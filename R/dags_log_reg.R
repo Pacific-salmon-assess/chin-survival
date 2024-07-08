@@ -22,7 +22,7 @@ adjustmentSets(dag_simple, exposure = "D", outcome = "S")
 adjustmentSets(dag_simple, exposure = "A", outcome = "S")
 impliedConditionalIndependencies(dag_simple)
 
-d_model <- bf(D ~ 1 + A + Y)
+d_model <- bf(D ~ 1 + A)
 f_model <- bf(FF ~ 1 + A + Y + D)
 l_model <- bf(L ~ 1 + A + Y + D + FF)
 s_model <- bf(S ~ 1 + A + Y + D + FF + L)
@@ -44,6 +44,12 @@ dag_full <-dagitty(
   }")
 adjustmentSets(dag_full, exposure = "L", outcome = "S")
 adjustmentSets(dag_full, exposure = "I", outcome = "S")
+
+
+# Following 14.4, which parameters should be correlated?
+# stock effects on survival, size, and lipid
+# year effects on survival, size, and lipid
+# size and lipid effects on survival 
 
 
 ################################################################################
