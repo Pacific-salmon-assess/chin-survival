@@ -47,7 +47,7 @@ adjustmentSets(dag_full, exposure = "I", outcome = "S")
 
 
 # Following 14.4, which parameters should be correlated?
-# stock effects on survival, size, and lipid
+# stock effects on survival, size, capture date, and lipid
 # year effects on survival, size, and lipid
 # size and lipid effects on survival 
 
