@@ -51,6 +51,67 @@ adjustmentSets(dag_full, exposure = "I", outcome = "S")
 # year effects on survival, size, and lipid
 # size and lipid effects on survival 
 
+## Updated version
+online_dag <- dagitty('
+dag {
+condition [latent,pos="-0.175,0.579"]
+date [exposure,pos="-0.692,0.709"]
+harvest [exposure,pos="0.307,0.102"]
+injury [exposure,pos="-0.006,1.682"]
+lipid [exposure,pos="0.378,0.688"]
+size [exposure,pos="-0.009,0.897"]
+stock [exposure,pos="-1.085,1.049"]
+surv [outcome,pos="1.053,1.639"]
+year [exposure,pos="-0.409,0.158"]
+condition -> lipid
+condition -> size
+date -> condition
+date -> harvest
+date -> surv
+harvest -> surv
+injury -> surv
+lipid -> surv
+size -> injury
+size -> surv
+stock -> condition
+stock -> date
+stock -> surv
+year -> condition
+year -> surv
+}
+')
+
+exposure <- c("lipid", "size", "injury", "date", "stock", "year")
+outcome <- "surv"
+
+adjustment_sets <- adjustmentSets(online_dag, exposure, outcome)
+print(adjustment_sets)
+
+
+set.seed(123)
+
+# Sample size
+n <- 100
+
+# Simulate ancestor variables
+G <- rnorm(n)  # Genetic predisposition
+SES <- rnorm(n)  # Socio-economic status
+HC <- rnorm(n)  # Health consciousness
+
+# Simulate exposure variable X (physical exercise)
+X <- 0.5 * G + 0.3 * SES + 0.4 * HC + rnorm(n)
+X <- rnorm(n)
+
+# Simulate outcome variable Y (blood pressure)
+Y <- -0.6 * X + 0.2 * G + 0.1 * SES + 0.2 * HC + rnorm(n)
+
+# Create a data frame
+data <- data.frame(G, SES, HC, X, Y)
+# Fit the model
+model <- lm(Y ~ X + G + SES + HC, data = data)
+
+# Summarize the model
+summary(model)
 
 ################################################################################
 

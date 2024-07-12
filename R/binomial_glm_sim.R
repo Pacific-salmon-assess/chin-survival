@@ -223,3 +223,120 @@ m2 <- ulam(
   control = list(adapt_delta = 0.95)
 )
 precis(m2 , depth=2)
+
+
+## EXAMPLE 3 -------------------------------------------------------------------
+
+# simulate condition as a latent process that determines size and lipid content,
+# condition is influenced by sampling date, and lipid content, size, and date
+# all influence survival
+
+set.seed(73)
+
+
+samp_date <- rnorm(n)
+alpha_date <- 0.7
+cond <- rnorm(n, alpha_date * samp_date, 1)
+beta_cond <- 0.6 #assume same effect on length and lipid for simplicity's sake
+size <- rnorm(n, beta_cond * cond, 1)
+lipid <- rnorm(n, beta_cond * cond, 1)
+gamma <- -1  # Intercept
+gamma_date <- -1   # Slope
+gamma_size <- 0.25
+gamma_lipid <- 2
+eta <- gamma + 
+  gamma_date * samp_date +
+  gamma_size * size +
+  gamma_lipid * lipid
+p <- boot::inv.logit(eta) # Probability of survival
+surv <- rbinom(n, 1, p)  # Binary outcome
+
+dat_list <- list(
+  samp_date = samp_date,
+  size = size,
+  lipid = lipid,
+  surv = surv
+  )
+
+m3 <- ulam(
+  alist(
+    # survival
+    surv ~ dbinom( 1 , p ) ,
+    logit(p) <- gamma + gamma_date * samp_date +
+      gamma_size * size +
+      gamma_lipid * lipid,
+    # priors
+    gamma ~ normal(0, 2.5),
+    c(gamma_date, gamma_size, gamma_lipid) ~ normal(0, 0.5)
+  ),
+  data=dat_list, chains=4 , log_lik=TRUE,
+  control = list(adapt_delta = 0.95)
+)
+
+m3b <- ulam(
+  alist(
+    # covariance among size and lipid
+    c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho, Sigma),
+    mu_size <- alpha_size + beta_ds * samp_date,
+    mu_lipid <- alpha_lipid + beta_dl * samp_date,
+    # survival
+    surv ~ dbinom( 1 , p ) ,
+    logit(p) <- gamma + gamma_date * samp_date +
+      gamma_size * size +
+      gamma_lipid * lipid,
+    # priors
+    c(alpha_size, alpha_lipid) ~ normal(0, 0.2),
+    c(beta_ds, beta_dl) ~ normal(0, 0.5),
+    Rho ~ lkj_corr( 2 ),
+    Sigma ~ exponential( 1 ),
+    gamma ~ normal(0, 2.5),
+    c(gamma_date, gamma_size, gamma_lipid) ~ normal(0, 0.5)
+  ),
+  data=dat_list, chains=4 , #log_lik=TRUE,
+  control = list(adapt_delta = 0.95)
+)
+
+
+# parameter estimates are nearly identical but what happens to estimate of
+# sampling day effect
+samp_date_seq <- seq( from=-2 , to=2 , length.out=30 )
+ss <- sim(m3 , data=sim_dat , vars=c("surv") )
+plot(samp_date_seq , colMeans(ss) , ylim=c(0, 1) , type="l" ,
+      xlab="date" , ylab="survival"  )
+
+
+# sim doesn't work with large number of variables so calc manually accounting 
+# for covariance
+post <- extract.samples(m3b)
+pred_mu_size <- purrr::map(
+  samp_date_seq, ~ post$alpha_size + post$beta_ds * .x
+)
+pred_mu_lipid <- purrr::map(
+  samp_date_seq, ~ post$alpha_lipid + post$beta_dl * .x
+)
+# generate posterior covariance matrix for each draw, combine with pred mu to 
+# sample from mvrnorm, then iterate over exp var
+sigma <- post$Sigma
+rho <- post$Rho
+S <- vector(mode = "list", length = nrow(sigma))
+sim_surv <- sim_size <- sim_lipid <- matrix(NA, nrow = nrow(sigma), 
+                                      ncol = length(samp_date_seq))
+for (j in seq_along(samp_date_seq)) {
+  # for (i in 1:nrow(sigma)) {
+  #   S <- diag(sigma[i,]) %*% rho[i,,] %*% diag(sigma[i,])
+  #   mu <- MASS::mvrnorm(
+  #     n = 1, mu=c(pred_mu_size[[j]][i], pred_mu_lipid[[j]][i]), 
+  #     Sigma = S
+  #   )
+  #   sim_size[i, j] <- mu[1]
+  #   sim_lipid[i, j] <- mu[2]
+  # }
+  sim_eta <- as.numeric(post$gamma + post$gamma_date * samp_date_seq[j] #+
+    # post$gamma_size * sim_size[ , j] +
+    # post$gamma_lipid * sim_lipid[ , j]
+    )
+  p <- boot::inv.logit(sim_eta) # Probability of survival
+  sim_surv[ , j] <- rbinom(length(p), 1, p)
+}
+plot(samp_date_seq, colMeans(sim_surv) , ylim=c(0, 1) , type="l" ,
+     xlab="date" , ylab="survival"  )
