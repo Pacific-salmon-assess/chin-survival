@@ -241,7 +241,7 @@ beta_cond <- 0.6 #assume same effect on length and lipid for simplicity's sake
 size <- rnorm(n, beta_cond * cond, 1)
 lipid <- rnorm(n, beta_cond * cond, 1)
 gamma <- -1  # Intercept
-gamma_date <- -1   # Slope
+gamma_date <- 0.5   # Slope
 gamma_size <- 0.25
 gamma_lipid <- 2
 eta <- gamma + 
@@ -322,19 +322,151 @@ S <- vector(mode = "list", length = nrow(sigma))
 sim_surv <- sim_size <- sim_lipid <- matrix(NA, nrow = nrow(sigma), 
                                       ncol = length(samp_date_seq))
 for (j in seq_along(samp_date_seq)) {
-  # for (i in 1:nrow(sigma)) {
-  #   S <- diag(sigma[i,]) %*% rho[i,,] %*% diag(sigma[i,])
-  #   mu <- MASS::mvrnorm(
-  #     n = 1, mu=c(pred_mu_size[[j]][i], pred_mu_lipid[[j]][i]), 
-  #     Sigma = S
-  #   )
-  #   sim_size[i, j] <- mu[1]
-  #   sim_lipid[i, j] <- mu[2]
-  # }
-  sim_eta <- as.numeric(post$gamma + post$gamma_date * samp_date_seq[j] #+
-    # post$gamma_size * sim_size[ , j] +
-    # post$gamma_lipid * sim_lipid[ , j]
+  for (i in 1:nrow(sigma)) {
+    S <- diag(sigma[i,]) %*% rho[i,,] %*% diag(sigma[i,])
+    mu <- MASS::mvrnorm(
+      n = 1, mu=c(pred_mu_size[[j]][i], pred_mu_lipid[[j]][i]),
+      Sigma = S
     )
+    sim_size[i, j] <- mu[1]
+    sim_lipid[i, j] <- mu[2]
+  }
+  sim_eta <- as.numeric(post$gamma + post$gamma_date * samp_date_seq[j] +
+    post$gamma_size * sim_size[ , j] +
+    post$gamma_lipid * sim_lipid[ , j]
+    )
+  p <- boot::inv.logit(sim_eta) # Probability of survival
+  sim_surv[ , j] <- rbinom(length(p), 1, p)
+}
+plot(samp_date_seq, colMeans(sim_surv) , ylim=c(0, 1) , type="l" ,
+     xlab="date" , ylab="survival"  )
+
+
+
+## EXAMPLE 4 -------------------------------------------------------------------
+
+# as above but include year effects on all covariates
+
+set.seed(73)
+
+## correlated annual intercepts for condition, date, survival
+Rho <- diag(3)
+Rho[upper.tri(Rho)] <- c(0.2, 0.7, 0.8)
+Rho[lower.tri(Rho)] <- t(Rho)[lower.tri(Rho)]
+mu_yr <- c(0, 0, 0) #average effects both centered on zero
+yr_sigmas <- c(0.4, 0.2, 0.3)
+Sigma <- diag(yr_sigmas) %*% Rho %*% diag(yr_sigmas) 
+yr_ints <- MASS::mvrnorm(n_years, mu_yr, Sigma)
+alpha_yd <- yr_ints[ , 1]
+alpha_yc <- yr_ints[ , 2]
+alpha_ys <- yr_ints[ , 3]
+
+dat <- data.frame(
+  yr = yr
+) %>% 
+  mutate(
+    samp_date = NA,
+    cond = NA,
+    size = NA,
+    lipid = NA
+  )
+
+# simulate covariate data
+beta_dc <- 0.7
+beta_cl <- beta_cf <- 0.6
+for (i in seq_along(dat$yr)) { 
+  dat$samp_date[i] <- rnorm(1, alpha_yd[yr[i]], 1)
+  dat$cond[i] <- rnorm(1, alpha_yc[yr[i]] + beta_dc * dat$samp_date[i], 1)
+  dat$size[i] <- rnorm(1, beta_cf * dat$cond[i], 1)
+  dat$lipid[i] <- rnorm(1, beta_cl * dat$cond[i], 1)
+  dat$alpha_ys[i] <- alpha_ys[yr[i]]
+}
+
+surv_bar <- -1  # Intercept
+beta_ds <- 0.5   # Slope
+beta_fs <- 0.25
+beta_ls <- 2
+eta <- surv_bar + dat$alpha_ys +
+  beta_ds * dat$samp_date +
+  beta_fs * dat$size +
+  beta_ls * dat$lipid
+p <- boot::inv.logit(eta) # Probability of survival
+dat$surv <- rbinom(n, 1, p)  # Binary outcome
+
+dat_list <- list(
+  samp_date = dat$samp_date,
+  yr = dat$yr, 
+  size = dat$size,
+  lipid = dat$lipid,
+  surv = dat$surv
+)
+
+m4 <- ulam(
+  alist(
+    # date
+    samp_date ~ dnorm(mu_date, sigma_date),
+    mu_date <- date_bar + alpha_yr[yr, 1],
+    # covariance among size and lipid
+    c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho_sl, Sigma_sl),
+    mu_size <- size_bar + alpha_yr[yr, 2] + beta_df * samp_date,
+    mu_lipid <- lipid_bar + alpha_yr[yr, 2] + beta_dl * samp_date,
+    # survival
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- surv_bar + alpha_yr[yr, 3] +
+      beta_ds * samp_date +
+      beta_fs * size +
+      beta_ls * lipid,
+    # adaptive priors
+    transpars> matrix[yr,3]:alpha_yr <-
+      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
+    matrix[3, yr]:z_yr ~ normal(0 , 1),
+    # priors
+    c(beta_df, beta_dl) ~ normal(0, 1),
+    c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
+    c(date_bar, size_bar, lipid_bar, surv_bar) ~ normal(0, 1.5),
+    Rho_sl ~ lkj_corr( 2 ),
+    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
+    vector[3]:sigma_yr ~ exponential(1),
+    c(Sigma_sl, sigma_date) ~ exponential(1),
+    # compute ordinary correlation matrixes from Cholesky factors
+    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr)
+  ),
+  data=dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+
+# sim doesn't work with large number of variables so calc manually accounting 
+# for covariance (excludes year effects)
+samp_date_seq <- seq(-2, 2, length.out = 30)
+post <- extract.samples(m4)
+pred_mu_size <- purrr::map(
+  samp_date_seq, ~ post$size_bar + post$beta_ds * .x
+)
+pred_mu_lipid <- purrr::map(
+  samp_date_seq, ~ post$lipid_bar + post$beta_dl * .x
+)
+# generate posterior covariance matrix for each draw, combine with pred mu to 
+# sample from mvrnorm, then iterate over exp var
+sigma <- post$Sigma
+rho <- post$Rho_sl
+S <- vector(mode = "list", length = nrow(sigma))
+sim_surv <- sim_size <- sim_lipid <- matrix(NA, nrow = nrow(sigma), 
+                                            ncol = length(samp_date_seq))
+for (j in seq_along(samp_date_seq)) {
+  for (i in 1:nrow(sigma)) {
+    S <- diag(sigma[i,]) %*% rho[i,,] %*% diag(sigma[i,])
+    mu <- MASS::mvrnorm(
+      n = 1, mu=c(pred_mu_size[[j]][i], pred_mu_lipid[[j]][i]),
+      Sigma = S
+    )
+    sim_size[i, j] <- mu[1]
+    sim_lipid[i, j] <- mu[2]
+  }
+  sim_eta <- as.numeric(post$surv_bar + post$beta_ds * samp_date_seq[j] +
+                          post$beta_fs * sim_size[ , j] +
+                          post$beta_ls * sim_lipid[ , j]
+  )
   p <- boot::inv.logit(sim_eta) # Probability of survival
   sim_surv[ , j] <- rbinom(length(p), 1, p)
 }
