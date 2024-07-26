@@ -1,0 +1,227 @@
+## Logistic survival
+# Survival to detection and to terminal arrays using logistic regression (i.e.
+# not stage-specific, does not account for detection probability)
+# Excludes immature tags and fish with unknown stock ID, but does not exclude
+# redeployed tags or injured fish
+# Feb. 22, 2021
+# Updated July 4, 2022
+
+library(tidyverse)
+library(rethinking)
+
+rstan::rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
+det_tbl <- readRDS(here::here("data", "det_history_tbl.RDS"))
+
+chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS"))
+
+det_dat <- det_tbl %>% 
+  dplyr::select(stock_group, agg_det) %>% 
+  unnest(cols = c(agg_det)) %>%
+  mutate(
+    term_det = ifelse(final_det + river_det > 0, 1, 0),
+    stock_group = as.factor(stock_group)
+  ) %>% 
+  left_join(., 
+            chin %>% 
+              select(vemco_code = acoustic_year, year, acoustic_type, 
+                     fl, lipid, year_day, hook_loc, fin_dam, injury, comment),
+            by = "vemco_code") %>%
+  mutate(
+    redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes")
+  ) %>% 
+  arrange(
+    year, stock_group
+  )
+  
+  # filter(
+  #   !is.na(mean_log_e),
+  #   !grepl("_redeploy", vemco_code),
+  #   # !grepl("_V9", vemco_code),
+  #   !injury == "3"
+  # ) 
+
+
+# PLOTS OF RAW DATA ------------------------------------------------------------
+
+ppn_foo <- function(group, response) {
+  group_exp <- c("vemco_code", group)
+  labs <- det_dat %>% 
+    dplyr::select_at(group_exp) %>% 
+    distinct() %>% 
+    group_by_at(group) %>% 
+    tally() %>% 
+    mutate(year = as.factor(year))
+  
+  dat_out <- det_dat %>% 
+    group_by_at(group) %>% 
+    summarize(n = length(unique(vemco_code)),
+              ppn = sum(.data[[response]] / n),
+              se = sqrt((ppn * (1 - ppn)) / n),
+              up = pmin(1, ppn + (1.96 * se)),
+              lo = pmax(0, ppn - (1.96 * se)),
+              .groups = "drop") %>% 
+    mutate(year = as.factor(year))
+  
+  list("labs" = labs, "dat" = dat_out)
+}
+
+
+det_ppns <- ppn_foo(group = c("stock_group", "year"), response = "term_det") 
+ggplot(data = det_ppns$dat, aes(y = ppn)) +
+  geom_pointrange(aes(x = year, ymin = lo, ymax = up)) +
+  facet_wrap(~stock_group) +
+  ggsidekick::theme_sleek() +
+  geom_text(data = det_ppns$lab, aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+inj_ppns <- ppn_foo(group = c("injury", "year"), response = "term_det")
+ggplot(data = inj_ppns$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~injury) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = inj_ppns$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+loc_ppns <- ppn_foo(group = c("hook_loc", "year"), response = "term_det")
+ggplot(data = loc_ppns$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~hook_loc) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = loc_ppns$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+fin_ppns <- ppn_foo(group = c("fin_dam", "year"), response = "term_det")
+ggplot(data = fin_ppns$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~fin_dam) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = fin_ppns$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+redep_ppns <- ppn_foo(group = c("redeploy", "year"), response = "det")
+ggplot(data = redep_ppns$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~redeploy) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = redep_ppns$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+
+ggplot(det_dat, aes(x = fl, y = det)) +
+  geom_point() +
+  facet_wrap(~year) +
+  ggsidekick::theme_sleek()
+ggplot(det_dat, aes(x = trough_time, y = det)) +
+  geom_point() +
+  facet_wrap(~year) +
+  ggsidekick::theme_sleek()
+ggplot(det_dat, aes(x = mean_log_e, y = final_det)) +
+  geom_point() +
+  facet_wrap(~year) +
+  ggsidekick::theme_sleek()
+
+
+# FIT LOGISTIC REG MODELS ------------------------------------------------------
+
+
+# assume year and stock group are random intercepts
+# compare three models for terminal detections: injury (0-3), redeploy tags,
+# and eye 
+dat_list <- list(
+  surv = det_dat$term_det,
+  inj = det_dat$injury,
+  redeploy = ifelse(det_dat$redeploy == "no", 0, 1),
+  yr = as.integer(as.factor(det_dat$year)),
+  stock = as.integer(as.factor(det_dat$stock_group)),
+  eye = ifelse(det_dat$hook_loc == "eye", 1, 0),
+  alpha = rep(2, length(unique(det_dat$injury)) - 1)
+)
+
+
+m0 <- ulam(
+  alist(
+    surv ~ dbinom( 1 , p ) ,
+    logit(p) <- gamma + 
+      gamma_yr[yr]*sigma_yr +
+      gamma_stock[stock] * sigma_stock
+    ,
+    # priors
+    gamma ~ normal(0, 2.5),
+    gamma_yr[yr] ~ dnorm(0, 0.5),
+    gamma_stock[stock] ~ dnorm(0, 0.5),
+    c(sigma_yr, sigma_stock) ~ exponential(1)
+    ),
+  data=dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+m1 <- ulam(
+  alist(
+    surv ~ dbinom( 1 , p ) ,
+    logit(p) <- gamma + 
+      gamma_yr[yr] * sigma_yr +
+      gamma_stock[stock] * sigma_stock +
+      gamma_inj * sum(delta_inj[1:inj]),
+    # priors
+    gamma ~ normal(0, 2.5),
+    gamma_yr[yr] ~ dnorm(0, 0.5),
+    gamma_stock[stock] ~ dnorm(0, 0.5),
+    gamma_inj ~ normal(0, 0.5),
+    vector[4]: delta_inj <<- append_row(0, delta),
+    simplex[3]: delta ~ dirichlet(alpha),
+    c(sigma_yr, sigma_stock) ~ exponential(1)
+  ),
+  data=dat_list, chains=4 , cores = 4,#log_lik=TRUE,
+  control = list(adapt_delta = 0.95)
+)
+m2 <- ulam(
+  alist(
+    surv ~ dbinom( 1 , p ) ,
+    logit(p) <- gamma + 
+      gamma_redeploy[redeploy]# +
+      # gamma_yr[yr]*sigma_yr +
+      # gamma_stock[stock] * sigma_stock
+    ,
+    # priors
+    gamma ~ normal(0, 2.5),
+    gamma_redeploy[redeploy] ~ dnorm(0, 0.5)#,
+    # gamma_yr[yr] ~ dnorm(0, 0.5),
+    # gamma_stock[stock] ~ dnorm(0, 0.5),
+    # c(sigma_yr, sigma_stock) ~ exponential(1)
+  ),
+  data=dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+# calculate posterior predictions
+post <- extract.samples(m1)
+p_link_abar <- function(injury) {
+  if (injury == 0) {
+    logodds <- with(post, gamma)
+  } else (
+    logodds <- with(
+      post, gamma + (gamma_inj * rowSums(delta[, 1:injury, drop = FALSE])) 
+    )
+  )
+  return( inv_logit(logodds) )
+}
+p_raw <- sapply(0:3 , function(i) p_link_abar( i ) )
+inj_dat <- purrr::map(
+  seq(0, 3, by = 1), function (i) {
+    data.frame(
+      injury = as.factor(i),
+      est = p_raw[ , i + 1])
+  }
+) %>% 
+  bind_rows()
+
