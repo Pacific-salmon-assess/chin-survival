@@ -134,6 +134,10 @@ ggplot(det_dat, aes(x = mean_log_e, y = final_det)) +
 
 # FIT LOGISTIC REG MODELS ------------------------------------------------------
 
+det_dat_no_redep <- det_dat %>% 
+  filter(redeploy == "no")
+det_dat_no_3 <- det_dat %>% 
+  filter(!injury == "3")
 
 # assume year and stock group are random intercepts
 # compare three models for terminal detections: injury (0-3), redeploy tags,
@@ -141,30 +145,47 @@ ggplot(det_dat, aes(x = mean_log_e, y = final_det)) +
 dat_list <- list(
   surv = det_dat$term_det,
   inj = det_dat$injury,
-  redeploy = ifelse(det_dat$redeploy == "no", 0, 1),
+  redeploy = ifelse(det_dat$redeploy == "no", 1, 2),
   yr = as.integer(as.factor(det_dat$year)),
   stock = as.integer(as.factor(det_dat$stock_group)),
-  eye = ifelse(det_dat$hook_loc == "eye", 1, 0),
   alpha = rep(2, length(unique(det_dat$injury)) - 1)
+)
+dat_list2 <- list(
+  surv = det_dat_no_redep$term_det,
+  inj = det_dat_no_redep$injury,
+  redeploy = ifelse(det_dat_no_redep$redeploy == "no", 1, 2),
+  yr = as.integer(as.factor(det_dat_no_redep$year)),
+  stock = as.integer(as.factor(det_dat_no_redep$stock_group)),
+  alpha = rep(2, length(unique(det_dat_no_redep$injury)) - 1)
+)
+dat_list3 <- list(
+  surv = det_dat_no_3$term_det,
+  inj = det_dat_no_3$injury,
+  redeploy = ifelse(det_dat_no_3$redeploy == "no", 1, 2),
+  yr = as.integer(as.factor(det_dat_no_3$year)),
+  stock = as.integer(as.factor(det_dat_no_3$stock_group)),
+  alpha = rep(2, length(unique(det_dat_no_3$injury)) - 1)
 )
 
 
+# null model
 m0 <- ulam(
   alist(
     surv ~ dbinom( 1 , p ) ,
     logit(p) <- gamma + 
       gamma_yr[yr]*sigma_yr +
-      gamma_stock[stock] * sigma_stock
-    ,
+      gamma_stock[stock] * sigma_stock,
     # priors
     gamma ~ normal(0, 2.5),
     gamma_yr[yr] ~ dnorm(0, 0.5),
     gamma_stock[stock] ~ dnorm(0, 0.5),
     c(sigma_yr, sigma_stock) ~ exponential(1)
-    ),
+  ),
   data=dat_list, chains=4 , cores = 4,
   control = list(adapt_delta = 0.95)
 )
+
+
 m1 <- ulam(
   alist(
     surv ~ dbinom( 1 , p ) ,
@@ -184,28 +205,47 @@ m1 <- ulam(
   data=dat_list, chains=4 , cores = 4,#log_lik=TRUE,
   control = list(adapt_delta = 0.95)
 )
-m2 <- ulam(
+m1b <- ulam(
   alist(
     surv ~ dbinom( 1 , p ) ,
     logit(p) <- gamma + 
-      gamma_redeploy[redeploy]# +
-      # gamma_yr[yr]*sigma_yr +
-      # gamma_stock[stock] * sigma_stock
-    ,
+      gamma_yr[yr] * sigma_yr +
+      gamma_stock[stock] * sigma_stock +
+      gamma_inj * sum(delta_inj[1:inj]),
     # priors
     gamma ~ normal(0, 2.5),
-    gamma_redeploy[redeploy] ~ dnorm(0, 0.5)#,
-    # gamma_yr[yr] ~ dnorm(0, 0.5),
-    # gamma_stock[stock] ~ dnorm(0, 0.5),
-    # c(sigma_yr, sigma_stock) ~ exponential(1)
+    gamma_yr[yr] ~ dnorm(0, 0.5),
+    gamma_stock[stock] ~ dnorm(0, 0.5),
+    gamma_inj ~ normal(0, 0.5),
+    vector[4]: delta_inj <<- append_row(0, delta),
+    simplex[3]: delta ~ dirichlet(alpha),
+    c(sigma_yr, sigma_stock) ~ exponential(1)
   ),
-  data=dat_list, chains=4 , cores = 4,
+  data=dat_list2, chains=4 , cores = 4,#log_lik=TRUE,
+  control = list(adapt_delta = 0.95)
+)
+m1c <- ulam(
+  alist(
+    surv ~ dbinom( 1 , p ) ,
+    logit(p) <- gamma + 
+      gamma_yr[yr] * sigma_yr +
+      gamma_stock[stock] * sigma_stock +
+      gamma_inj * sum(delta_inj[1:inj]),
+    # priors
+    gamma ~ normal(0, 2.5),
+    gamma_yr[yr] ~ dnorm(0, 0.5),
+    gamma_stock[stock] ~ dnorm(0, 0.5),
+    gamma_inj ~ normal(0, 0.5),
+    vector[3]: delta_inj <<- append_row(0, delta),
+    simplex[2]: delta ~ dirichlet(alpha),
+    c(sigma_yr, sigma_stock) ~ exponential(1)
+  ),
+  data=dat_list3, chains=4 , cores = 4,#log_lik=TRUE,
   control = list(adapt_delta = 0.95)
 )
 
-# calculate posterior predictions
-post <- extract.samples(m1)
-p_link_abar <- function(injury) {
+post <- extract.samples(m1b)
+p_link_inj <- function(injury) {
   if (injury == 0) {
     logodds <- with(post, gamma)
   } else (
@@ -215,7 +255,7 @@ p_link_abar <- function(injury) {
   )
   return( inv_logit(logodds) )
 }
-p_raw <- sapply(0:3 , function(i) p_link_abar( i ) )
+p_raw <- sapply(0:3 , function(i) p_link_inj( i ) )
 inj_dat <- purrr::map(
   seq(0, 3, by = 1), function (i) {
     data.frame(
@@ -224,4 +264,63 @@ inj_dat <- purrr::map(
   }
 ) %>% 
   bind_rows()
+ggplot(inj_dat, aes(x = injury, y = est)) +
+  geom_boxplot()
 
+
+# redeploy model
+m2 <- ulam(
+  alist(
+    surv ~ dbinom( 1 , p ) ,
+    logit(p) <- gamma + 
+      gamma_redeploy[redeploy] +
+      gamma_yr[yr]*sigma_yr +
+      gamma_stock[stock] * sigma_stock,
+    # priors
+    gamma ~ normal(0, 2.5),
+    gamma_redeploy[redeploy] ~ dnorm(0, 0.5),
+    gamma_yr[yr] ~ dnorm(0, 0.5),
+    gamma_stock[stock] ~ dnorm(0, 0.5),
+    c(sigma_yr, sigma_stock) ~ exponential(1)
+  ),
+  data=dat_list, chains = 4, cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+m2b <- ulam(
+  alist(
+    surv ~ dbinom( 1 , p ) ,
+    logit(p) <- gamma + 
+      gamma_redeploy[redeploy] +
+      gamma_yr[yr]*sigma_yr +
+      gamma_stock[stock] * sigma_stock,
+    # priors
+    gamma ~ normal(0, 2.5),
+    gamma_redeploy[redeploy] ~ dnorm(0, 0.5),
+    gamma_yr[yr] ~ dnorm(0, 0.5),
+    gamma_stock[stock] ~ dnorm(0, 0.5),
+    c(sigma_yr, sigma_stock) ~ exponential(1)
+  ),
+  data=dat_list3, chains = 4, cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+post2 <- extract.samples(m2b)
+p_link_redeploy <- function(redeploy) {
+  logodds <- with(
+      post2, gamma + gamma_redeploy[ , redeploy] 
+    )
+  return( inv_logit(logodds) )
+}
+p_raw <- sapply(1:2, function(i) p_link_redeploy( i ) )
+redep_dat <- purrr::map(
+  c(1, 2), function (i) {
+    data.frame(
+      redeploy = as.factor(i),
+      est = p_raw[ , i])
+  }
+) %>% 
+  bind_rows()
+ggplot(redep_dat, aes(x = redeploy, y = est)) +
+  geom_boxplot()
+
+# greatest stabilizing effect from removing redeployed tags
