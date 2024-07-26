@@ -16,12 +16,19 @@ det_tbl <- readRDS(here::here("data", "det_history_tbl.RDS"))
 
 chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS"))
 
-det_dat <- det_tbl %>% 
+# pull agg names for fraser
+agg_names <- det_tbl$bio_dat[[2]] %>% 
+  select(vemco_code, agg) 
+  
+  
+det_dat1 <- det_tbl %>% 
   dplyr::select(stock_group, agg_det) %>% 
   unnest(cols = c(agg_det)) %>%
+  left_join(., agg_names, by = "vemco_code") %>% 
   mutate(
     term_det = ifelse(final_det + river_det > 0, 1, 0),
-    stock_group = as.factor(stock_group)
+    stock_group = ifelse(stock_group == "Fraser", agg, stock_group) %>% 
+      as.factor()
   ) %>% 
   left_join(., 
             chin %>% 
@@ -34,13 +41,29 @@ det_dat <- det_tbl %>%
   arrange(
     year, stock_group
   )
-  
-  # filter(
-  #   !is.na(mean_log_e),
-  #   !grepl("_redeploy", vemco_code),
-  #   # !grepl("_V9", vemco_code),
-  #   !injury == "3"
-  # ) 
+
+
+# small number of tags (<2% missing lipid data; impute)
+bio_dat <- det_dat1 %>% 
+  select(vemco_code, fl, lipid, stock_group, year) %>%
+  distinct() 
+interp_lipid <- bio_dat %>%
+  select(-vemco_code) %>% 
+  VIM::kNN(., k = 5) %>% 
+  select(-ends_with("imp")) 
+det_dat1$lipid <- interp_lipid$lipid
+
+
+# remove redeployed tags and scale continuous covariates
+det_dat <- det_dat1 %>% 
+  filter(
+    !redeploy == "yes"
+  ) %>% 
+  mutate(
+    lipid_z = scale(lipid) %>% as.numeric(),
+    fl_z = scale(fl) %>% as.numeric(),
+    day_z = scale(year_day) %>% as.numeric()
+  )
 
 
 # PLOTS OF RAW DATA ------------------------------------------------------------
@@ -118,7 +141,7 @@ ggplot(data = redep_ppns$dat,  aes(x = year, y = ppn)) +
             vjust = -0.5)
 
 
-ggplot(det_dat, aes(x = fl, y = det)) +
+ggplot(det_dat, aes(x = lipid_z, y = final_det)) +
   geom_point() +
   facet_wrap(~year) +
   ggsidekick::theme_sleek()
@@ -134,14 +157,64 @@ ggplot(det_dat, aes(x = mean_log_e, y = final_det)) +
 
 # FIT LOGISTIC REG MODELS ------------------------------------------------------
 
+
+
+dat_list <- list(
+  surv = det_dat$term_det,
+  fl_z = det_dat$fl,
+  
+  # inj = det_dat$injury,
+  yr = as.integer(as.factor(det_dat$year)),
+  stock = as.integer(as.factor(det_dat$stock_group))#,
+  # alpha = rep(2, length(unique(det_dat$injury)) - 1)
+)
+
+m4 <- ulam(
+  alist(
+    # date
+    samp_date ~ dnorm(mu_date, sigma_date),
+    mu_date <- date_bar + alpha_yr[yr, 1],
+    # covariance among size and lipid
+    c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho_sl, Sigma_sl),
+    mu_size <- size_bar + alpha_yr[yr, 2] + beta_df * samp_date,
+    mu_lipid <- lipid_bar + alpha_yr[yr, 2] + beta_dl * samp_date,
+    # survival
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- surv_bar + alpha_yr[yr, 3] +
+      beta_ds * samp_date +
+      beta_fs * size +
+      beta_ls * lipid,
+    # adaptive priors
+    transpars> matrix[yr,3]:alpha_yr <-
+      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
+    matrix[3, yr]:z_yr ~ normal(0 , 1),
+    # priors
+    c(beta_df, beta_dl) ~ normal(0, 1),
+    c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
+    c(date_bar, size_bar, lipid_bar, surv_bar) ~ normal(0, 1.5),
+    Rho_sl ~ lkj_corr( 2 ),
+    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
+    vector[3]:sigma_yr ~ exponential(1),
+    c(Sigma_sl, sigma_date) ~ exponential(1),
+    # compute ordinary correlation matrixes from Cholesky factors
+    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr)
+  ),
+  data=dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+
+
+
+# injury vs redeployed tag effects
+
 det_dat_no_redep <- det_dat %>% 
   filter(redeploy == "no")
 det_dat_no_3 <- det_dat %>% 
   filter(!injury == "3")
 
 # assume year and stock group are random intercepts
-# compare three models for terminal detections: injury (0-3), redeploy tags,
-# and eye 
+# compare three models for terminal detections: injury (0-3) & redeploy tags
 dat_list <- list(
   surv = det_dat$term_det,
   inj = det_dat$injury,
