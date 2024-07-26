@@ -1,0 +1,97 @@
+"stock_group","region","array_num","max_array_num","segment_name"
+"Low Col.","deploy",1,6,"Release"
+"Low Col.","wcvi",2,6,"WCVI/
+Salish Sea"
+"Low Col.","jdf",2,6,"WCVI/
+Salish Sea"
+"Low Col.","puget",2,6,"WCVI/
+Salish Sea"
+"Low Col.","sog",2,6,"WCVI/
+Salish Sea"
+"Low Col.","cali",2,6,"WCVI/
+Salish Sea"
+"Low Col.","nevi",2,6,"WCVI/
+Salish Sea"
+"Low Col.","nwwa",3,6,"NW WA"
+"Low Col.","swwa_or",4,6,"SW WA"
+"Low Col.","col_est",5,6,"Estuary"
+"Low Col.","in_river",6,6,"In River"
+"Up Col.","deploy",1,6,"Release"
+"Up Col.","wcvi",2,6,"WCVI/
+Salish Sea"
+"Up Col.","jdf",2,6,"WCVI/
+Salish Sea"
+"Up Col.","puget",2,6,"WCVI/
+Salish Sea"
+"Up Col.","sog",2,6,"WCVI/
+Salish Sea"
+"Up Col.","cali",2,6,"WCVI/
+Salish Sea"
+"Up Col.","nevi",2,6,"WCVI/
+Salish Sea"
+"Up Col.","nwwa",3,6,"NW WA"
+"Up Col.","swwa_or",4,6,"SW WA"
+"Up Col.","col_est",5,6,"Estuary"
+"Up Col.","in_river",6,6,"In River"
+"Fraser","deploy",1,5,"Release"
+"Fraser","wcvi",2,5,"Outside Shelf"
+"Fraser","col_est",2,5,"Outside Shelf"
+"Fraser","swwa_or",2,5,"Outside Shelf"
+"Fraser","nwwa",2,5,"Outside Shelf"
+"Fraser","cali",2,5,"Outside Shelf"
+"Fraser","jdf",3,5,"Juan de Fuca"
+"Fraser","puget",3,5,"Juan de Fuca"
+"Fraser","nevi",3,5,"Juan de Fuca"
+"Fraser","sog",4,5,"Strait of Georgia"
+"Fraser","in_river",5,5,"In River"
+"Puget Sound","deploy",1,5,"Release"
+"Puget Sound","wcvi",2,5,"Outside Shelf"
+"Puget Sound","col_est",2,5,"Outside Shelf"
+"Puget Sound","swwa_or",2,5,"Outside Shelf"
+"Puget Sound","nwwa",2,5,"Outside Shelf"
+"Puget Sound","cali",2,5,"Outside Shelf"
+"Puget Sound","jdf",3,5,"Juan de Fuca"
+"Puget Sound","nevi",3,5,"Juan de Fuca"
+"Puget Sound","sog",4,5,"Strait of Georgia"
+"Puget Sound","in_river",5,5,"Terminal
+Marine"
+"Puget Sound","puget",5,5,"Terminal
+Marine"
+"WA_OR","deploy",1,3,"Release"
+"WA_OR","wcvi",2,3,"Marine"
+"WA_OR","col_est",2,3,"Marine"
+"WA_OR","jdf",2,3,"Marine"
+"WA_OR","swwa_or",2,3,"Marine"
+"WA_OR","puget",2,3,"Marine"
+"WA_OR","sog",2,3,"Marine"
+"WA_OR","nwwa",2,3,"Marine"
+"WA_OR","cali",2,3,"Marine"
+"WA_OR","nevi",2,3,"Marine"
+"WA_OR","in_river",3,3,"In River"
+"Cali","deploy",1,6,"Release"
+"Cali","wcvi",2,6,"WCVI/
+Salish Sea"
+"Cali","jdf",2,6,"WCVI/
+Salish Sea"
+"Cali","puget",2,6,"WCVI/
+Salish Sea"
+"Cali","sog",2,6,"WCVI/
+Salish Sea"
+"Cali","nevi",2,6,"WCVI/
+Salish Sea"
+"Cali","nwwa",3,6,"NW WA"
+"Cali","col_est",4,6,"SW WA"
+"Cali","swwa_or",4,6,"SW WA"
+"Cali","cali",5,6,"Central CA"
+"Cali","in_river",6,6,"In River"
+"WCVI","deploy",1,3,"Release"
+"WCVI","wcvi",2,3,"Marine"
+"WCVI","col_est",2,3,"Marine"
+"WCVI","jdf",2,3,"Marine"
+"WCVI","swwa_or",2,3,"Marine"
+"WCVI","puget",2,3,"Marine"
+"WCVI","sog",2,3,"Marine"
+"WCVI","nwwa",2,3,"Marine"
+"WCVI","cali",2,3,"Marine"
+"WCVI","nevi",2,3,"Marine"
+"WCVI","in_river",3,3,"In River"

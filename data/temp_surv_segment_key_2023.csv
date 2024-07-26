@@ -1,0 +1,100 @@
+agg,region,array_num,segment_names,max_array_num
+Low Col.,deploy,1,,6
+Low Col.,wcvi,2,,6
+Low Col.,jdf,2,,6
+Low Col.,puget,2,,6
+Low Col.,sog,2,,6
+Low Col.,cali,2,,6
+Low Col.,nevi,2,,6
+Low Col.,nwwa,3,,6
+Low Col.,swwa_or,4,,6
+Low Col.,col_est,5,,6
+Low Col.,in_river,6,,6
+Up Col.,deploy,1,,6
+Up Col.,wcvi,2,,6
+Up Col.,jdf,2,,6
+Up Col.,puget,2,,6
+Up Col.,sog,2,,6
+Up Col.,cali,2,,6
+Up Col.,nevi,2,,6
+Up Col.,nwwa,3,,6
+Up Col.,swwa_or,4,,6
+Up Col.,col_est,5,,6
+Up Col.,in_river,6,,6
+Fraser Year.,deploy,1,,5
+Fraser Year.,wcvi,2,,5
+Fraser Year.,col_est,2,,5
+Fraser Year.,swwa_or,2,,5
+Fraser Year.,nwwa,2,,5
+Fraser Year.,cali,2,,5
+Fraser Year.,jdf,3,,5
+Fraser Year.,puget,3,,5
+Fraser Year.,nevi,3,,5
+Fraser Year.,sog,4,,5
+Fraser Year.,in_river,5,,5
+Puget Sound,deploy,1,,5
+Puget Sound,wcvi,2,,5
+Puget Sound,col_est,2,,5
+Puget Sound,swwa_or,2,,5
+Puget Sound,nwwa,2,,5
+Puget Sound,cali,2,,5
+Puget Sound,jdf,3,,5
+Puget Sound,nevi,3,,5
+Puget Sound,sog,4,,5
+Puget Sound,in_river,5,,5
+Puget Sound,puget,5,,5
+Fraser 4.1,deploy,1,,5
+Fraser 4.1,wcvi,2,,5
+Fraser 4.1,col_est,2,,5
+Fraser 4.1,swwa_or,2,,5
+Fraser 4.1,nwwa,2,,5
+Fraser 4.1,cali,2,,5
+Fraser 4.1,jdf,3,,5
+Fraser 4.1,puget,3,,5
+Fraser 4.1,nevi,3,,5
+Fraser 4.1,sog,4,,5
+Fraser 4.1,in_river,5,,5
+Fraser Fall,deploy,1,,5
+Fraser Fall,wcvi,2,,5
+Fraser Fall,col_est,2,,5
+Fraser Fall,swwa_or,2,,5
+Fraser Fall,nwwa,2,,5
+Fraser Fall,cali,2,,5
+Fraser Fall,jdf,3,,5
+Fraser Fall,puget,3,,5
+Fraser Fall,nevi,3,,5
+Fraser Fall,sog,4,,5
+Fraser Fall,in_river,5,,5
+WA_OR,deploy,1,,3
+WA_OR,wcvi,2,,3
+WA_OR,col_est,2,,3
+WA_OR,jdf,2,,3
+WA_OR,swwa_or,2,,3
+WA_OR,puget,2,,3
+WA_OR,sog,2,,3
+WA_OR,nwwa,2,,3
+WA_OR,cali,2,,3
+WA_OR,nevi,2,,3
+WA_OR,in_river,3,,3
+Cali,deploy,1,,6
+Cali,wcvi,2,,6
+Cali,jdf,2,,6
+Cali,puget,2,,6
+Cali,sog,2,,6
+Cali,nevi,2,,6
+Cali,nwwa,3,,6
+Cali,col_est,4,,6
+Cali,swwa_or,4,,6
+Cali,cali,5,,6
+Cali,in_river,6,,6
+WCVI,deploy,1,,3
+WCVI,wcvi,2,,3
+WCVI,col_est,2,,3
+WCVI,jdf,2,,3
+WCVI,swwa_or,2,,3
+WCVI,puget,2,,3
+WCVI,sog,2,,3
+WCVI,nwwa,2,,3
+WCVI,cali,2,,3
+WCVI,nevi,2,,3
+WCVI,in_river,3,,3
