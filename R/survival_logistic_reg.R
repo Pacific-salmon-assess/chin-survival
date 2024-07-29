@@ -158,51 +158,109 @@ ggplot(det_dat, aes(x = mean_log_e, y = final_det)) +
 # FIT LOGISTIC REG MODELS ------------------------------------------------------
 
 
-
 dat_list <- list(
-  surv = det_dat$term_det,
-  fl_z = det_dat$fl,
-  
+  surv = as.integer(det_dat$term_det),
+  fl_z = det_dat$fl_z,
+  lipid_z = det_dat$lipid_z,
+  day_z = det_dat$day_z,
   # inj = det_dat$injury,
   yr = as.integer(as.factor(det_dat$year)),
-  stock = as.integer(as.factor(det_dat$stock_group))#,
+  stk = as.integer(as.factor(det_dat$stock_group))#,
   # alpha = rep(2, length(unique(det_dat$injury)) - 1)
 )
 
-m4 <- ulam(
+
+m1 <- ulam(
   alist(
-    # date
-    samp_date ~ dnorm(mu_date, sigma_date),
-    mu_date <- date_bar + alpha_yr[yr, 1],
-    # covariance among size and lipid
-    c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho_sl, Sigma_sl),
-    mu_size <- size_bar + alpha_yr[yr, 2] + beta_df * samp_date,
-    mu_lipid <- lipid_bar + alpha_yr[yr, 2] + beta_dl * samp_date,
-    # survival
     surv ~ dbinom(1 , p) ,
-    logit(p) <- surv_bar + alpha_yr[yr, 3] +
-      beta_ds * samp_date +
-      beta_fs * size +
-      beta_ls * lipid,
-    # adaptive priors
-    transpars> matrix[yr,3]:alpha_yr <-
-      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
-    matrix[3, yr]:z_yr ~ normal(0 , 1),
-    # priors
-    c(beta_df, beta_dl) ~ normal(0, 1),
+    logit(p) <- surv_bar + 
+      beta_yr[yr] * sigma_yr +
+      beta_stk[stk] * sigma_stk +
+      beta_ds * day_z +
+      beta_fs * fl_z +
+      beta_ls * lipid_z
+      ,
+    surv_bar ~ normal(0, 1.25),
+    beta_yr[yr] ~ normal(0, 0.5),
+    beta_stk[stk] ~ normal(0, 0.5),
     c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
-    c(date_bar, size_bar, lipid_bar, surv_bar) ~ normal(0, 1.5),
-    Rho_sl ~ lkj_corr( 2 ),
-    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
-    vector[3]:sigma_yr ~ exponential(1),
-    c(Sigma_sl, sigma_date) ~ exponential(1),
-    # compute ordinary correlation matrixes from Cholesky factors
-    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr)
+    c(sigma_yr, sigma_stk) ~ exponential(1)
   ),
-  data=dat_list, chains=4 , cores = 4,
+  data=dat_list, chains = 4 , cores = 4, iter = 2000,
   control = list(adapt_delta = 0.95)
 )
 
+
+# check priors
+# set.seed(1999)
+# prior <- extract.prior( m1 , n=1e4 )
+# prior_p_dat <- data.frame(
+#   fl_z = seq(-2, 2, length = 30),
+#   lipid_z = 0,
+#   day_z = 0,
+#   yr = 1,
+#   stk = 1
+# )
+# prior_p <- link(m1, post = prior, data = prior_p_dat)
+# hist(prior_p)
+# plot(prior_p[1, ] ~ prior_p_dat$fl_z, type = "line", ylim = c(0, 1))
+# for (i in 2:50) {
+#   lines(prior_p_dat$fl_z, prior_p[i, ])
+# }
+
+
+# plot posterior preds
+post <- extract.samples(m1)
+link_foo <- function(pred_dat) {
+  logodds <- with(
+    post,
+    surv_bar + beta_ds * pred_dat$day_z + beta_fs * pred_dat$fl_z + beta_ls *
+      pred_dat$lipid_z 
+  )
+  return( inv_logit(logodds) )
+}
+
+
+pred_l <- sapply(
+  seq(-2, 2, length = 30), 
+  function (x) {
+    inv_logit(post$surv_bar + post$beta_ls * x)
+  }
+)
+pred_l_mu <- apply(pred_l, 2, mean)
+pred_l_pi <- apply(pred_l, 2, PI)
+plot( NULL , xlab="Lipid Scaled" , ylab="Proportion Terminal Det",
+      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
+lines(seq(-2, 2, length = 30) , pred_l_mu )
+shade( pred_l_pi , seq(-2, 2, length = 30))
+
+
+pred_f <- sapply(
+  seq(-2, 2, length = 30), 
+  function (x) {
+    inv_logit(post$surv_bar + post$beta_fs * x)
+  }
+)
+pred_f_mu <- apply(pred_f, 2, mean)
+pred_f_pi <- apply(pred_f, 2, PI)
+plot( NULL , xlab="FL Scaled" , ylab="Proportion Terminal Det",
+      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
+lines(seq(-2, 2, length = 30) , pred_f_mu )
+shade( pred_f_pi , seq(-2, 2, length = 30))
+
+
+pred_d <- sapply(
+  seq(-2, 2, length = 30), 
+  function (x) {
+    inv_logit(post$surv_bar + post$beta_ds * x)
+  }
+)
+pred_d_mu <- apply(pred_d, 2, mean)
+pred_d_pi <- apply(pred_d, 2, PI)
+plot( NULL , xlab="Yday Scaled" , ylab="Proportion Terminal Det",
+      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
+lines(seq(-2, 2, length = 30) , pred_d_mu )
+shade( pred_d_pi , seq(-2, 2, length = 30))
 
 
 
