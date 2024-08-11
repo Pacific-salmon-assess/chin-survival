@@ -300,9 +300,9 @@ m3b <- ulam(
 # parameter estimates are nearly identical but what happens to estimate of
 # sampling day effect
 samp_date_seq <- seq( from=-2 , to=2 , length.out=30 )
-ss <- sim(m3 , data=sim_dat , vars=c("surv") )
-plot(samp_date_seq , colMeans(ss) , ylim=c(0, 1) , type="l" ,
-      xlab="date" , ylab="survival"  )
+# ss <- sim(m3 , data=sim_dat , vars=c("surv") )
+# plot(samp_date_seq , colMeans(ss) , ylim=c(0, 1) , type="l" ,
+#       xlab="date" , ylab="survival"  )
 
 
 # sim doesn't work with large number of variables so calc manually accounting 

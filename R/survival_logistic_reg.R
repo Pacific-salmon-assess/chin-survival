@@ -170,6 +170,7 @@ dat_list <- list(
 )
 
 
+# multiple regression hierarchical model with no injury effects 
 m1 <- ulam(
   alist(
     surv ~ dbinom(1 , p) ,
@@ -187,9 +188,8 @@ m1 <- ulam(
     c(sigma_yr, sigma_stk) ~ exponential(1)
   ),
   data=dat_list, chains = 4 , cores = 4, iter = 2000,
-  control = list(adapt_delta = 0.95)
+  control = list(adapt_delta = 0.96)
 )
-
 
 # check priors
 # set.seed(1999)
@@ -209,16 +209,142 @@ m1 <- ulam(
 # }
 
 
-# plot posterior preds
-post <- extract.samples(m1)
-link_foo <- function(pred_dat) {
-  logodds <- with(
-    post,
-    surv_bar + beta_ds * pred_dat$day_z + beta_fs * pred_dat$fl_z + beta_ls *
-      pred_dat$lipid_z 
+# as model 1 but assumes date influences size and lipid content, which also 
+# covary with one another
+m2 <- ulam(
+  alist(
+    # unobserved latent condition
+    c(fl_z, lipid_z) ~ multi_normal(c(mu_fl, mu_lipid), Rho, Sigma),
+    mu_fl <- alpha_fl + beta_df * day_z,
+    mu_lipid <- alpha_lipid + beta_dl * day_z,
+    # survival
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- surv_bar + 
+      beta_yr[yr] * sigma_yr +
+      beta_stk[stk] * sigma_stk +
+      beta_ds * day_z +
+      beta_fs * fl_z +
+      beta_ls * lipid_z
+    ,
+    c(alpha_fl, alpha_lipid) ~ normal(0, 0.5),
+    c(beta_df, beta_dl) ~ normal(0.1, 0.5),
+    Rho ~ lkj_corr(2),
+    Sigma ~ exponential(1),
+    surv_bar ~ normal(0, 1.25),
+    beta_yr[yr] ~ normal(0, 0.5),
+    beta_stk[stk] ~ normal(0, 0.5),
+    c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
+    c(sigma_yr, sigma_stk) ~ exponential(1)
+  ),
+  data=dat_list, chains = 4 , cores = 4, iter = 2000,
+  control = list(adapt_delta = 0.96)
+)
+
+
+# as model 2 but assume year- and stock-specific intercepts on size and lipid
+m3 <- ulam(
+  alist(
+    # unobserved latent condition
+    c(fl_z, lipid_z) ~ multi_normal(c(mu_fl, mu_lipid), Rho, Sigma),
+    mu_fl <- alpha_fl + beta_df * day_z + beta_yr[yr, 1] + beta_stk[stk, 1],
+    mu_lipid <- alpha_lipid + beta_dl * day_z + beta_yr[yr, 2] + 
+      beta_stk[stk, 2],
+    # survival
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- surv_bar + 
+      beta_yr[yr, 3] +
+      beta_stk[stk, 3] +
+      beta_ds * day_z +
+      beta_fs * fl_z +
+      beta_ls * lipid_z
+    ,
+    # adaptive priors
+    transpars> matrix[yr, 3]:beta_yr <-
+      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
+    matrix[3, yr]:z_yr ~ normal(0, 0.5),
+    transpars> matrix[stk, 3]:beta_stk <-
+      compose_noncentered(sigma_stk , L_Rho_stk , z_stk),
+    matrix[3, stk]:z_stk ~ normal(0, 0.5),
+    # fixed priors
+    c(alpha_fl, alpha_lipid) ~ normal(0, 0.5),
+    c(beta_df, beta_dl) ~ normal(0.1, 0.5),
+    Rho ~ lkj_corr(2),
+    Sigma ~ exponential(1),
+    
+    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
+    vector[3]:sigma_yr ~ exponential(1),
+    cholesky_factor_corr[3]:L_Rho_stk ~ lkj_corr_cholesky(2),
+    vector[3]:sigma_stk ~ exponential(1),
+    
+    surv_bar ~ normal(0, 1.25),
+    c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
+    
+    # compute ordinary correlation matrixes from Cholesky factors
+    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
+    gq> matrix[3, 3]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
+  ),
+  data=dat_list, chains = 4 , cores = 4, iter = 2000,
+  control = list(adapt_delta = 0.96)
+)
+
+## posterior predictions
+# sampling day, including indirect effects on size/lipid
+samp_date_seq <- seq(from = -2, to = 2, length.out = 30)
+
+post <- extract.samples(m2)
+pred_mu_fl <- purrr::map(
+  samp_date_seq, ~ post$alpha_fl + post$beta_df * .x
+)
+pred_mu_lipid <- purrr::map(
+  samp_date_seq, ~ post$alpha_lipid + post$beta_dl * .x
+)
+
+# generate posterior covariance matrix for each draw, combine with pred mu to 
+# sample from mvrnorm, then iterate over exp var
+sigma <- post$Sigma
+rho <- post$Rho
+S <- vector(mode = "list", length = nrow(sigma))
+sim_surv_d <- sim_fl <- sim_lipid <- matrix(
+  NA, 
+  nrow = nrow(sigma), 
+  ncol = length(samp_date_seq)
+)
+for (j in seq_along(samp_date_seq)) {
+  for (i in 1:nrow(sigma)) {
+    S <- diag(sigma[i,]) %*% rho[i,,] %*% diag(sigma[i,])
+    mu <- MASS::mvrnorm(
+      n = 1, mu=c(pred_mu_fl[[j]][i], pred_mu_lipid[[j]][i]),
+      Sigma = S
+    )
+    sim_fl[i, j] <- mu[1]
+    sim_lipid[i, j] <- mu[2]
+  }
+  sim_eta <- as.numeric(post$surv_bar + post$beta_ds * samp_date_seq[j] +
+                          post$beta_fs * sim_fl[ , j] +
+                          post$beta_ls * sim_lipid[ , j]
   )
-  return( inv_logit(logodds) )
+  sim_surv_d[ , j] <- boot::inv.logit(sim_eta) # Probability of survival
+  # sim_surv_d[ , j] <- rbinom(length(sim_eta), 1, boot::inv.logit(sim_eta))
 }
+pred_d_mu <- apply(sim_surv_d, 2, mean)
+pred_d_pi <- apply(sim_surv_d, 2, PI)
+plot( NULL , xlab="Date Scaled" , ylab="Proportion Terminal Det",
+      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
+lines(seq(-2, 2, length = 30) , pred_d_mu )
+shade( pred_d_pi , seq(-2, 2, length = 30))
+
+
+
+# plot posterior preds
+# post <- extract.samples(m1)
+# link_foo <- function(pred_dat) {
+#   logodds <- with(
+#     post,
+#     surv_bar + beta_ds * pred_dat$day_z + beta_fs * pred_dat$fl_z + beta_ls *
+#       pred_dat$lipid_z 
+#   )
+#   return( inv_logit(logodds) )
+# }
 
 
 pred_l <- sapply(
@@ -261,6 +387,10 @@ plot( NULL , xlab="Yday Scaled" , ylab="Proportion Terminal Det",
       ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
 lines(seq(-2, 2, length = 30) , pred_d_mu )
 shade( pred_d_pi , seq(-2, 2, length = 30))
+
+
+
+
 
 
 
