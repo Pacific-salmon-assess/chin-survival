@@ -17,7 +17,9 @@ det_tbl <- readRDS(here::here("data", "det_history_tbl.RDS"))
 chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS"))
 
 # pull agg names for fraser
-agg_names <- det_tbl$bio_dat[[2]] %>% 
+agg_names <- det_tbl %>% 
+  filter(stock_group == "Fraser") %>% 
+  unnest(bio_dat) %>%
   select(vemco_code, agg) 
   
   
@@ -33,9 +35,11 @@ det_dat1 <- det_tbl %>%
   left_join(., 
             chin %>% 
               select(vemco_code = acoustic_year, year, acoustic_type, 
-                     fl, lipid, year_day, hook_loc, fin_dam, injury, comment),
+                     fl, lipid, year_day, hook_loc, fin_dam, injury, scale_loss,
+                     comment),
             by = "vemco_code") %>%
   mutate(
+    comp_inj = (injury + scale_loss + fin_dam),
     redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes")
   ) %>% 
   arrange(
@@ -110,6 +114,17 @@ ggplot(data = inj_ppns$dat,  aes(x = year, y = ppn)) +
             position = position_dodge(width = 1),
             vjust = -0.5)
 
+inj_ppns2 <- ppn_foo(group = c("comp_inj", "year"), response = "term_det")
+ggplot(data = inj_ppns2$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~comp_inj) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = inj_ppns2$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+
 loc_ppns <- ppn_foo(group = c("hook_loc", "year"), response = "term_det")
 ggplot(data = loc_ppns$dat,  aes(x = year, y = ppn)) +
   geom_pointrange(aes(ymin = lo, ymax = up)) +
@@ -126,6 +141,16 @@ ggplot(data = fin_ppns$dat,  aes(x = year, y = ppn)) +
   facet_wrap(~fin_dam) +
   ggsidekick::theme_sleek()+
   geom_text(data = fin_ppns$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+scale_ppns <- ppn_foo(group = c("scale_loss", "year"), response = "term_det")
+ggplot(data = scale_ppns$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~scale_loss) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = scale_ppns$lab, 
             aes(x = year, y = -Inf, label  = n),
             position = position_dodge(width = 1),
             vjust = -0.5)
@@ -163,10 +188,10 @@ dat_list <- list(
   fl_z = det_dat$fl_z,
   lipid_z = det_dat$lipid_z,
   day_z = det_dat$day_z,
-  # inj = det_dat$injury,
+  inj = det_dat$injury,
   yr = as.integer(as.factor(det_dat$year)),
-  stk = as.integer(as.factor(det_dat$stock_group))#,
-  # alpha = rep(2, length(unique(det_dat$injury)) - 1)
+  stk = as.integer(as.factor(det_dat$stock_group)),
+  alpha = rep(2, length(unique(det_dat$injury)) - 1)
 )
 
 
@@ -179,13 +204,16 @@ m1 <- ulam(
       beta_stk[stk] * sigma_stk +
       beta_ds * day_z +
       beta_fs * fl_z +
-      beta_ls * lipid_z
+      beta_ls * lipid_z +
+      beta_is * sum(delta_inj[1:inj])
       ,
     surv_bar ~ normal(0, 1.25),
     beta_yr[yr] ~ normal(0, 0.5),
     beta_stk[stk] ~ normal(0, 0.5),
-    c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
-    c(sigma_yr, sigma_stk) ~ exponential(1)
+    c(beta_ds, beta_fs, beta_ls, beta_is) ~ normal(0, 0.5),
+    c(sigma_yr, sigma_stk) ~ exponential(1),
+    vector[4]: delta_inj <<- append_row(0, delta),
+    simplex[3]: delta ~ dirichlet(alpha)
   ),
   data=dat_list, chains = 4 , cores = 4, iter = 2000,
   control = list(adapt_delta = 0.96)
@@ -287,11 +315,59 @@ m3 <- ulam(
   control = list(adapt_delta = 0.96)
 )
 
+
+# as model 3 but includes injury effects
+m3 <- ulam(
+  alist(
+    # unobserved latent condition
+    c(fl_z, lipid_z) ~ multi_normal(c(mu_fl, mu_lipid), Rho, Sigma),
+    mu_fl <- alpha_fl + beta_df * day_z + beta_yr[yr, 1] + beta_stk[stk, 1],
+    mu_lipid <- alpha_lipid + beta_dl * day_z + beta_yr[yr, 2] + 
+      beta_stk[stk, 2],
+    # survival
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- surv_bar + 
+      beta_yr[yr, 3] +
+      beta_stk[stk, 3] +
+      beta_ds * day_z +
+      beta_fs * fl_z +
+      beta_ls * lipid_z
+    ,
+    # adaptive priors
+    transpars> matrix[yr, 3]:beta_yr <-
+      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
+    matrix[3, yr]:z_yr ~ normal(0, 0.5),
+    transpars> matrix[stk, 3]:beta_stk <-
+      compose_noncentered(sigma_stk , L_Rho_stk , z_stk),
+    matrix[3, stk]:z_stk ~ normal(0, 0.5),
+    # fixed priors
+    c(alpha_fl, alpha_lipid) ~ normal(0, 0.5),
+    c(beta_df, beta_dl) ~ normal(0.1, 0.5),
+    Rho ~ lkj_corr(2),
+    Sigma ~ exponential(1),
+    
+    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
+    vector[3]:sigma_yr ~ exponential(1),
+    cholesky_factor_corr[3]:L_Rho_stk ~ lkj_corr_cholesky(2),
+    vector[3]:sigma_stk ~ exponential(1),
+    
+    surv_bar ~ normal(0, 1.25),
+    c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
+    
+    # compute ordinary correlation matrixes from Cholesky factors
+    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
+    gq> matrix[3, 3]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
+  ),
+  data=dat_list, chains = 4 , cores = 4, iter = 2000,
+  control = list(adapt_delta = 0.96)
+)
+
+
 ## posterior predictions
 # sampling day, including indirect effects on size/lipid
 samp_date_seq <- seq(from = -2, to = 2, length.out = 30)
 
-post <- extract.samples(m2)
+post <- extract.samples(m3)
 pred_mu_fl <- purrr::map(
   samp_date_seq, ~ post$alpha_fl + post$beta_df * .x
 )
@@ -334,7 +410,6 @@ lines(seq(-2, 2, length = 30) , pred_d_mu )
 shade( pred_d_pi , seq(-2, 2, length = 30))
 
 
-
 # plot posterior preds
 # post <- extract.samples(m1)
 # link_foo <- function(pred_dat) {
@@ -375,18 +450,18 @@ lines(seq(-2, 2, length = 30) , pred_f_mu )
 shade( pred_f_pi , seq(-2, 2, length = 30))
 
 
-pred_d <- sapply(
-  seq(-2, 2, length = 30), 
-  function (x) {
-    inv_logit(post$surv_bar + post$beta_ds * x)
-  }
-)
-pred_d_mu <- apply(pred_d, 2, mean)
-pred_d_pi <- apply(pred_d, 2, PI)
-plot( NULL , xlab="Yday Scaled" , ylab="Proportion Terminal Det",
-      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
-lines(seq(-2, 2, length = 30) , pred_d_mu )
-shade( pred_d_pi , seq(-2, 2, length = 30))
+# pred_d <- sapply(
+#   seq(-2, 2, length = 30), 
+#   function (x) {
+#     inv_logit(post$surv_bar + post$beta_ds * x)
+#   }
+# )
+# pred_d_mu <- apply(pred_d, 2, mean)
+# pred_d_pi <- apply(pred_d, 2, PI)
+# plot( NULL , xlab="Yday Scaled" , ylab="Proportion Terminal Det",
+#       ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
+# lines(seq(-2, 2, length = 30) , pred_d_mu )
+# shade( pred_d_pi , seq(-2, 2, length = 30))
 
 
 
