@@ -71,7 +71,6 @@ date -> surv
 harvest -> surv
 injury -> surv
 lipid -> surv
-size -> injury
 size -> surv
 stock -> condition
 stock -> date
