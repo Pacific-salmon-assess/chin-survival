@@ -21,6 +21,7 @@ knitr-cache
 # History files
 .Rhistory
 .Rapp.history
+data/model_outputs/
 
 myNotes.*
 .Rproj.user/
