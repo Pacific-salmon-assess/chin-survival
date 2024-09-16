@@ -18,7 +18,7 @@ options(mc.cores = parallel::detectCores())
 set.seed(123)
 
 ## Import occurence matrix (generated in prep_detection_histories.R)
-dat_tbl <- readRDS(here::here("data", "generated_data", "det_history_tbl.RDS")) 
+dat_tbl <- readRDS(here::here("data", "det_history_tbl.RDS")) 
 
 # ID tag codes to retain
 # 1) no extreme injuries
@@ -29,7 +29,7 @@ kept_tags <- dat_tbl %>%
   pull(vemco_code)
 
 dat_tbl_trim <- dat_tbl %>% 
-  filter(!stock_group == "ECVI") %>% 
+  filter(!stock_group %in% c("ECVI", "North Puget")) %>% 
   mutate(
     bio_dat = purrr::map(bio_dat, function (x) {
       x %>%
@@ -39,9 +39,9 @@ dat_tbl_trim <- dat_tbl %>%
       # remove aggregate vector if only one level
       dd <- x %>%
         filter(vemco_code %in% kept_tags)
-      if (length(unique(dd$agg)) == "1") {
+      # if (length(unique(dd$agg)) == "1") {
         dd <- dd %>% select(-agg)
-      }
+      # }
       return(dd)
     })
   ) %>%
@@ -57,25 +57,27 @@ dat_tbl_trim <- dat_tbl %>%
 
 
 ## Import survival segment key for labelling plots 
-seg_key <- read.csv(here::here("data", "generated_data", 
+seg_key <- read.csv(here::here("data", 
                                "surv_segment_key_2023.csv")) %>%
   mutate(segment = array_num - 1,
          segment_name = str_replace(segment_name, " ", "\n")) %>% 
   dplyr::select(stock_group, segment, segment_name) %>% 
   distinct()
 
+
 # Average survival by segment and year -----------------------------------------
 
 dat_tbl %>% 
   select(stock_group, long_array_dat) %>% 
-  unnest() %>% 
+  unnest(cols = "long_array_dat") %>% 
   group_by(stock_group, year)
+
 
 mean_det <- purrr::map2(
   dat_tbl_trim$stock_group,
   dat_tbl_trim$wide_array_dat, 
   ~ .y %>% 
-    group_by(year) %>% 
+    group_by(year) %>%
     summarise(
       n = n(),
       across(-c(vemco_code, n), function(x) {sum(x) / n})
@@ -105,7 +107,7 @@ mean_det_pt <- ggplot(mean_det) +
     legend.position = "top"
   )
 
-png(here::here("figs", "survival", "average_detections.png"), 
+png(here::here("figs", "average_detections.png"), 
     height = 6, width = 9, units = "in", res = 250)
 mean_det_pt
 dev.off()
@@ -152,7 +154,7 @@ prep_cjs_dat <- function(dat, fixp = NULL, grouping_vars = NULL) {
 dat_tbl_trim$fixp <- ifelse(
   grepl("Fraser", dat_tbl_trim$stock_group) | 
     grepl("Up Col", dat_tbl_trim$stock_group) | 
-    grepl("Puget", dat_tbl_trim$stock_group) , 
+    grepl("South Puget", dat_tbl_trim$stock_group) , 
   0.99, 
   NA)
 dat_tbl_trim$years <- purrr::map(dat_tbl_trim$wide_array_dat, function (x) {
@@ -360,7 +362,7 @@ file_names <- paste(
 )
 
 for (i in seq_along(par_list)) {
-  pdf(here::here("figs", "survival", "cjs", "diagnostics", 
+  pdf(here::here("figs", "diagnostics", 
                  file_names[i]),
       height = 5, width = 8)
   for (j in seq_along(dat_tbl_trim$cjs_hier)) {
@@ -426,8 +428,7 @@ pp_plot_list <- map2(pp_list, dat_tbl_trim$stock_group, function (xx, title) {
     ggsidekick::theme_sleek()
 })
 
-pdf(here::here("figs", "survival", "cjs", "diagnostics", 
-               "posterior_checks_hier.pdf"),
+pdf(here::here("figs", "diagnostics", "posterior_checks_hier.pdf"),
     height = 5, width = 8)
 pp_plot_list
 dev.off()
@@ -436,7 +437,8 @@ dev.off()
 ## Post-hoc calculations -------------------------------------------------------
 
 
-# extract phi matrix and swap last col with beta estimates except for fix p 
+# extract phi matrix and swap last col with beta estimates (i.e. combined p and 
+# phi) except for fix p models 
 # stocks
 phi_mat <- pmap(
   list(dat_tbl_trim$cjs_hier, dat_tbl_trim$fixp), 
@@ -579,6 +581,7 @@ cum_surv_list_mean <- pmap(
       arrange(segment, iter) 
   }
 )
+dat_tbl_trim$phi_mat_mean <- phi_mat_mean
 dat_tbl_trim$cum_survival_mean <- cum_surv_list_mean
 
 
@@ -661,20 +664,20 @@ sigma_plot_list <- purrr::map2(
 )
 
 
-pdf(here::here("figs", "survival", "cjs", "estimated_rho.pdf"), 
+pdf(here::here("figs", "cjs", "estimated_rho.pdf"), 
     height = 4.5, width = 6)
 rho_plot_list
 dev.off()
 
-pdf(here::here("figs", "survival", "cjs", "estimated_sigma_beta.pdf"), 
+pdf(here::here("figs", "cjs", "estimated_sigma_beta.pdf"), 
              height = 4.5, width = 6)
 sigma_plot_list
 dev.off()
 
 
 # posterior estimates of det probability for Upper Col
-p_mat <- extract(dat_tbl_trim$cjs_hier[[5]])[["p_year"]]
-hist(p_mat[ , 1:4, 4]) # second to last stage, ignore last year when rec missing
+p_mat <- extract(dat_tbl_trim$cjs_hier[[5]])[["p_yr"]]
+hist(p_mat[ , 1:5, 4]) # second to last stage, ignore last year when rec missing
 
 
 ## Visualize posterior ---------------------------------------------------------
@@ -706,17 +709,17 @@ surv_plot_mean <- dat_tbl_trim$cum_survival_mean %>%
   facet_wrap(~stock_group, scales = "free_x", nrow = 2)
 
 
-pdf(here::here("figs", "survival", "cjs", "cum_surv_ind_hier_trials.pdf"), 
+pdf(here::here("figs", "cjs", "cum_surv_ind_hier_trials.pdf"), 
     height = 6, width = 7.5)
 surv_plot_trials
 dev.off()
 
-pdf(here::here("figs", "survival", "cjs", "cum_surv_ind_hier_clean.pdf"), 
+pdf(here::here("figs", "cjs", "cum_surv_ind_hier_clean.pdf"), 
     height = 6, width = 7.5)
 surv_plot_clean
 dev.off()
 
-png(here::here("figs", "survival", "cjs", "cum_surv_mean_hier_clean.png"), 
+png(here::here("figs", "cjs", "cum_surv_mean_hier_clean.png"), 
     height = 5, width = 9.5, units = "in", res = 200)
 surv_plot_mean
 dev.off()

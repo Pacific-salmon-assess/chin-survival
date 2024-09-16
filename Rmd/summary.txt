@@ -1,0 +1,18 @@
+Survival Rmd
+
+Outline
+- Summary of objectives
+- Summary of data collected and study area
+- Summary of modeling approaches
+- CJS results
+- Logistic regression results
+- Outstanding issues
+
+Figures 
+1. Map of study area
+2. Stock composition
+3. Raw proportions detected
+4. CJS phi estimates
+5. CJS model predictions
+6. CJS posterior predictions
+7. DAG
