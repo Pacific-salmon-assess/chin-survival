@@ -1,60 +1,67 @@
-stock,conservation_unit,stock_group,ctc_indicator,comments
-AMERICAN_RIVER,California Central Valley_Fall,Cali,NA,
-BATTLE_CREEK,California Central Valley_Fall,Cali,NA,
-FEATHER_RIVER_FALL,California Central Valley_Fall,Cali,NA,
-MERCED_RIVER,California Central Valley_Fall,Cali,NA,
-FEATHER_RIVER_SPRING,California Central Valley_Spring,Cali,NA,
-COWICHAN_RIVER,East Vancouver Island-Cowichan and Koksilah_FA_0.x,ECVI,Cowichan,
-COWICHAN_RIVER,East Vancouver Island-Georgia Strait_SU_0.3,ECVI,Cowichan,
-CHEMAINUS_RIVER,East Vancouver Island-Nanaimo and Chemainus_FA_0.x,ECVI,Cowichan,
-QUATSE_RIVER,East Vancouver Island-North_FA_0.x,ECVI,Quinsam,
-QUALICUM_RIVER,East Vancouver Island-Qualicum and Puntledge_FA_0.x,ECVI,Quinsam,Might be Cowichan?
-SHUSWAP_RIVER-LOWER,Shuswap River_SU_0.3,Fraser 4.1,Shuswap,
-ADAMS_RIVER,South Thompson_SU_0.3,Fraser 4.1,Shuswap,
-LITTLE_RIVER,South Thompson_SU_0.3,Fraser 4.1,Shuswap,
-THOMPSON_RIVER_BELOW_KAMLOOPS_LAKE,South Thompson_SU_0.3,Fraser 4.1,Shuswap,
-CAPILANO_RIVER,Lower Fraser River_FA_0.3,Fraser Fall,Harrison,
-CHILLIWACK_RIVER_fall,Lower Fraser River_FA_0.3,Fraser Fall,Harrison,
-CHILLIWACK_VEDDER_RIVER,Lower Fraser River_FA_0.3,Fraser Fall,Harrison,
-HARRISON_RIVER,Lower Fraser River_FA_0.3,Fraser Fall,Harrison,
-COLDWATER_RIVER-UPPER,Lower Thompson_SP_1.2,Fraser Year.,Nicola,
-DEADMAN_RIVER,Lower Thompson_SP_1.2,Fraser Year.,Nicola,
-NICOLA_RIVER,Lower Thompson_SP_1.2,Fraser Year.,Nicola,
-WEST_ROAD_BLACKWATER_RIVER,Middle Fraser River_SP_1.3,Fraser Year.,Nicola,Proxy given lack of Spring 5.2/Summer 5.2 indicator
-CARIBOO_RIVER,Middle Fraser River_SU_1.3,Fraser Year.,Nicola,Proxy given lack of Spring 5.2/Summer 5.2 indicator
-CHILKO_RIVER,Middle Fraser River_SU_1.3,Fraser Year.,Nicola,Proxy given lack of Spring 5.2/Summer 5.2 indicator
-NECHAKO_RIVER,Middle Fraser River_SU_1.3,Fraser Year.,Nicola,Proxy given lack of Spring 5.2/Summer 5.2 indicator
-NORTH_THOMPSON_RIVER,North Thompson_SU_1.3,Fraser Year.,Nicola,Proxy given lack of Spring 5.2/Summer 5.2 indicator
-RAFT_RIVER,North Thompson_SU_1.3,Fraser Year.,Nicola,Proxy given lack of Spring 5.2/Summer 5.2 indicator
-EAGLE_RIVER,South Thompson_SU_1.3,Fraser Year.,Nicola,Proxy given lack of Spring 5.2/Summer 5.2 indicator
-ABERNATHY_RIVER,Lower Columbia River,Low Col.,Coweeman,
-COWEEMAN,Lower Columbia River,Low Col.,Coweeman,
-COWLITZ_HATCHERY_SPRING,Lower Columbia River,Low Col.,Coweeman,
-CLACKAMAS_RIVER,Upper Willamette River,Low Col.,Coweeman,Not sure if there's an indicator for Willamette systems or not?
-SANDY_RIVER,Upper Willamette River,Low Col.,Coweeman,Not sure if there's an indicator for Willamette systems or not?
-SANTIAM_RIVER_North,Upper Willamette River,Low Col.,Coweeman,Not sure if there's an indicator for Willamette systems or not?
-NOOKSACK_RIVER,North Puget Sound,Puget Sound,Skagit Summer Fall,Not sure if this is correct?
-SKAGIT_RIVER,North Puget Sound,Puget Sound,Skagit Summer Fall,
-SKYKOMISH_RIVER,North Puget Sound,Puget Sound,Skykomish,
-SNOHOMISH_RIVER,North Puget Sound,Puget Sound,Skykomish,
-GREEN_RIVER,South Puget Sound,Puget Sound,,Not sure what to use here?
-GREEN_RIVER-Kendal,South Puget Sound,Puget Sound,,Not sure what to use here?
-SOOS_CREEK,South Puget Sound,Puget Sound,,Not sure what to use here?
-WHITE_RIVER,South Puget Sound,Puget Sound,,Not sure what to use here?
-OKANAGAN_RIVER,Okanagan_1.x,Up Col.,Upriver Brights/Hanford Reach,
-LYON'S_FERRY,Snake River_FA,Up Col.,Upriver Brights/Hanford Reach,
-DESCHUTES_RIVER,Upper Columbia River_SU_FA,Up Col.,Upriver Brights/Hanford Reach,
-HANFORD_REACH,Upper Columbia River_SU_FA,Up Col.,Upriver Brights/Hanford Reach,
-SIMILKAMEEN,Upper Columbia River_SU_FA,Up Col.,Upriver Brights/Hanford Reach,
-WENATCHEE_RIVER,Upper Columbia River_SU_FA,Up Col.,Upriver Brights/Hanford Reach,
-FORKS_CREEK_HATCHERY,Coastal Washington,WA_OR,Queets,
-EUCHRE_CREEK,North & Central Oregon,WA_OR,Salmon River,Not sure if this is correct?
-NESTUCCA_RIVER_FALL,North & Central Oregon,WA_OR,Salmon River,Not sure if this is correct?
-TRASK_HATCHERY,North & Central Oregon,WA_OR,Salmon River,Not sure if this is correct?
-EUCHRE_CREEK,South Oregon coastal,WA_OR,Elk River,Not sure if this is correct?
-HUNTER_CREEK,South Oregon coastal,WA_OR,Elk River,Not sure if this is correct?
-UMPQUA_SPRING,South Oregon coastal,WA_OR,Elk River,Not sure if this is correct?
-ROBERTSON_CREEK,West Vancouver Island-South_FA_0.x,WCVI,Robertson Creek,
-SAN_JUAN_RIVER,West Vancouver Island-South_FA_0.x,WCVI,Robertson Creek,
-SOOKE_RIVER,West Vancouver Island-South_FA_0.x,WCVI,Robertson Creek,
-THORNTON_CREEK,West Vancouver Island-South_FA_0.x,WCVI,Robertson Creek,
+"stock","cu_name","agg_name"
+"MERCED_RIVER","California Central Valley_Fall","Cali"
+"BATTLE_CREEK","California Central Valley_Fall","Cali"
+"FEATHER_RIVER_SPRING","California Central Valley_Spring","Cali"
+"FEATHER_RIVER_FALL","California Central Valley_Fall","Cali"
+"AMERICAN_RIVER","California Central Valley_Fall","Cali"
+"COWICHAN_RIVER","East Vancouver Island-Georgia Strait_SU_0.3","ECVI"
+"QUATSE_RIVER","East Vancouver Island-North_FA_0.x","ECVI"
+"COWICHAN_RIVER","East Vancouver Island-Cowichan and Koksilah_FA_0.x","ECVI"
+"QUALICUM_RIVER","East Vancouver Island-Qualicum and Puntledge_FA_0.x","ECVI"
+"CHEMAINUS_RIVER","East Vancouver Island-Nanaimo and Chemainus_FA_0.x","ECVI"
+"THOMPSON_RIVER_BELOW_KAMLOOPS_LAKE","South Thompson_SU_0.3","Fraser 4.1"
+"LITTLE_RIVER","South Thompson_SU_0.3","Fraser 4.1"
+"ADAMS_RIVER","South Thompson_SU_0.3","Fraser 4.1"
+"SHUSWAP_RIVER-LOWER","Shuswap River_SU_0.3","Fraser 4.1"
+"HARRISON_RIVER","Lower Fraser River_FA_0.3","Fraser Fall"
+"CAPILANO_RIVER","Lower Fraser River_FA_0.3","Fraser Fall"
+"CHILLIWACK_VEDDER_RIVER","Lower Fraser River_FA_0.3","Fraser Fall"
+"CHILLIWACK_RIVER_fall","Lower Fraser River_FA_0.3","Fraser Fall"
+NA,NA,"Fraser Sub."
+"EAGLE_RIVER","South Thompson_SU_1.3","Fraser Year."
+"RAFT_RIVER","North Thompson_SU_1.3","Fraser Year."
+"DEADMAN_RIVER","Lower Thompson_SP_1.2","Fraser Year."
+"NECHAKO_RIVER","Middle Fraser River_SU_1.3","Fraser Year."
+"CHILKO_RIVER","Middle Fraser River_SU_1.3","Fraser Year."
+"CARIBOO_RIVER","Middle Fraser River_SU_1.3","Fraser Year."
+"WEST_ROAD_BLACKWATER_RIVER","Middle Fraser River_SP_1.3","Fraser Year."
+"NORTH_THOMPSON_RIVER","North Thompson_SU_1.3","Fraser Year."
+"COLDWATER_RIVER-UPPER","Lower Thompson_SP_1.2","Fraser Year."
+"NICOLA_RIVER","Lower Thompson_SP_1.2","Fraser Year."
+NA,NA,"Low Col."
+"ABERNATHY_RIVER","Lower Columbia River","Low Col."
+"COWEEMAN","Lower Columbia River","Low Col."
+"COWLITZ_HATCHERY_SPRING","Lower Columbia River","Low Col."
+"CLACKAMAS_RIVER","Upper Willamette River","Low Col."
+"SANDY_RIVER","Upper Willamette River","Low Col."
+"SANTIAM_RIVER_North","Upper Willamette River","Low Col."
+"NOOKSACK_RIVER","North Puget Sound","North Puget"
+"SKAGIT_RIVER","North Puget Sound","North Puget"
+NA,NA,"South Puget"
+"SOOS_CREEK","South Puget Sound","South Puget"
+NA,"South Puget Sound","South Puget"
+"GREEN_RIVER","South Puget Sound","South Puget"
+"WHITE_RIVER","South Puget Sound","South Puget"
+"SNOHOMISH_RIVER","North Puget Sound","South Puget"
+"GREEN_RIVER-Kendal","South Puget Sound","South Puget"
+"SKYKOMISH_RIVER","North Puget Sound","South Puget"
+"HANFORD_REACH","Upper Columbia River_SU_FA","Up Col."
+NA,"Snake River_FA","Up Col."
+NA,"Upper Columbia River_SU_FA","Up Col."
+"LYON'S_FERRY","Snake River_FA","Up Col."
+"WENATCHEE_RIVER","Upper Columbia River_SU_FA","Up Col."
+"DESCHUTES_RIVER","Upper Columbia River_SU_FA","Up Col."
+"OKANAGAN_RIVER","Okanagan_1.x","Up Col."
+"SIMILKAMEEN","Upper Columbia River_SU_FA","Up Col."
+"HUNTER_CREEK","South Oregon coastal","WA_OR"
+"UMPQUA_SPRING","South Oregon coastal","WA_OR"
+"FORKS_CREEK_HATCHERY","Coastal Washington","WA_OR"
+"EUCHRE_CREEK","North & Central Oregon","WA_OR"
+"TRASK_HATCHERY","North & Central Oregon","WA_OR"
+"EUCHRE_CREEK","South Oregon coastal","WA_OR"
+"NESTUCCA_RIVER_FALL","North & Central Oregon","WA_OR"
+"ROBERTSON_CREEK","West Vancouver Island-South_FA_0.x","WCVI"
+"SOOKE_RIVER","West Vancouver Island-South_FA_0.x","WCVI"
+"SAN_JUAN_RIVER","West Vancouver Island-South_FA_0.x","WCVI"
+"THORNTON_CREEK","West Vancouver Island-South_FA_0.x","WCVI"
+NA,NA,NA
