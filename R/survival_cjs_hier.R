@@ -680,6 +680,60 @@ p_mat <- extract(dat_tbl_trim$cjs_hier[[5]])[["p_yr"]]
 hist(p_mat[ , 1:5, 4]) # second to last stage, ignore last year when rec missing
 
 
+# estimates of stage specific mean survival rates
+med_seg_surv <- purrr::map2(
+  dat_tbl_trim$phi_mat_mean, dat_tbl_trim$stock_group,
+  ~ .x %>% 
+    as.table() %>% 
+    as.data.frame() %>% 
+    mutate(segment = as.integer(Var2),
+           iteration = rep(1:nrow(.x), 
+                           times = length(unique(Var2))),
+           stock_group = .y
+    ) %>% 
+    group_by(
+      segment, stock_group
+    ) %>% 
+    reframe(
+      med = median(Freq),
+      lo = rethinking::HPDI(Freq, 0.05),
+      up = rethinking::HPDI(Freq, 0.95)
+    ) %>% 
+    left_join(., seg_key, by = c("stock_group", "segment")) 
+) %>% 
+  bind_rows() %>% 
+  mutate(
+    segment_name = fct_reorder(as.factor(segment_name), segment),
+    par = ifelse(
+      stock_group %in% c("Cali", "Low Col.", "WA_OR", "WCVI") & 
+        segment_name == "In\nRiver",
+      "beta",
+      "phi"
+    )
+  ) 
+
+fill_pal <- c("white", "red")
+names(fill_pal) <- c("phi", "beta")
+
+ggplot(med_seg_surv) +
+  geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up, 
+                      fill = par), shape = 21) +
+  scale_fill_manual(values = fill_pal) +
+  facet_wrap(~stock_group, scales = "free") +
+  ggsidekick::theme_sleek() +
+  theme(
+    axis.title = element_blank()
+  )
+
+ggplot(med_seg_surv %>% filter(!par == "beta")) +
+  geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up)) +
+  facet_wrap(~stock_group, scales = "free") +
+  ggsidekick::theme_sleek() +
+  theme(
+    axis.title = element_blank()
+  )
+
+
 ## Visualize posterior ---------------------------------------------------------
 
 source(here::here("R", "functions", "plot_survival.R"))

@@ -1,0 +1,67 @@
+---
+title: "results-summary"
+output:
+  bookdown::html_document2:
+    number_sections: true
+    toc: true
+date: "2024-09-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+
+# import data from survival_cjs_hier
+dat_tbl_trim <- readRDS(
+  here::here("data", "model_outputs", "hier_cjs_posterior_tbl.RDS")
+  )
+
+# import data from survival_logistic_reg
+tag_dat <- readRDS(here::here("data", "cleaned_log_reg.rds"))
+
+```
+
+DFO deployed 519 acoustic tags on genetically stock identified, mature Chinook salmon (2019-2023) off the west coast of Vancouver Island (Figure \@ref(fig:deploy-locs)). This work was intended to assess patterns of Chinook salmon habitat use in southern resident killer whale critical habitat. However, these data also provide an opportunity to better understand patterns of survival in Chinook salmon during return migrations prior to freshwater entry. Specifically we sought to address two objectivtes.
+1. Use Cormack-Jolly-Seber (CJS) models to estimate stage-specific survival rates during the return migration to identify locations with relatively high mortality.
+2. Use hierarchical generalized linear models to quantify direct and indirect effects of interacting covariates (individual condition, capture date, stock identity, annual exploitation rate, capture injuries) on survival.
+
+```{r deploy-locs, echo=FALSE, fig.cap = "Location of moored receievers by tagging year. Not all receivers were active for the entire year, but the majority were in place prior to tags being deployed and retrieved after adult fish had entered freshwater. Receivers in central California not shown to improve readability"}
+map_dep <- readRDS(here::here("figs", "deploy_map.rds"))
+map_dep
+```
+
+A wide range of Chinook salmon stocks were encountered, however the majority of tagged fish belonged to populations spawning in the Columbia, Fraser, or Puget Sound (Figure \@ref(fig:stock-comp)). We distinguished between upper and lower Columbia River populations given that only the former is likely to migrate past receivers at Bonneville. We distinguished between north and south Puget Sound to account for Nooksack and Skagit river populations that were unlikely to encounter Puget Sound receivers that begin at Admiralty Inlet. We distinguish between Fraser River stocks based on run-timing because these fish interact with the same receiver arrays and can therefore be modeled hierarchically, but may show divergent patterns in survival. Note we focus on relatively coarse groupings here given the constraints of the CJS models, but may evaluate finer stock groupings in the logistic regression model (additional details below). 
+
+```{r stock-comp, echo=FALSE, fig.cap = "Monthly stock composition of mature fish tagged with acoustic transmitters. Fraser Sub refers to fish that could not be identified based on genetics but were identified as Fraser River subyearling based on migration behaviour."}
+full_comp <- tag_dat %>% 
+  mutate(
+    month = ifelse(month == "4", 5, month)
+  ) %>% 
+  group_by(month) %>%
+  mutate(nn = n()) %>% 
+  ungroup() %>% 
+  group_by(stock_group, month, nn) %>%
+  tally() %>%
+  mutate(prop = n / nn) 
+
+
+ggplot(
+  full_comp, 
+  aes(fill = stock_group, y = prop, x = as.factor(month))
+) + 
+  geom_bar(position="stack", stat="identity") +
+  scale_fill_brewer(name = "Stock Aggregate", na.value = "grey60",
+                    type = "qual", palette = "Paired") +
+  labs(y = "Proportion Stock Composition", x = "Capture Month") +
+  ggsidekick::theme_sleek()
+```
+
+Acoustic tags were detected on a network of moored receivers. Coverage extended from southwest Vancouver Island to the mouth of the Columbia River and throughout the southern Salish Sea, however specific locations varied year to year (Figure \@ref(fig:receiver-map1)). 
+
+```{r receiver-map1, echo=FALSE, fig.cap = "Location of moored receievers by tagging year. Not all receivers were active for the entire year, but the majority were in place prior to tags being deployed and retrieved after adult fish had entered freshwater. Receivers in central California not shown to improve readability"}
+map1 <- readRDS(here::here("figs", "receiver_map1.rds"))
+map1
+```
+
+CJS models rely on discrete mark-recapture events to estimate survival through time or space. Given differences in when tags were deployed, we focused on estimating spatial patterns, i.e. how survival declined throughout marine migrations. Since migratory routes differed among stock groups, the number and location of mark-recapture events also differed. For each stock group we identified groups of receivers that approximated a s  

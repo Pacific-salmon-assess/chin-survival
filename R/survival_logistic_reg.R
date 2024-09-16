@@ -34,7 +34,8 @@ det_dat1 <- det_tbl %>%
   ) %>% 
   left_join(., 
             chin %>% 
-              select(vemco_code = acoustic_year, year, acoustic_type, 
+              mutate(month = lubridate::month(date)) %>% 
+              select(vemco_code = acoustic_year, month, year, acoustic_type, 
                      fl, lipid, year_day, hook_loc, fin_dam, injury, scale_loss,
                      comment),
             by = "vemco_code") %>%
@@ -66,8 +67,16 @@ det_dat <- det_dat1 %>%
   mutate(
     lipid_z = scale(lipid) %>% as.numeric(),
     fl_z = scale(fl) %>% as.numeric(),
-    day_z = scale(year_day) %>% as.numeric()
+    day_z = scale(year_day) %>% as.numeric(),
+    stock_group = factor(
+      stock_group, levels = c("Cali", "Up Col.", "Low Col.", "WA_OR", "WCVI",
+                              "ECVI", "North Puget", "South Puget", 
+                              "Fraser Year.", "Fraser Sub.",  "Fraser 4.1",
+                              "Fraser Fall")
+    )
   )
+saveRDS(det_dat,
+        here::here("data", "cleaned_log_reg.rds"))
 
 
 # PLOTS OF RAW DATA ------------------------------------------------------------
