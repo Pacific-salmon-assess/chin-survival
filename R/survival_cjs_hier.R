@@ -61,17 +61,11 @@ seg_key <- read.csv(here::here("data",
                                "surv_segment_key_2023.csv")) %>%
   mutate(segment = array_num - 1,
          segment_name = str_replace(segment_name, " ", "\n")) %>% 
-  dplyr::select(stock_group, segment, segment_name) %>% 
+  dplyr::select(stock_group, segment, array_num, segment_name) %>% 
   distinct()
 
 
 # Average survival by segment and year -----------------------------------------
-
-dat_tbl %>% 
-  select(stock_group, long_array_dat) %>% 
-  unnest(cols = "long_array_dat") %>% 
-  group_by(stock_group, year)
-
 
 mean_det <- purrr::map2(
   dat_tbl_trim$stock_group,
@@ -100,8 +94,7 @@ mean_det <- purrr::map2(
       select(stock_group, array_num, segment_name) %>% 
       distinct(),
     by = c("array_num", "stock_group")
-  ) %>% 
-  glimpse()
+  ) 
 
 mean_det_pt <- ggplot(mean_det) +
   geom_point(
@@ -221,7 +214,7 @@ hier_mod_sims_fixp <- stan_model(
 # 
 # ## FOR DEBUGGING
 # dd <-  dat_tbl_trim$dat_in[[5]]
-# # saveRDS(dd, here::here("data", "generated_data", "sample_cjs_dat.rds"))
+# saveRDS(dd, here::here("data", "model_outputs", "sample_cjs_dat.rds"))
 # 
 # inits <- list(
 #     alpha_phi = rnorm(1, 0, 0.5),
@@ -290,8 +283,8 @@ hier_mod_sims_fixp <- stan_model(
 ## REAL FIT --------------------------------------------------------------------
 
 # MCMC settings
-n_chains = 4
-n_iter = 2000
+n_chains = 1
+n_iter = 1000
 n_warmup = n_iter / 2
 params_fixp <- c(
   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",

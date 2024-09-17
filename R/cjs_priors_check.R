@@ -29,44 +29,51 @@ hist(boot::inv.logit(beta_p), col=rgb(0,0,1,0.4), add = T)
 
 
 #import sample data genereted in survival_cjs_hier.R
-dd <- readRDS(here::here("data", "generated_data", "sample_cjs_dat.rds"))
-
-params <- c(
-  "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
-  "L_Rho_yr", "alpha_p", "alpha_yr_p",
-  # transformed pars or estimated quantities
-  "Rho_yr", "phi_yr", "p_yr", "beta_yr"
-)
-
-## FOR DEBUGGING
-inits <- list(
-    alpha_phi = rnorm(1, 0, 0.5),
-    # note z transformed so inverted compared to beta_phi or beta_p
-    alpha_yr_phi_z = matrix(
-      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
-    ),
-    alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
-    sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
-    # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-    L_Rho_yr = matrix(
-      runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
-    ),
-    alpha_p = rnorm(1, 0, 0.5),
-    alpha_yr_p = matrix(
-      rnorm(dd$nyear * (dd$n_occasions), 0, 0.5), nrow = dd$nyear
-    )
-  )
+dd <- readRDS(here::here("data", "model_outputs", "sample_cjs_dat.rds"))
 
 # stan code 
 hier_mod_sims_priors_only <- stan_model(
   here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_v2_priorsONLY.stan")
 )
 
-fit_priors <- sampling(
-  hier_mod_sims_priors_only, data = dd, pars = params,
-  init = inits, chains = 1, iter = 4000, warmup = 50,
-  open_progress = FALSE
+
+n_chains = 1
+n_iter = 1000
+n_warmup = n_iter / 2
+params_fixp <- c(
+  "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
+  "L_Rho_yr", "alpha_p", "alpha_yr_p",
+  # transformed pars or estimated quantities
+  "Rho_yr", "phi_yr", "p_yr", "y_hat"
 )
+alpha_yr_p_dim <- dd$nyear * (dd$n_occasions)
+
+inits <- lapply(1:n_chains, function (i) {
+  list(
+    alpha_phi = rnorm(1, 0, 0.5),
+    # note z transformed so inverted compared to beta_phi or beta_p
+    alpha_yr_phi_z = matrix(
+      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), 
+      nrow = (dd$n_occasions - 1)
+    ),
+    alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
+    sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
+    # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+    L_Rho_yr = matrix(
+      runif((dd$n_occasions - 1)^2, -0.5, 0.5), 
+      nrow = (dd$n_occasions - 1)
+    ),
+    alpha_p = rnorm(1, 0, 0.5),
+    alpha_yr_p = matrix(rnorm(alpha_yr_p_dim, 0, 0.5), nrow = dd$nyear)
+  )
+})
+
+fit_priors <- sampling(hier_mod_sims_priors_only, data = dd, pars = params,
+         init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
+         open_progress = FALSE,
+         control = list(adapt_delta = 0.95))
+
+
 
 phi_est <- extract(fit_priors)[["phi_yr"]]
 p_est <- extract(fit_priors)[["p_yr"]]
