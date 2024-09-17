@@ -22,6 +22,7 @@ knitr-cache
 .Rhistory
 .Rapp.history
 data/model_outputs/
+figs/array_map.rds
 
 myNotes.*
 .Rproj.user/

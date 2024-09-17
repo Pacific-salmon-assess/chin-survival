@@ -85,32 +85,46 @@ mean_det <- purrr::map2(
     ungroup() %>% 
     pivot_longer(
       cols = -c(year, n),
-      names_to = "array_number",
+      names_to = "array_num",
       values_to = "ppn_detected"
     ) %>% 
     mutate(
-      stock_group = .x
+      stock_group = .x,
+      array_num = as.numeric(array_num)
     )
 ) %>%
-  bind_rows()
+  bind_rows() %>% 
+  left_join(
+    .,
+    seg_key %>% 
+      select(stock_group, array_num, segment_name) %>% 
+      distinct(),
+    by = c("array_num", "stock_group")
+  ) %>% 
+  glimpse()
 
 mean_det_pt <- ggplot(mean_det) +
   geom_point(
-    aes(x = array_number, y = ppn_detected, fill = as.factor(year)),
+    aes(x = fct_reorder(segment_name, array_num), y = ppn_detected, fill = as.factor(year)),
     position = position_dodge(width = 0.5),
     shape = 21
   ) +
   scale_fill_discrete(name = "Year") +
   facet_wrap(~stock_group, scales = "free_x") +
   ggsidekick::theme_sleek() +
+  labs(y = "Proportion Tags Detected") +
   theme(
-    legend.position = "top"
+    legend.position = "top",
+    axis.title.x = element_blank()
   )
 
 png(here::here("figs", "average_detections.png"), 
     height = 6, width = 9, units = "in", res = 250)
 mean_det_pt
 dev.off()
+
+#export for Rmd
+saveRDS(mean_det_pt, here::here("figs", "average_detections.rds" ))
 
 
 # Fit model --------------------------------------------------------------------

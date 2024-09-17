@@ -9,8 +9,6 @@ Outline
 - Outstanding issues
 
 Figures 
-1. Map of study area
-2. Stock composition
 3. Raw proportions detected
 4. CJS phi estimates
 5. CJS model predictions

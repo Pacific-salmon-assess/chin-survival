@@ -1,5 +1,5 @@
 ---
-title: "results-summary"
+title: "Preliminary CJS Results"
 output:
   bookdown::html_document2:
     number_sections: true
@@ -59,9 +59,23 @@ ggplot(
 
 Acoustic tags were detected on a network of moored receivers. Coverage extended from southwest Vancouver Island to the mouth of the Columbia River and throughout the southern Salish Sea, however specific locations varied year to year (Figure \@ref(fig:receiver-map1)). 
 
-```{r receiver-map1, echo=FALSE, fig.cap = "Location of moored receievers by tagging year. Not all receivers were active for the entire year, but the majority were in place prior to tags being deployed and retrieved after adult fish had entered freshwater. Receivers in central California not shown to improve readability"}
+```{r receiver-map1, echo=FALSE, fig.cap = "Location of moored receievers by tagging year. Not all receivers were active for the entire year, but the majority were in place prior to tags being deployed and retrieved after adult fish had entered freshwater. Receivers in central California not shown to improve readability."}
 map1 <- readRDS(here::here("figs", "receiver_map1.rds"))
 map1
 ```
 
-CJS models rely on discrete mark-recapture events to estimate survival through time or space. Given differences in when tags were deployed, we focused on estimating spatial patterns, i.e. how survival declined throughout marine migrations. Since migratory routes differed among stock groups, the number and location of mark-recapture events also differed. For each stock group we identified groups of receivers that approximated a s  
+CJS models rely on discrete mark-recapture events to estimate survival through time or space. Given differences in when tags were deployed, we focused on estimating spatial patterns, i.e. how survival declined throughout marine migrations. Since migratory routes differed among stock groups, the number and location of mark-recapture events also differed. For each stock group we identified groups of receivers that approximated a stage of the marine migration  (Figure \@ref(fig:receiver-map2)). We were able to distinguish between a greater number of migratory stages for stocks with marine migration that passed a larger number of arrays. For all stocks the first stage represented release and the final stage represented detections in freshwater. We note, however, that terminal freshwater detections were rare except in the Columbia and Fraser rivers. Additionally, we defined the final detection stage for southern Puget Sound populations as any of the marine arrays within the sound. Not only were these arrays relatively densely spaced, but even if freshwater arrays were consistently present in Puget Sound, we were unable to reliably assign fish to spawning system due to hatchery introgression. 
+
+```{r receiver-map2, echo=FALSE, fig.width=6, fig.height=7, fig.cap = "Receiver arrays grouped by stock-specific migration stage. Darker (lighter) colours represent locations earlier (later) in a stock's migration. Freshwater receivers are only shown in locations where a stock was likely to encounter them. Stocks with insufficient sample sizes to fit CJS models are not shown."}
+map2 <- readRDS(here::here("figs", "array_map.rds"))
+map2
+```
+
+Once arrays have been grouped, the data are wrangled to identify the number of individuals observed at each portion of the migration. The proportion of the tagged population observed at each stage of the migration varied among stocks, arrays, and years (Figure \@ref(fig:mean-det)). However, these data provide only an approximate index of survival because they fail to account for highly variable estimates of detection probability among stocks and arrays. 
+
+```{r mean-det, echo=FALSE, fig.cap = "Mean proportion of tagged population observed at each stage of the migration by tagging year. Note that the number and descriotion of migration stages differs among stocks, corresponding to the groups of arrays defined in Figure \@ref(fig:receiver-map2)."}
+mean_det_pt <- readRDS(here::here("figs", "average_detections.rds" ))
+mean_det_pt
+```
+
+To account for variable detection probabilities (p), mark-recapture data were fit to hiearchical CJS models. Since the migration stages differ among stocks, the CJS model's parameters cannot be easily estimated hierarchically and a separate model was fit to each stock. Fraser River populations were the one exception since all populations encountered were expected to migrate past the lower river array. Additionally, year- and stage-specific survival parameters were estimated hierarchically, while year- and stage-specific detection probabilities were estimated as fixed effects (since they are expected to differ due to interannual changes in array configuration). Finally, we distinguished between stocks with high terminal p and those with low or uncertain terminal p. Upriver Columbia, Fraser River, and south Puget Sound populations are an example of the former because the array spacing is sufficiently tight that high-powered tags are not expected to pass undetected. In this case, the final p parameter was fixed at 0.99, allowing survival to be estimated. For the other populations p and survival could not be independently estimated in the terminal stage. Instead terminal survival estimates incorporate both the detection probability and survival and are consequently markedly lower. 
