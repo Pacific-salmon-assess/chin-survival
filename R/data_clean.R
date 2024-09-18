@@ -4,7 +4,7 @@
 library(tidyverse)
 
 
-det_tbl <- readRDS(here::here("data", "det_history_tbl.RDS"))
+dat_tbl <- readRDS(here::here("data", "det_history_tbl.RDS"))
 
 chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS")) %>% 
   filter(
@@ -60,7 +60,7 @@ agg_names <- chin2 %>%
 
 
 ## Logistic Regression Dataset
-det_dat1 <- det_tbl %>% 
+det_dat1 <- dat_tbl %>% 
   dplyr::select(stock_group, agg_det) %>% 
   unnest(cols = c(agg_det)) %>%
   left_join(., agg_names, by = "vemco_code") %>% 
@@ -84,7 +84,6 @@ det_dat1 <- det_tbl %>%
     year, stock_group
   )
 
-
 # small number of tags (<2% missing lipid data; impute)
 bio_dat <- det_dat1 %>% 
   select(vemco_code, fl, lipid, stock_group, year) %>%
@@ -95,9 +94,45 @@ interp_lipid <- bio_dat %>%
   select(-ends_with("imp")) 
 det_dat1$lipid <- interp_lipid$lipid
 
-
 # export 
 saveRDS(det_dat1, here::here("data", "surv_log_reg_data.rds"))
+
+
+
+## CJS Model Data
+# ID tag codes to retain
+kept_tags <- dat_tbl %>%
+  # unnest and filter out stage 3
+  unnest(cols = bio_dat) %>%
+  filter(redeploy == "no") %>%
+  pull(vemco_code)
+
+# add updated Fraser groupings and imputed lipid content
+dat_tbl_trim <- dat_tbl %>% 
+  filter(!stock_group %in% c("ECVI", "North Puget")) %>% 
+  mutate(
+    bio_dat = purrr::map(bio_dat, function (x) {
+      x %>%
+        filter(vemco_code %in% kept_tags) %>% 
+        select(-c(agg, lipid)) %>% 
+        left_join(
+          ., 
+          det_dat1 %>% select(vemco_code, agg = stock_group, lipid)
+        )
+    }),
+    wide_array_dat = purrr::map(wide_array_dat, function (x) {
+      # remove aggregate vector if only one level
+      dd <- x %>%
+        filter(vemco_code %in% kept_tags)
+      # if (length(unique(dd$agg)) == "1") {
+      dd <- dd %>% select(-agg)
+      # }
+      return(dd)
+    })
+  ) %>%
+  select(stock_group, bio_dat, wide_array_dat)
+
+saveRDS(dat_tbl_trim, here::here("data", "surv_cjs_data.rds"))
 
 
 
