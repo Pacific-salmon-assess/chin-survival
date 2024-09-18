@@ -17,43 +17,13 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 set.seed(123)
 
-## Import occurence matrix (generated in prep_detection_histories.R)
-dat_tbl <- readRDS(here::here("data", "det_history_tbl.RDS")) 
+## Import occurence matrix (generated in chinTagging/prep_detection_histories.R 
+# and cleaned in data_clean.R)
+dat_tbl_trim <- readRDS(here::here("data", "surv_cjs_data.rds"))
 
-# ID tag codes to retain
-# 1) no extreme injuries
-kept_tags <- dat_tbl %>%
-  # unnest and filter out stage 3
-  unnest(cols = bio_dat) %>%
-  filter(redeploy == "no") %>%
-  pull(vemco_code)
 
-dat_tbl_trim <- dat_tbl %>% 
-  filter(!stock_group %in% c("ECVI", "North Puget")) %>% 
-  mutate(
-    bio_dat = purrr::map(bio_dat, function (x) {
-      x %>%
-        filter(vemco_code %in% kept_tags)
-    }),
-    wide_array_dat = purrr::map(wide_array_dat, function (x) {
-      # remove aggregate vector if only one level
-      dd <- x %>%
-        filter(vemco_code %in% kept_tags)
-      # if (length(unique(dd$agg)) == "1") {
-        dd <- dd %>% select(-agg)
-      # }
-      return(dd)
-    })
-  ) %>%
-  select(stock_group, bio_dat, wide_array_dat)
-
-# dat_tbl_trim$input_mat <- purrr::map(dat_tbl_trim$wide_array_dat, function(x) {
-#   out_mat <- x %>% 
-#       select(-vemco_code) %>% 
-#       as.matrix()
-#   attr(out_mat, "dimnames") <- NULL
-#   return(out_mat)
-# })
+# remove first columns of 100% observations 
+dat_tbl_trim$bio_dat <- purrr::map()
 
 
 ## Import survival segment key for labelling plots 
@@ -291,7 +261,7 @@ params_fixp <- c(
   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
   "L_Rho_yr", "alpha_p", "alpha_yr_p",
   # transformed pars or estimated quantities
-  "Rho_yr", "phi_yr", "p_yr", "y_hat"
+  "Rho_yr", "alpha_yr_phi", "phi_yr", "p_yr", "y_hat"
 )
 
 cjs_hier_sims <- pmap(
@@ -459,7 +429,6 @@ phi_mat <- pmap(
     extract(x)[["phi_yr"]]
   } else {
     phi_adj <- extract(x)[["phi_yr"]]
-    # beta_est <- extract(x)[["beta_yr"]]
     # replace array corresponding to last stage-specific survival est, w/ beta
     phi_adj[ , , dim(phi_adj)[3]] <- extract(x)[["beta_yr"]]
     return(phi_adj)
@@ -728,23 +697,48 @@ fill_pal <- c("white", "red")
 names(fill_pal) <- c("phi", "beta")
 
 ggplot(med_seg_surv) +
-  geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up, 
-                      fill = par), shape = 21) +
-  scale_fill_manual(values = fill_pal) +
-  facet_wrap(~stock_group, scales = "free") +
-  ggsidekick::theme_sleek() +
-  theme(
-    axis.title = element_blank()
-  )
 
+  png(here::here("figs", "cjs", "phi_ests.png"), 
+    height = 5, width = 7.5, units = "in", res = 200)
 ggplot(med_seg_surv %>% filter(!par == "beta")) +
   geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up)) +
   facet_wrap(~stock_group, scales = "free") +
   ggsidekick::theme_sleek() +
   theme(
     axis.title = element_blank()
-  )
+  ) 
+dev.off()
 
+
+# year- and stage-specific detection probability estimates
+alpha_yr_p_mat <- map(dat_tbl_trim$cjs_hier, ~ extract(.x)[["alpha_yr_p"]])
+
+
+dd <- alpha_yr_p_mat[[1]] %>% 
+  as.data.frame.table() %>% 
+  rename(year = Var2, segment = Var3) %>% 
+  mutate(est = boot::inv.logit(Freq),
+         year = as.numeric(as.factor(year)) + 2018,
+         segment = as.numeric(as.factor(segment))) %>% 
+  group_by(
+    segment, year
+  ) %>% 
+  reframe(
+    med = median(est),
+    lo = rethinking::HPDI(est, 0.05),
+    up = rethinking::HPDI(est, 0.95),
+    stock_group = dat_tbl_trim$stock_group[[1]]
+  ) %>% 
+  left_join(., seg_key, by = c("stock_group", "segment"))
+
+ggplot(dd) +
+  geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up)) +
+  facet_wrap(~year, scales = "free") +
+  ggsidekick::theme_sleek() +
+  theme(
+    axis.title = element_blank()
+  ) 
+  
 
 ## Visualize posterior ---------------------------------------------------------
 
