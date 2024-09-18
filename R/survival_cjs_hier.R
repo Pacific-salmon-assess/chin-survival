@@ -23,7 +23,9 @@ dat_tbl_trim <- readRDS(here::here("data", "surv_cjs_data.rds"))
 
 
 # remove first columns of 100% observations 
-dat_tbl_trim$bio_dat <- purrr::map()
+dat_tbl_trim$wide_array_dat <- purrr::map(
+  dat_tbl_trim$wide_array_dat, ~ .x %>% select(-`1`)
+)
 
 
 ## Import survival segment key for labelling plots 
@@ -165,90 +167,94 @@ hier_mod_sims_fixp <- stan_model(
 
 ## TEST FIT --------------------------------------------------------------------
 
-# # MCMC settings
-# n_chains = 1
-# n_iter = 500
-# n_warmup = n_iter / 2
-# params <- c(
-#   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
-#   "L_Rho_yr", "alpha_p", "alpha_yr_p",
-#   # transformed pars or estimated quantities
-#   "Rho_yr", "phi_yr", "p_yr", "beta_yr", "y_hat"
-# )
-# params2 <- c(
-#   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
-#   "L_Rho_yr", "alpha_p", "alpha_yr_p",
-#   # transformed pars or estimated quantities
-#   "Rho_yr", "phi_yr", "p_yr", "y_hat"
-# )
-# 
-# 
+# MCMC settings
+n_chains = 1
+n_iter = 1000
+n_warmup = n_iter / 2
+params <- c(
+  "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
+  "L_Rho_yr", "alpha_p", "alpha_yr_p",
+  # transformed pars or estimated quantities
+  "Rho_yr", "phi_yr", "p_yr", "beta_yr", "y_hat"
+)
+params2 <- c(
+  "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
+  "L_Rho_yr", "alpha_p", "alpha_yr_p",
+  # transformed pars or estimated quantities
+  "Rho_yr", "phi_yr", "p_yr", "y_hat"
+)
+
+
 # ## FOR DEBUGGING
-# dd <-  dat_tbl_trim$dat_in[[5]]
+dd <-  dat_tbl_trim$dat_in[[4]]
 # saveRDS(dd, here::here("data", "model_outputs", "sample_cjs_dat.rds"))
-# 
-# inits <- list(
-#     alpha_phi = rnorm(1, 0, 0.5),
-#     # note z transformed so inverted compared to beta_phi or beta_p
-#     alpha_yr_phi_z = matrix(
-#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
-#     ),
-#     alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
-#     sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
-#     # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-#     L_Rho_yr = matrix(
-#       runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
-#       ),
-#     alpha_p = rnorm(1, 0, 0.5),
-#     alpha_yr_p = matrix(
-#       rnorm(dd$nyear * (dd$n_occasions), 0, 0.5), nrow = dd$nyear
-#       )
-#   )
-# inits2 <- list(
-#     alpha_phi = rnorm(1, 0, 0.5),
-#     # note z transformed so inverted compared to beta_phi or beta_p
-#     alpha_yr_phi_z = matrix(
-#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
-#     ),
-#     alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
-#     sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
-#     # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-#     L_Rho_yr = matrix(
-#       runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
-#     ),
-#     alpha_p = rnorm(1, 0, 0.5),
-#     alpha_yr_p = matrix(
-#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = dd$nyear
-#     )
-#   )
-# 
-# fit <- sampling(
-#   hier_mod_sims, data = dd, pars = params,
-#   init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
-#   open_progress = FALSE,
-#   control = list(adapt_delta = 0.95)
-# )
-# fit2 <- sampling(
-#   hier_mod_sims_fixp, data = dd, pars = params2,
-#   init = inits2, chains = n_chains, iter = n_iter, warmup = n_warmup,
-#   open_progress = FALSE,
-#   control = list(adapt_delta = 0.95)
-# )
-# 
-# 
-# phi_pattern <- "phi_yr\\[\\d+,5\\]$"
-# p_pattern <- "p_yr\\[\\d+,6\\]$"
-# 
-# fit_post <- summary(fit)$summary
-# fit_post[grepl("beta", rownames(fit_post)), ]
-# fit_post[grepl(p_pattern, rownames(fit_post)), ]
-# fit_post[grepl(phi_pattern, rownames(fit_post)), ]
-# fit_post[grepl("sigma_alpha_yr_phi", rownames(fit_post)), ]
-# fit_post[grepl("Rho_yr", rownames(fit_post)), ]
-# 
-# fit_post2 <- summary(fit2)$summary
-# fit_post2[grepl(p_pattern, rownames(fit_post2)), ]
-# fit_post2[grepl(phi_pattern, rownames(fit_post2)), ]
+
+inits <- lapply(1:n_chains, function (i) {
+  list(
+    alpha_phi = rnorm(1, 0, 0.5),
+    # note z transformed so inverted compared to beta_phi or beta_p
+    alpha_yr_phi_z = matrix(
+      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5),
+      nrow = (dd$n_occasions - 1)
+    ),
+    alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
+    sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
+    # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+    L_Rho_yr = matrix(
+      runif((dd$n_occasions - 1)^2, -0.5, 0.5),
+      nrow = (dd$n_occasions - 1)
+    ),
+    alpha_p = rnorm(1, 0, 0.5),
+    alpha_yr_p = matrix(rnorm(dd$nyear * (dd$n_occasions), 0, 0.5), nrow = dd$nyear)
+  )
+})
+inits2 <- lapply(1:n_chains, function (i) {
+  list(
+    alpha_phi = rnorm(1, 0, 0.5),
+    # note z transformed so inverted compared to beta_phi or beta_p
+    alpha_yr_phi_z = matrix(
+      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
+    ),
+    alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
+    sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
+    # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+    L_Rho_yr = matrix(
+      runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
+    ),
+    alpha_p = rnorm(1, 0, 0.5),
+    alpha_yr_p = matrix(
+      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = dd$nyear
+    )
+  )
+})
+
+fit <- sampling(
+  hier_mod_sims, data = dd, pars = params,
+  init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
+  open_progress = TRUE,
+  control = list(adapt_delta = 0.95)
+)
+fit2 <- sampling(
+  hier_mod_sims_fixp, data = dd, pars = params2,
+  init = inits2, chains = n_chains, iter = n_iter, warmup = n_warmup,
+  open_progress = FALSE,
+  control = list(adapt_delta = 0.95)
+)
+
+
+phi_pattern <- "phi_yr"#"phi_yr\\[\\d+,5\\]$"
+p_pattern <- "p_yr"#\\[\\d+,6\\]$"
+
+fit_post <- summary(fit)$summary
+fit_post[grepl("beta", rownames(fit_post)), ]
+fit_post[grepl(p_pattern, rownames(fit_post)), ]
+fit_post[grepl(phi_pattern, rownames(fit_post)), ]
+fit_post[grepl("sigma_alpha_yr_phi", rownames(fit_post)), ]
+fit_post[grepl("Rho_yr", rownames(fit_post)), ]
+
+fit_post2 <- summary(fit2)$summary
+fit_post2[grepl(p_pattern, rownames(fit_post2)), ]
+fit_post2[grepl(phi_pattern, rownames(fit_post2)), ]
 
 
 ## REAL FIT --------------------------------------------------------------------
