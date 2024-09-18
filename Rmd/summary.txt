@@ -12,7 +12,7 @@ Figures
 3. Raw proportions detected
 4. CJS phi estimates
 5. CJS model predictions
-6. CJS posterior predictions
+6. CJS posterior predictions	
 7. DAG
 
 

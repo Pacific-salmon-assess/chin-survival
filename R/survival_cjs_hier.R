@@ -98,7 +98,8 @@ mean_det <- purrr::map2(
 
 mean_det_pt <- ggplot(mean_det) +
   geom_point(
-    aes(x = fct_reorder(segment_name, array_num), y = ppn_detected, fill = as.factor(year)),
+    aes(x = fct_reorder(segment_name, array_num), y = ppn_detected, 
+        fill = as.factor(year)),
     position = position_dodge(width = 0.5),
     shape = 21
   ) +
@@ -283,8 +284,8 @@ hier_mod_sims_fixp <- stan_model(
 ## REAL FIT --------------------------------------------------------------------
 
 # MCMC settings
-n_chains = 1
-n_iter = 1000
+n_chains = 4
+n_iter = 2000
 n_warmup = n_iter / 2
 params_fixp <- c(
   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
@@ -338,6 +339,10 @@ cjs_hier_sims <- pmap(
 
 # add to tibble
 dat_tbl_trim$cjs_hier <- cjs_hier_sims
+
+saveRDS(dat_tbl_trim, 
+        here::here("data", "model_outputs", "hier_cjs_fit_tbl.RDS")) 
+
 
 
 ## Model checks ----------------------------------------------------------------

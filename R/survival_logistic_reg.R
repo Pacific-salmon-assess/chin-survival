@@ -12,51 +12,9 @@ library(rethinking)
 rstan::rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
-det_tbl <- readRDS(here::here("data", "det_history_tbl.RDS"))
-
-chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS"))
-
-# pull agg names for fraser
-agg_names <- det_tbl %>% 
-  filter(stock_group == "Fraser") %>% 
-  unnest(bio_dat) %>%
-  select(vemco_code, agg) 
-  
-  
-det_dat1 <- det_tbl %>% 
-  dplyr::select(stock_group, agg_det) %>% 
-  unnest(cols = c(agg_det)) %>%
-  left_join(., agg_names, by = "vemco_code") %>% 
-  mutate(
-    term_det = ifelse(final_det + river_det > 0, 1, 0),
-    stock_group = ifelse(stock_group == "Fraser", agg, stock_group) %>% 
-      as.factor()
-  ) %>% 
-  left_join(., 
-            chin %>% 
-              mutate(month = lubridate::month(date)) %>% 
-              select(vemco_code = acoustic_year, month, year, acoustic_type, 
-                     fl, lipid, year_day, hook_loc, fin_dam, injury, scale_loss,
-                     comment),
-            by = "vemco_code") %>%
-  mutate(
-    comp_inj = (injury + scale_loss + fin_dam),
-    redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes")
-  ) %>% 
-  arrange(
-    year, stock_group
-  )
 
 
-# small number of tags (<2% missing lipid data; impute)
-bio_dat <- det_dat1 %>% 
-  select(vemco_code, fl, lipid, stock_group, year) %>%
-  distinct() 
-interp_lipid <- bio_dat %>%
-  select(-vemco_code) %>% 
-  VIM::kNN(., k = 5) %>% 
-  select(-ends_with("imp")) 
-det_dat1$lipid <- interp_lipid$lipid
+det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds"))
 
 
 # remove redeployed tags and scale continuous covariates
