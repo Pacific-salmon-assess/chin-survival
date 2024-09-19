@@ -32,7 +32,7 @@ functions {
         int t_next = t_curr + 1;
         
         chi[i, t_curr] = (1 - phi[i, t_curr])
-                        + phi[i, t_curr] * (1 - p[i, t_next - 1]) * chi[i, t_next];
+                        + phi[i, t_curr] * (1 - p[i, t_next]) * chi[i, t_next];
       }
     }
     return chi;
@@ -66,7 +66,8 @@ parameters {
   vector<lower=0>[n_occ_minus_1] sigma_alpha_yr_phi;   // SD among years
   cholesky_factor_corr[n_occ_minus_1] L_Rho_yr;    // for covariance among year-stage intercepts
   real alpha_p;                              // Mean det prob
-  matrix[nyear, n_occ_minus_1 - 1] alpha_yr_p;        // Year/time intercepts for p (one short due to last being fixed)
+  matrix[nyear, n_occ_minus_1] alpha_yr_p;        // Year/time intercepts for p
+  // note last column of alpha_yr_p is excluded because probability fixed
 }
 
 transformed parameters {
@@ -76,7 +77,7 @@ transformed parameters {
 
 
   matrix<lower=0,upper=1>[nind, n_occ_minus_1] phi;
-  matrix<lower=0,upper=1>[nind, n_occ_minus_1] p;
+  matrix<lower=0,upper=1>[nind, n_occasions] p;
   matrix<lower=0,upper=1>[nind, n_occasions] chi;
 
   // Constraints
@@ -85,11 +86,13 @@ transformed parameters {
       phi[i, t] = 0;
       p[i, t] = 0;
     }
-    for (t in first[i]:(n_occ_minus_1 - 1)) {
+    // fix p in first time step since deployed
+    p[i, 1] = 1;
+    for (t in 2:n_occ_minus_1) {
       p[i, t] = inv_logit(alpha_p + alpha_yr_p[year[i], t]);
     }
     // fix p in final time step
-    p[i, n_occ_minus_1] = final_fix_p;
+    p[i, n_occasions] = final_fix_p;
     for (t in first[i]:n_occ_minus_1) {
       phi[i, t] = inv_logit(alpha_phi + alpha_yr_phi[year[i], t] + alpha_t_phi[t]);
     }
@@ -112,8 +115,13 @@ model {
   for (i in 1:nind) {
     if (first[i] > 0) {
       for (t in (first[i] + 1):last[i]) {
+        // assumes detections at current time step
         1 ~ bernoulli(phi[i, t - 1]);
-        y[i, t] ~ bernoulli(p[i, t - 1]);
+        if (t == n_occasions) {
+          y[i, t] ~ bernoulli(final_fix_p);  // Use fixed p in likelihood
+        } else {
+          y[i, t] ~ bernoulli(p[i, t]);
+        }
       }
       1 ~ bernoulli(chi[i, last[i]]);
     }
@@ -122,7 +130,7 @@ model {
 
 generated quantities {
   matrix<lower=0,upper=1>[nyear, n_occ_minus_1] phi_yr;
-  matrix<lower=0,upper=1>[nyear, n_occ_minus_1] p_yr;
+  matrix<lower=0,upper=1>[nyear, n_occasions] p_yr;
   matrix[n_occ_minus_1, n_occ_minus_1] Rho_yr;
   
   // matrices to store obs
@@ -133,13 +141,14 @@ generated quantities {
 
   // posterior estimates of year_specific phi
   for (yy in 1:nyear) {
-    for (t in 1:(n_occ_minus_1 - 1)) {
-      p_yr[yy, t] = inv_logit(alpha_p + alpha_yr_p[yy, t]);
-    }
-    p_yr[yy, n_occ_minus_1] = final_fix_p;
     for (t in 1:n_occ_minus_1) {
       phi_yr[yy, t] = inv_logit(alpha_phi + alpha_yr_phi[yy, t] + alpha_t_phi[t]);
     }
+    p_yr[yy, 1] = 1;
+    for (t in 2:n_occ_minus_1) {
+      p_yr[yy, t] = inv_logit(alpha_p + alpha_yr_p[yy, t]);
+    }
+    p_yr[yy, n_occasions] = final_fix_p;
   }
   Rho_yr = multiply_lower_tri_self_transpose(L_Rho_yr);
 
@@ -156,7 +165,7 @@ generated quantities {
       z[i, t] = bernoulli_rng(mu_state[i, t]);
       
       // obs process
-      mu_obs[i, t] = p_yr[year[i], t - 1] * z[i, t];
+      mu_obs[i, t] = p_yr[year[i], t] * z[i, t];
       y_hat[i, t] = bernoulli_rng(mu_obs[i, t]);
     }
   }

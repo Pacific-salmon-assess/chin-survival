@@ -45,7 +45,6 @@ data {
   int<lower=0,upper=1> y[nind, n_occasions];    // Capture-history
   int<lower=1> nyear;               // Number of years
   int<lower=1,upper=nyear> year[nind];     // Year
-  real<lower=0> final_fix_p;     // fixed values for final detection prob
 }
 
 transformed data {
@@ -66,7 +65,7 @@ parameters {
   vector<lower=0>[n_occ_minus_1] sigma_alpha_yr_phi;   // SD among years
   cholesky_factor_corr[n_occ_minus_1] L_Rho_yr;    // for covariance among year-stage intercepts
   real alpha_p;                              // Mean det prob
-  matrix[nyear, n_occ_minus_1] alpha_yr_p;        // Year/time intercepts for p
+  matrix[nyear, n_occasions] alpha_yr_p;        // Year/time intercepts for p
 }
 
 transformed parameters {
@@ -85,12 +84,14 @@ transformed parameters {
       phi[i, t] = 0;
       p[i, t] = 0;
     }
-    for (t in first[i]:n_occ_minus_1) {
-      phi[i, t] = inv_logit(alpha_phi + alpha_yr_phi[year[i], t] + alpha_t_phi[t]);
+    // fix p in first time step since deployed
+    p[i, 1] = 1;
+    for (t in 2:n_occasions) {
       p[i, t] = inv_logit(alpha_p + alpha_yr_p[year[i], t]);
     }
-    // fix p in final time step
-    p[i, n_occasions] = final_fix_p;
+    for (t in first[i]:n_occ_minus_1) {
+      phi[i, t] = inv_logit(alpha_phi + alpha_yr_phi[year[i], t] + alpha_t_phi[t]);
+    }
   }
 
   chi = prob_uncaptured(nind, n_occasions, p, phi);
@@ -123,7 +124,9 @@ generated quantities {
   matrix<lower=0,upper=1>[nyear, n_occ_minus_1] phi_yr;
   matrix<lower=0,upper=1>[nyear, n_occasions] p_yr;
   matrix[n_occ_minus_1, n_occ_minus_1] Rho_yr;
-  
+  // phi[n_occ_minus_1] and p[n_occasions] can't be identified simultaneously; define their product instead based on year-specific estimates
+  vector[nyear] beta_yr; 
+
   // matrices to store obs
   int<lower=0,upper=1> y_hat[nind, n_occasions];
   real<lower=0,upper=1> mu_state[nind, n_occasions];
@@ -134,9 +137,12 @@ generated quantities {
   for (yy in 1:nyear) {
     for (t in 1:n_occ_minus_1) {
       phi_yr[yy, t] = inv_logit(alpha_phi + alpha_yr_phi[yy, t] + alpha_t_phi[t]);
+    }
+    p_yr[yy, 1] = 1;
+    for (t in 2:n_occasions) {
       p_yr[yy, t] = inv_logit(alpha_p + alpha_yr_p[yy, t]);
     }
-    p_yr[yy, n_occasions] = final_fix_p;
+    beta_yr[yy] = phi_yr[yy, n_occ_minus_1] * p_yr[yy, n_occasions];
   }
   Rho_yr = multiply_lower_tri_self_transpose(L_Rho_yr);
 
