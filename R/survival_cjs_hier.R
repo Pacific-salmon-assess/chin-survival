@@ -167,94 +167,94 @@ hier_mod_sims_fixp <- stan_model(
 
 ## TEST FIT --------------------------------------------------------------------
 
-# MCMC settings
-# n_chains = 1
-# n_iter = 1000
-# n_warmup = n_iter / 2
-# params <- c(
-#   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
-#   "L_Rho_yr", "alpha_p", "alpha_yr_p",
-#   # transformed pars or estimated quantities
-#   "Rho_yr", "phi_yr", "p_yr", "beta_yr", "y_hat"
-# )
-# params2 <- c(
-#   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
-#   "L_Rho_yr", "alpha_p", "alpha_yr_p",
-#   # transformed pars or estimated quantities
-#   "Rho_yr", "phi_yr", "p_yr", "y_hat"
-# )
-# 
-# 
-# # ## FOR DEBUGGING
-# dd <-  dat_tbl_trim$dat_in[[2]]
-# # saveRDS(dd, here::here("data", "model_outputs", "sample_cjs_dat.rds"))
-# 
-# inits <- lapply(1:n_chains, function (i) {
-#   list(
-#     alpha_phi = rnorm(1, 0, 0.5),
-#     # note z transformed so inverted compared to beta_phi or beta_p
-#     alpha_yr_phi_z = matrix(
-#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5),
-#       nrow = (dd$n_occasions - 1)
-#     ),
-#     alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
-#     sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
-#     # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-#     L_Rho_yr = matrix(
-#       runif((dd$n_occasions - 1)^2, -0.5, 0.5),
-#       nrow = (dd$n_occasions - 1)
-#     ),
-#     alpha_p = rnorm(1, 0, 0.5),
-#     alpha_yr_p = matrix(rnorm(dd$nyear * (dd$n_occasions), 0, 0.5), nrow = dd$nyear)
-#   )
-# })
-# inits2 <- lapply(1:n_chains, function (i) {
-#   list(
-#     alpha_phi = rnorm(1, 0, 0.5),
-#     # note z transformed so inverted compared to beta_phi or beta_p
-#     alpha_yr_phi_z = matrix(
-#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
-#     ),
-#     alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
-#     sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
-#     # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-#     L_Rho_yr = matrix(
-#       runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
-#     ),
-#     alpha_p = rnorm(1, 0, 0.5),
-#     alpha_yr_p = matrix(
-#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = dd$nyear
-#     )
-#   )
-# })
-# 
-# fit <- sampling(
-#   hier_mod_sims, data = dd, pars = params,
-#   init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
-#   open_progress = FALSE,
-#   control = list(adapt_delta = 0.95)
-# )
-# fit2 <- sampling(
-#   hier_mod_sims_fixp, data = dd, pars = params2,
-#   init = inits2, chains = n_chains, iter = n_iter, warmup = n_warmup,
-#   open_progress = FALSE,
-#   control = list(adapt_delta = 0.95)
-# )
-# 
-# 
-# phi_pattern <- "phi_yr"#"phi_yr\\[\\d+,5\\]$"
-# p_pattern <- "p_yr"#\\[\\d+,6\\]$"
-# 
-# fit_post <- summary(fit)$summary
-# fit_post[grepl("beta", rownames(fit_post)), ]
-# fit_post[grepl(p_pattern, rownames(fit_post)), ]
-# fit_post[grepl(phi_pattern, rownames(fit_post)), ]
-# fit_post[grepl("sigma_alpha_yr_phi", rownames(fit_post)), ]
-# fit_post[grepl("Rho_yr", rownames(fit_post)), ]
-# 
-# fit_post2 <- summary(fit2)$summary
-# fit_post2[grepl(p_pattern, rownames(fit_post2)), ]
-# fit_post2[grepl(phi_pattern, rownames(fit_post2)), ]
+#MCMC settings
+n_chains = 1
+n_iter = 1000
+n_warmup = n_iter / 2
+params <- c(
+  "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
+  "L_Rho_yr", "alpha_p", "alpha_yr_p",
+  # transformed pars or estimated quantities
+  "Rho_yr", "phi_yr", "p_yr", "beta_yr", "y_hat"
+)
+params2 <- c(
+  "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
+  "L_Rho_yr", "alpha_p", "alpha_yr_p",
+  # transformed pars or estimated quantities
+  "Rho_yr", "phi_yr", "p_yr", "y_hat"
+)
+
+
+# ## FOR DEBUGGING
+dd <-  dat_tbl_trim$dat_in[[2]]
+# saveRDS(dd, here::here("data", "model_outputs", "sample_cjs_dat.rds"))
+
+inits <- lapply(1:n_chains, function (i) {
+  list(
+    alpha_phi = rnorm(1, 0, 0.5),
+    # note z transformed so inverted compared to beta_phi or beta_p
+    alpha_yr_phi_z = matrix(
+      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5),
+      nrow = (dd$n_occasions - 1)
+    ),
+    alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
+    sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
+    # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+    L_Rho_yr = matrix(
+      runif((dd$n_occasions - 1)^2, -0.5, 0.5),
+      nrow = (dd$n_occasions - 1)
+    ),
+    alpha_p = rnorm(1, 0, 0.5),
+    alpha_yr_p = matrix(rnorm(dd$nyear * (dd$n_occasions), 0, 0.5), nrow = dd$nyear)
+  )
+})
+inits2 <- lapply(1:n_chains, function (i) {
+  list(
+    alpha_phi = rnorm(1, 0, 0.5),
+    # note z transformed so inverted compared to beta_phi or beta_p
+    alpha_yr_phi_z = matrix(
+      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
+    ),
+    alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
+    sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
+    # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+    L_Rho_yr = matrix(
+      runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
+    ),
+    alpha_p = rnorm(1, 0, 0.5),
+    alpha_yr_p = matrix(
+      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = dd$nyear
+    )
+  )
+})
+
+fit <- sampling(
+  hier_mod_sims, data = dd, pars = params,
+  init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
+  open_progress = FALSE,
+  control = list(adapt_delta = 0.95)
+)
+fit2 <- sampling(
+  hier_mod_sims_fixp, data = dd, pars = params2,
+  init = inits2, chains = n_chains, iter = n_iter, warmup = n_warmup,
+  open_progress = FALSE,
+  control = list(adapt_delta = 0.95)
+)
+
+
+phi_pattern <- "phi_yr"#"phi_yr\\[\\d+,5\\]$"
+p_pattern <- "p_yr"#\\[\\d+,6\\]$"
+
+fit_post <- summary(fit)$summary
+fit_post[grepl("beta", rownames(fit_post)), ]
+fit_post[grepl(p_pattern, rownames(fit_post)), ]
+fit_post[grepl(phi_pattern, rownames(fit_post)), ]
+fit_post[grepl("sigma_alpha_yr_phi", rownames(fit_post)), ]
+fit_post[grepl("Rho_yr", rownames(fit_post)), ]
+
+fit_post2 <- summary(fit2)$summary
+fit_post2[grepl(p_pattern, rownames(fit_post2)), ]
+fit_post2[grepl(phi_pattern, rownames(fit_post2)), ]
 
 
 ## REAL FIT --------------------------------------------------------------------
@@ -664,7 +664,7 @@ dev.off()
 
 # posterior estimates of det probability for Upper Col
 p_mat <- extract(dat_tbl_trim$cjs_hier[[5]])[["p_yr"]]
-hist(p_mat[ , 1:5, 4]) # second to last stage, ignore last year when rec missing
+hist(p_mat[ , 1:5, 5]) # second to last stage, ignore last year when rec missing
 
 
 # estimates of stage specific mean survival rates
@@ -702,9 +702,7 @@ med_seg_surv <- purrr::map2(
 fill_pal <- c("white", "red")
 names(fill_pal) <- c("phi", "beta")
 
-ggplot(med_seg_surv) +
-
-  png(here::here("figs", "cjs", "phi_ests.png"), 
+png(here::here("figs", "cjs", "phi_ests.png"), 
     height = 5, width = 7.5, units = "in", res = 200)
 ggplot(med_seg_surv %>% filter(!par == "beta")) +
   geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up)) +
@@ -716,40 +714,47 @@ ggplot(med_seg_surv %>% filter(!par == "beta")) +
 dev.off()
 
 
-# year- and stage-specific detection probability estimates
-alpha_yr_p_mat <- map(dat_tbl_trim$cjs_hier, ~ extract(.x)[["p_yr"]])
-pars <- extract(fit)
-yr_p_mat <- pars[["p_yr"]]
-alpha_yr_p_mat <- pars[["alpha_yr_p"]]
-
-p_sum <- yr_p_mat %>% 
-  as.data.frame.table() %>% 
-  rename(year = Var2, segment = Var3) %>% 
-  mutate(est = Freq,
-         year = as.numeric(as.factor(year)) + 2018,
-         array_num = as.numeric(as.factor(segment))) %>% 
-  group_by(
-    array_num, year
-  ) %>% 
-  reframe(
-    med = median(est),
-    lo = rethinking::HPDI(est, 0.05),
-    up = rethinking::HPDI(est, 0.95),
-    stock_group = dat_tbl_trim$stock_group[[2]]
-  ) %>% 
-  left_join(., seg_key, by = c("stock_group", "array_num")) %>% 
-  mutate(
-    segment_name = fct_reorder(as.factor(segment_name), segment)
+# year- and stage-specific detection parameter estimates
+yr_p_mat_plots <- purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group,
+  function(x, y) {
+  yr_p_mat <- extract(x)[["p_yr"]] 
+  p_sum <- yr_p_mat %>% 
+    as.data.frame.table() %>% 
+    rename(year = Var2, segment = Var3) %>% 
+    mutate(est = Freq,
+           year = as.numeric(as.factor(year)) + 2018,
+           array_num = as.numeric(as.factor(segment))) %>% 
+    group_by(
+      array_num, year
+    ) %>% 
+    reframe(
+      med = median(est),
+      lo = rethinking::HPDI(est, 0.05),
+      up = rethinking::HPDI(est, 0.95),
+      stock_group = y
+      ) %>% 
+    left_join(., seg_key, by = c("stock_group", "array_num")) %>% 
+    mutate(
+      segment_name = fct_reorder(as.factor(segment_name), segment)
+    )
+  
+  ggplot(p_sum) +
+    geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up)) +
+    facet_wrap(~year) +
+    ggsidekick::theme_sleek() +
+    labs(title = y) +
+    theme(
+      axis.title = element_blank()
+    ) 
+  }
   )
 
-ggplot(p_sum) +
-  geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up)) +
-  facet_wrap(~year) +
-  ggsidekick::theme_sleek() +
-  theme(
-    axis.title = element_blank()
-  ) 
-  
+pdf(here::here("figs", "cjs", "estimated_yearly_p.pdf"), 
+    height = 5.5, width = 7.5)
+yr_p_mat_plots
+dev.off()
+
 
 ## Visualize posterior ---------------------------------------------------------
 
