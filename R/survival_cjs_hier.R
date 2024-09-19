@@ -22,10 +22,10 @@ set.seed(123)
 dat_tbl_trim <- readRDS(here::here("data", "surv_cjs_data.rds"))
 
 
-# remove first columns of 100% observations 
-dat_tbl_trim$wide_array_dat <- purrr::map(
-  dat_tbl_trim$wide_array_dat, ~ .x %>% select(-`1`)
-)
+# # remove first columns of 100% observations 
+# dat_tbl_trim$wide_array_dat <- purrr::map(
+#   dat_tbl_trim$wide_array_dat, ~ .x %>% select(-`1`)
+# )
 
 
 ## Import survival segment key for labelling plots 
@@ -161,7 +161,7 @@ hier_mod_sims <- stan_model(
   here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_v2.stan")
 )
 hier_mod_sims_fixp <- stan_model(
-  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_fixp_v2.stan")
+  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_fixp_v3.stan")
 )
 
 
@@ -186,7 +186,7 @@ params2 <- c(
 
 
 # ## FOR DEBUGGING
-dd <-  dat_tbl_trim$dat_in[[4]]
+dd <-  dat_tbl_trim$dat_in[[2]]
 # saveRDS(dd, here::here("data", "model_outputs", "sample_cjs_dat.rds"))
 
 inits <- lapply(1:n_chains, function (i) {
@@ -231,7 +231,7 @@ inits2 <- lapply(1:n_chains, function (i) {
 fit <- sampling(
   hier_mod_sims, data = dd, pars = params,
   init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
-  open_progress = TRUE,
+  open_progress = FALSE,
   control = list(adapt_delta = 0.95)
 )
 fit2 <- sampling(
@@ -717,25 +717,29 @@ dev.off()
 
 
 # year- and stage-specific detection probability estimates
-alpha_yr_p_mat <- map(dat_tbl_trim$cjs_hier, ~ extract(.x)[["alpha_yr_p"]])
+alpha_yr_p_mat <- map(dat_tbl_trim$cjs_hier, ~ extract(.x)[["p_yr"]])
 
+alpha_yr_p_mat <- extract(fit2)[["p_yr"]]
 
-dd <- alpha_yr_p_mat[[1]] %>% 
+dd <- alpha_yr_p_mat %>% 
   as.data.frame.table() %>% 
   rename(year = Var2, segment = Var3) %>% 
   mutate(est = boot::inv.logit(Freq),
          year = as.numeric(as.factor(year)) + 2018,
-         segment = as.numeric(as.factor(segment))) %>% 
+         array_num = as.numeric(as.factor(segment))) %>% 
   group_by(
-    segment, year
+    array_num, year
   ) %>% 
   reframe(
     med = median(est),
     lo = rethinking::HPDI(est, 0.05),
     up = rethinking::HPDI(est, 0.95),
-    stock_group = dat_tbl_trim$stock_group[[1]]
+    stock_group = dat_tbl_trim$stock_group[[2]]
   ) %>% 
-  left_join(., seg_key, by = c("stock_group", "segment"))
+  left_join(., seg_key, by = c("stock_group", "array_num")) %>% 
+  mutate(
+    segment_name = fct_reorder(as.factor(segment_name), segment)
+  )
 
 ggplot(dd) +
   geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up)) +
