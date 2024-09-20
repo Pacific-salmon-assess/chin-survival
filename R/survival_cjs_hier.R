@@ -22,12 +22,6 @@ set.seed(123)
 dat_tbl_trim <- readRDS(here::here("data", "surv_cjs_data.rds"))
 
 
-# # remove first columns of 100% observations 
-# dat_tbl_trim$wide_array_dat <- purrr::map(
-#   dat_tbl_trim$wide_array_dat, ~ .x %>% select(-`1`)
-# )
-
-
 ## Import survival segment key for labelling plots 
 seg_key <- read.csv(here::here("data", 
                                "surv_segment_key_2023.csv")) %>%
@@ -163,98 +157,147 @@ hier_mod_sims <- stan_model(
 hier_mod_sims_fixp <- stan_model(
   here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_fixp_v3.stan")
 )
+hier_mod_sims_fixp_stk <- stan_model(
+  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_fixp_v3_stock.stan")
+)
 
 
 ## TEST FIT --------------------------------------------------------------------
 
 #MCMC settings
-n_chains = 1
-n_iter = 1000
-n_warmup = n_iter / 2
-params <- c(
-  "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
-  "L_Rho_yr", "alpha_p", "alpha_yr_p",
-  # transformed pars or estimated quantities
-  "Rho_yr", "phi_yr", "p_yr", "beta_yr", "y_hat"
-)
-params2 <- c(
-  "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
-  "L_Rho_yr", "alpha_p", "alpha_yr_p",
-  # transformed pars or estimated quantities
-  "Rho_yr", "phi_yr", "p_yr", "y_hat"
-)
+# n_chains = 4
+# n_iter = 2000
+# n_warmup = n_iter / 2
+# params <- c(
+#   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
+#   "L_Rho_yr", "alpha_p", "alpha_yr_p",
+#   # transformed pars or estimated quantities
+#   "Rho_yr", "phi_yr", "p_yr", "beta_yr", "y_hat"
+# )
+# params2 <- c(
+#   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
+#   "L_Rho_yr", "alpha_p", "alpha_yr_p",
+#   # transformed pars or estimated quantities
+#   "Rho_yr", "phi_yr", "p_yr", "y_hat"
+# )
+# params3 <- c(
+#   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
+#   "L_Rho_yr", "alpha_p", "alpha_yr_p", 
+#   # transformed pars or estimated quantities
+#   "Rho_yr", "phi_yr", "p_yr", "y_hat",
+#   # stock specific pars and quants
+#   "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
+#   "alpha_yr_phi", "alpha_stk_phi_z"
+# )
+# 
+# # ## FOR DEBUGGING
+# dd <-  dat_tbl_trim$dat_in[[2]]
+# dd$nstock <- dat_tbl_trim$bio_dat[[2]]$agg %>% unique() %>% length()
+# dd$stock <- dat_tbl_trim$bio_dat[[2]]$agg %>% 
+#   as.factor() %>% 
+#   droplevels() %>% 
+#   as.numeric()
+# # saveRDS(dd, here::here("data", "model_outputs", "sample_cjs_dat.rds"))
+# 
+# inits <- lapply(1:n_chains, function (i) {
+#   list(
+#     alpha_phi = rnorm(1, 0, 0.5),
+#     # note z transformed so inverted compared to beta_phi or beta_p
+#     alpha_yr_phi_z = matrix(
+#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5),
+#       nrow = (dd$n_occasions - 1)
+#     ),
+#     alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
+#     sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
+#     # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+#     L_Rho_yr = matrix(
+#       runif((dd$n_occasions - 1)^2, -0.5, 0.5),
+#       nrow = (dd$n_occasions - 1)
+#     ),
+#     alpha_p = rnorm(1, 0, 0.5),
+#     alpha_yr_p = matrix(rnorm(dd$nyear * (dd$n_occasions), 0, 0.5), nrow = dd$nyear)
+#   )
+# })
+# inits2 <- lapply(1:n_chains, function (i) {
+#   list(
+#     alpha_phi = rnorm(1, 0, 0.5),
+#     # note z transformed so inverted compared to beta_phi or beta_p
+#     alpha_yr_phi_z = matrix(
+#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
+#     ),
+#     alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
+#     sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
+#     # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+#     L_Rho_yr = matrix(
+#       runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
+#     ),
+#     alpha_p = rnorm(1, 0, 0.5),
+#     alpha_yr_p = matrix(
+#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = dd$nyear
+#     )
+#   )
+# })
+# inits3 <- lapply(1:n_chains, function (i) {
+#   list(
+#     alpha_phi = rnorm(1, 0, 0.5),
+#     # note z transformed so inverted compared to beta_phi or beta_p
+#     alpha_yr_phi_z = matrix(
+#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
+#     ),
+#     alpha_stk_phi = rnorm(dd$nstock, 0, 0.5),
+#     alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
+#     sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
+#     sigma_alpha_stk_phi = rexp(1, 2),
+#     # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+#     L_Rho_yr = matrix(
+#       runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
+#     ),
+#     alpha_p = rnorm(1, 0, 0.5),
+#     alpha_yr_p = matrix(
+#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = dd$nyear
+#     )
+#   )
+# })
+# 
+# 
+# fit <- sampling(
+#   hier_mod_sims, data = dd, pars = params,
+#   init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
+#   open_progress = FALSE,
+#   control = list(adapt_delta = 0.95)
+# )
+# fit2 <- sampling(
+#   hier_mod_sims_fixp, data = dd, pars = params2,
+#   init = inits2, chains = n_chains, iter = n_iter, warmup = n_warmup,
+#   open_progress = FALSE,
+#   control = list(adapt_delta = 0.95)
+# )
+# fit3 <- sampling(
+#   hier_mod_sims_fixp_stk, data = dd, pars = params3,
+#   init = inits3, chains = n_chains, iter = n_iter, warmup = n_warmup,
+#   open_progress = FALSE,
+#   control = list(adapt_delta = 0.95)
+# )
+# 
+# 
+# phi_pattern <- "phi_yr"#"phi_yr\\[\\d+,5\\]$"
+# p_pattern <- "p_yr"#\\[\\d+,6\\]$"
+# 
+# fit_post <- summary(fit)$summary
+# fit_post[grepl("beta", rownames(fit_post)), ]
+# fit_post[grepl(p_pattern, rownames(fit_post)), ]
+# fit_post[grepl(phi_pattern, rownames(fit_post)), ]
+# fit_post[grepl("sigma_alpha_yr_phi", rownames(fit_post)), ]
+# fit_post[grepl("Rho_yr", rownames(fit_post)), ]
+# 
+# fit_post2 <- summary(fit2)$summary
+# fit_post2[grepl(p_pattern, rownames(fit_post2)), ]
+# fit_post2[grepl("alpha_yr_phi", rownames(fit_post2)), ]
+# 
+# fit_post3 <- summary(fit3)$summary
+# fit_post3[grepl("alpha_stk_phi", rownames(fit_post3)), ]
+# fit_post3[grepl("alpha_yr_phi", rownames(fit_post3)), ]
 
-
-# ## FOR DEBUGGING
-dd <-  dat_tbl_trim$dat_in[[2]]
-# saveRDS(dd, here::here("data", "model_outputs", "sample_cjs_dat.rds"))
-
-inits <- lapply(1:n_chains, function (i) {
-  list(
-    alpha_phi = rnorm(1, 0, 0.5),
-    # note z transformed so inverted compared to beta_phi or beta_p
-    alpha_yr_phi_z = matrix(
-      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5),
-      nrow = (dd$n_occasions - 1)
-    ),
-    alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
-    sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
-    # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-    L_Rho_yr = matrix(
-      runif((dd$n_occasions - 1)^2, -0.5, 0.5),
-      nrow = (dd$n_occasions - 1)
-    ),
-    alpha_p = rnorm(1, 0, 0.5),
-    alpha_yr_p = matrix(rnorm(dd$nyear * (dd$n_occasions), 0, 0.5), nrow = dd$nyear)
-  )
-})
-inits2 <- lapply(1:n_chains, function (i) {
-  list(
-    alpha_phi = rnorm(1, 0, 0.5),
-    # note z transformed so inverted compared to beta_phi or beta_p
-    alpha_yr_phi_z = matrix(
-      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
-    ),
-    alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
-    sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
-    # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-    L_Rho_yr = matrix(
-      runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
-    ),
-    alpha_p = rnorm(1, 0, 0.5),
-    alpha_yr_p = matrix(
-      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = dd$nyear
-    )
-  )
-})
-
-fit <- sampling(
-  hier_mod_sims, data = dd, pars = params,
-  init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
-  open_progress = FALSE,
-  control = list(adapt_delta = 0.95)
-)
-fit2 <- sampling(
-  hier_mod_sims_fixp, data = dd, pars = params2,
-  init = inits2, chains = n_chains, iter = n_iter, warmup = n_warmup,
-  open_progress = FALSE,
-  control = list(adapt_delta = 0.95)
-)
-
-
-phi_pattern <- "phi_yr"#"phi_yr\\[\\d+,5\\]$"
-p_pattern <- "p_yr"#\\[\\d+,6\\]$"
-
-fit_post <- summary(fit)$summary
-fit_post[grepl("beta", rownames(fit_post)), ]
-fit_post[grepl(p_pattern, rownames(fit_post)), ]
-fit_post[grepl(phi_pattern, rownames(fit_post)), ]
-fit_post[grepl("sigma_alpha_yr_phi", rownames(fit_post)), ]
-fit_post[grepl("Rho_yr", rownames(fit_post)), ]
-
-fit_post2 <- summary(fit2)$summary
-fit_post2[grepl(p_pattern, rownames(fit_post2)), ]
-fit_post2[grepl(phi_pattern, rownames(fit_post2)), ]
 
 
 ## REAL FIT --------------------------------------------------------------------
@@ -270,9 +313,11 @@ params_fixp <- c(
   "Rho_yr", "alpha_yr_phi", "phi_yr", "p_yr", "y_hat"
 )
 
+## TODO: replace Fraser w/ hier stock model
 cjs_hier_sims <- pmap(
-  list(x = dat_tbl_trim$dat_in, fixp = dat_tbl_trim$fixp), 
-  .f = function(x, fixp) {
+  list(x = dat_tbl_trim$dat_in, fixp = dat_tbl_trim$fixp, 
+       stock_group = dat_tbl_trim$stock_group), 
+  .f = function(x, fixp, stock_group) {
     # used fixed p model if fixed p value is provided in tbl and adjust inits
     # for alpha_yr p accordingly
     if (!is.na(fixp)) {
@@ -285,33 +330,78 @@ cjs_hier_sims <- pmap(
       pars_in <- c(params_fixp, "beta_yr")
     }
     
-    # matrix of inits with same dims as estimated parameter matrices
-    inits <- lapply(1:n_chains, function (i) {
-      list(
-        alpha_phi = rnorm(1, 0, 0.5),
-        # note z transformed so inverted compared to beta_phi or beta_p
-        alpha_yr_phi_z = matrix(
-          rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5), 
-          nrow = (x$n_occasions - 1)
-        ),
-        alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
-        sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
-        # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-        L_Rho_yr = matrix(
-          runif((x$n_occasions - 1)^2, -0.5, 0.5), 
-          nrow = (x$n_occasions - 1)
-        ),
-        alpha_p = rnorm(1, 0, 0.5),
-        alpha_yr_p = matrix(rnorm(alpha_yr_p_dim, 0, 0.5), nrow = x$nyear)
-      )
-    })
- 
-    sampling(mod, data = x, pars = pars_in,
-             init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
-             open_progress = FALSE,
-             control = list(adapt_delta = 0.95))
+    if (stock_group == "Fraser") {
+      NULL
+    } else{
+      # matrix of inits with same dims as estimated parameter matrices
+      inits <- lapply(1:n_chains, function (i) {
+        list(
+          alpha_phi = rnorm(1, 0, 0.5),
+          # note z transformed so inverted compared to beta_phi or beta_p
+          alpha_yr_phi_z = matrix(
+            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5), 
+            nrow = (x$n_occasions - 1)
+          ),
+          alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
+          sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
+          # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+          L_Rho_yr = matrix(
+            runif((x$n_occasions - 1)^2, -0.5, 0.5), 
+            nrow = (x$n_occasions - 1)
+          ),
+          alpha_p = rnorm(1, 0, 0.5),
+          alpha_yr_p = matrix(rnorm(alpha_yr_p_dim, 0, 0.5), nrow = x$nyear)
+        )
+      })
+      
+      sampling(mod, data = x, pars = pars_in,
+               init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
+               open_progress = FALSE,
+               control = list(adapt_delta = 0.95))
+    }
 })
 
+
+# separately fit hierarchical stocks model for Fraser only
+params_stk <- c(params_fixp, "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk")
+
+
+dd <-  dat_tbl_trim$dat_in[[2]]
+dd$nstock <- dat_tbl_trim$bio_dat[[2]]$agg %>% unique() %>% length()
+dd$stock <- dat_tbl_trim$bio_dat[[2]]$agg %>% 
+  as.factor() %>% 
+  droplevels() %>% 
+  as.numeric()
+inits_stk <- lapply(1:n_chains, function (i) {
+  list(
+    alpha_phi = rnorm(1, 0, 0.5),
+    # note z transformed so inverted compared to beta_phi or beta_p
+    alpha_yr_phi_z = matrix(
+      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
+    ),
+    alpha_stk_phi = rnorm(dd$nstock, 0, 0.5),
+    alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
+    sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
+    sigma_alpha_stk_phi = rexp(1, 2),
+    # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+    L_Rho_yr = matrix(
+      runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
+    ),
+    alpha_p = rnorm(1, 0, 0.5),
+    alpha_yr_p = matrix(
+      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = dd$nyear
+    )
+  )
+})
+fit_stk <- sampling(
+  hier_mod_sims_fixp_stk, data = dd, pars = params_stk,
+  init = inits_stk, chains = n_chains, iter = n_iter, warmup = n_warmup,
+  open_progress = FALSE,
+  control = list(adapt_delta = 0.95)
+)
+
+
+cjs_hier_sims[[2]] <- fit_stk
 
 # add to tibble
 dat_tbl_trim$cjs_hier <- cjs_hier_sims
@@ -362,6 +452,7 @@ for (i in seq_along(par_list)) {
 
 # posterior predictions check
 # compare predicted to observed proportions for each year and stage by aggregate
+# TODO: modify hier stock model to include alpha_stk in posterior preds
 pp_list <- pmap(list(dat_tbl_trim$dat_in, dat_tbl_trim$cjs_hier, 
                      dat_tbl_trim$years), 
      function (dat_in, mod, years) {
@@ -702,16 +793,22 @@ med_seg_surv <- purrr::map2(
 fill_pal <- c("white", "red")
 names(fill_pal) <- c("phi", "beta")
 
-png(here::here("figs", "cjs", "phi_ests.png"), 
-    height = 5, width = 7.5, units = "in", res = 200)
-ggplot(med_seg_surv %>% filter(!par == "beta")) +
+stage_spec_surv <- ggplot(med_seg_surv %>% filter(!par == "beta")) +
   geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up)) +
   facet_wrap(~stock_group, scales = "free") +
   ggsidekick::theme_sleek() +
   theme(
     axis.title = element_blank()
   ) 
+
+png(here::here("figs", "cjs", "phi_ests.png"), 
+    height = 5, width = 7.5, units = "in", res = 200)
+stage_spec_surv
 dev.off()
+
+saveRDS(
+  stage_spec_surv, here::here("figs", "cjs", "stage_spec_surv.rds")
+)
 
 
 # year- and stage-specific detection parameter estimates
@@ -799,4 +896,85 @@ png(here::here("figs", "cjs", "cum_surv_mean_hier_clean.png"),
     height = 5, width = 9.5, units = "in", res = 200)
 surv_plot_mean
 dev.off()
+
+saveRDS(
+  surv_plot_mean, here::here("figs", "cjs", "mean_cum_surv.rds")
+)
+
+
+## Calculate cumulative survival for Fraser by stock ---------------------------
+
+# stock name key
+stk_key <- data.frame(stock = dat_tbl_trim$bio_dat[[2]]$agg) %>%
+  mutate(
+    agg_n = as.factor(stock) %>% 
+      droplevels() %>% 
+      as.numeric()
+  ) %>% 
+  distinct()
+
+phi_stk <- extract(dat_tbl_trim$cjs_hier[[2]])[["phi_stk"]]
+
+# calculate cumulative product for each stk and iteration then convert to DF
+dims <- list(iter = seq(1, dim(phi_stk)[1], by = 1),
+             segment = seq(1, dim(phi_stk)[3], by = 1))
+
+dumm <- expand.grid(iter = dims$iter,
+                    segment = 0, 
+                    Freq = 1, 
+                    agg_n = stk_key$agg_n)
+
+# calculate the cumulative product across segments for each group and 
+# iteration, then convert to a dataframe
+cumprod_list <- vector(length(stk_key$agg_n), mode = "list") 
+for (i in seq_along(stk_key$agg_n)) {
+  cumprod_mat <- t(apply(phi_stk[ , i, ], 1, cumprod))
+  dimnames(cumprod_mat) = dims[1:2]
+  cumprod_list[[i]] <- cumprod_mat %>% 
+    as.table() %>% 
+    as.data.frame() %>% 
+    mutate(agg_n = stk_key$agg_n[i])
+}
+
+stk_cumprod_plot <- cumprod_list %>% 
+  bind_rows() %>% 
+  rbind(dumm, .) %>%
+  mutate(segment = as.integer(as.character(segment)),
+         stock_group = "Fraser") %>%
+  rename(est = Freq) %>% 
+  #add segment key
+  left_join(., seg_key, by = c("stock_group", "segment")) %>% 
+  left_join(., stk_key, by = "agg_n") %>% 
+  mutate(segment_name = fct_reorder(as.factor(segment_name), segment),
+         hab = case_when(
+           segment == max(segment) ~ "river",
+           TRUE ~ "marine"
+         )) %>% 
+  group_by(segment, segment_name, stock) %>% 
+  summarize(median = median(est),
+         low = quantile(est, 0.05),
+         up = quantile(est, 0.95)) %>% 
+  ungroup() %>% 
+  mutate(agg_name_f = NA) %>% 
+  ggplot(.) +
+  geom_pointrange(aes(x = fct_reorder(segment_name, segment), 
+                      y = median, ymin = low, ymax = up, fill = stock),
+                  shape = 21, position = position_dodge(width = 0.5)) +
+  ggsidekick::theme_sleek() +
+  theme(axis.title.x = element_blank(), 
+        axis.title.y = element_blank(),
+        legend.text=element_text(size = 9),
+        legend.title = element_blank(),
+        axis.text.x = element_text(size = rel(.8)),
+        legend.position = "top") +
+  lims(y = c(0, 1))  
+
+png(here::here("figs", "cjs", "fraser_stock_surv.png"), 
+    height = 4.5, width = 5.5, units = "in", res = 200)
+stk_cumprod_plot
+dev.off()
+
+saveRDS(
+  stk_cumprod_plot, here::here("figs", "cjs", "frsr_stk_cum_surv.rds")
+)
 
