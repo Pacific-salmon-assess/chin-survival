@@ -22,8 +22,9 @@ tag_dat <- readRDS(here::here("data", "surv_log_reg_data.rds"))
 
 ```
 
-DFO deployed 519 acoustic tags on genetically stock identified, mature Chinook salmon (2019-2023) off the west coast of Vancouver Island (Figure \@ref(fig:deploy-locs)). This work was intended to assess patterns of Chinook salmon habitat use in southern resident killer whale critical habitat. However, these data also provide an opportunity to better understand patterns of survival in Chinook salmon during return migrations prior to freshwater entry. Specifically we sought to address two objectivtes.
-1. Use Cormack-Jolly-Seber (CJS) models to estimate stage-specific survival rates during the return migration to identify locations with relatively high mortality.
+DFO deployed 519 acoustic tags on genetically stock identified, mature Chinook salmon (2019-2023) off the west coast of Vancouver Island (Figure \@ref(fig:deploy-locs)). This work was intended to assess patterns of Chinook salmon habitat use in southern resident killer whale critical habitat. However, these data also provide an opportunity to better understand patterns of survival in Chinook salmon during return migrations. Specifically we should be able to address two objectives:
+
+1. Use Cormack-Jolly-Seber (CJS) models to estimate stage-specific survival rates during return migration to identify locations with relatively high mortality and estimate survival to freshwater entry for a subset of stocks.
 2. Use hierarchical generalized linear models to quantify direct and indirect effects of interacting covariates (individual condition, capture date, stock identity, annual exploitation rate, capture injuries) on survival.
 
 ```{r deploy-locs, echo=FALSE, fig.cap = "Location of tag deployments. Different colours represent different years (2019-2023)."}
@@ -31,7 +32,7 @@ map_dep <- readRDS(here::here("figs", "deploy_map.rds"))
 map_dep
 ```
 
-A wide range of Chinook salmon stocks were encountered, however the majority of tagged fish belonged to populations spawning in the Columbia, Fraser, or Puget Sound (Figure \@ref(fig:stock-comp)). We distinguished between upper and lower Columbia River populations given that only the former is likely to migrate past receivers at Bonneville. We distinguished between north and south Puget Sound to account for Nooksack and Skagit river populations that were unlikely to encounter Puget Sound receivers that begin at Admiralty Inlet. We distinguish between Fraser River stocks based on run-timing because these fish interact with the same receiver arrays and can therefore be modeled hierarchically, but may show divergent patterns in survival. Note we focus on relatively coarse groupings here given the constraints of the CJS models, but may evaluate finer stock groupings in the logistic regression model (additional details below). 
+A wide range of Chinook salmon stocks were encountered, however the majority of tagged fish belonged to populations spawning in the Columbia, Fraser, or Puget Sound watershed (Figure \@ref(fig:stock-comp)). We distinguished between upper and lower Columbia River populations given that only the former is likely to migrate past PIT receivers at Bonneville. We distinguished between north and south Puget Sound to account for Nooksack and Skagit river populations that were unlikely to encounter Puget Sound receivers that begin in Admiralty Inlet. We distinguish between Fraser River stock units based on run-timing because these fish interact with the same receiver arrays and can therefore be modeled hierarchically, but may show divergent patterns in survival. Note we focus on relatively coarse groupings here given the constraints of the CJS models, but may evaluate finer stock groupings in the logistic regression model (additional details below). 
 
 ```{r stock-comp, echo=FALSE, fig.cap = "Monthly stock composition of mature fish tagged with acoustic transmitters."}
 full_comp <- tag_dat %>% 
@@ -59,41 +60,41 @@ ggplot(
 
 Acoustic tags were detected on a network of moored receivers. Coverage extended from southwest Vancouver Island to the mouth of the Columbia River and throughout the southern Salish Sea, however specific locations varied year to year (Figure \@ref(fig:receiver-map1)). 
 
-```{r receiver-map1, echo=FALSE, fig.cap = "Location of moored receievers by tagging year. Not all receivers were active for the entire year, but the majority were in place prior to tags being deployed and retrieved after adult fish had entered freshwater. Receivers in central California not shown to improve readability."}
+```{r receiver-map1, echo=FALSE, fig.cap = "Location of receievers across tagging years. Not all receivers were active for the entire year, but the majority were in place prior to tags being deployed and retrieved after adult fish had entered freshwater. Receivers in central California not shown to improve readability."}
 map1 <- readRDS(here::here("figs", "receiver_map1.rds"))
 map1
 ```
 
 ## Cormack-Jolly-Seber Models ##
 
-CJS models rely on discrete mark-recapture events to estimate survival through time or space. Given differences in when tags were deployed, we focused on estimating spatial patterns, i.e. how survival declined throughout marine migrations. Since migratory routes differed among stock groups, the number and location of mark-recapture events also differed. For each stock group we identified groups of receivers that approximated a stage of the marine migration  (Figure \@ref(fig:receiver-map2)). We were able to distinguish between a greater number of migratory stages for stocks with marine migrations that passed a larger number of arrays. For all stocks the first stage represented tag deployment and the final stage represented any detections in freshwater (i.e. receiver detections, harvest, or escapement surveys). We note, however, that terminal freshwater detections were relatively rare except in the Columbia and Fraser rivers. Additionally, we defined the final detection stage for southern Puget Sound populations as any of the marine arrays within the sound. We believe that these detections provide a reasonable estimate of terminal survival given their location deep in Puget Sound and our inability to reliably assign individuals to specific freshwater systems due to hatchery introgression. 
+CJS models rely on discrete mark-recapture events to estimate survival through time or space. Given differences in when tags were deployed, we focused on estimating spatial patterns, i.e. how survival declined throughout marine migrations. Since migratory routes differed among stock groups, the number and location of mark-recapture events also differed. For each stock group we identified groups of receivers that approximated a stage of the marine migration  (Figure \@ref(fig:receiver-map2)). We were able to distinguish between a greater number of migratory stages for stocks with marine migrations that passed a larger number of arrays. For all stocks the first stage represented tag deployment and the final stage represented any detections in freshwater (i.e. receiver detections, harvest, or escapement surveys). We note, however, that terminal freshwater detections were relatively rare except in the Columbia and Fraser rivers. Additionally, we defined the final detection stage for southern Puget Sound populations as any of the marine arrays within the sound. We believe that these detections provide a reasonable estimate of terminal survival given their dense spacing and our inability to reliably assign south Puget Sound individuals to specific freshwater systems due to hatchery introgression. 
 
 ```{r receiver-map2, echo=FALSE, fig.width=6, fig.height=7, fig.cap = "Receiver arrays grouped by stock-specific migration stage. Darker (lighter) colours represent locations earlier (later) in a stock's migration. Freshwater receivers are only shown in locations where a stock was likely to encounter them. Stocks with insufficient sample sizes to fit CJS models are not shown."}
-map2 <- readRDS(here::here("figs", "receiver_map1.rds"))
+map2 <- readRDS(here::here("figs", "array_map.rds"))
 map2
 ```
 
-Once arrays were grouped, we identified, for each stock, the number of individuals observed at each migration stage. The proportion of the tagged population observed varied among stocks, arrays, and years (Figure \@ref(fig:mean-det)). However, these data provide only an approximate index of survival because they fail to account for highly variable estimates of detection probability among stocks and arrays. 
+Once arrays were grouped, we identified, for each stock, the number of tagged individuals observed at each migration stage. The proportion of the tagged population observed varied among stocks, arrays, and years (Figure \@ref(fig:mean-det)). However, these data provide only an approximate index of survival because they fail to account for highly variable estimates of detection probability among stocks and arrays. 
 
-```{r mean-det, echo=FALSE, fig.cap = "Mean proportion of tagged population observed at each stage of the migration by tagging year. Note that the number and descriotion of migration stages differs among stocks, corresponding to the groups of arrays defined in Figure 2. Note that we exclude ECVI and North Puget Sound stocks here because too few individuals were tagged to reliably fit stock-specific CJS models."}
+```{r mean-det, echo=FALSE, fig.cap = "Mean proportion of tagged population observed at each stage of the migration by tagging year. The number and description of migration stages differs among stocks, corresponding to the groups of arrays defined in Figure 2. We excluded ECVI and North Puget Sound stocks because too few individuals were tagged to reliably fit stock-specific CJS models."}
 mean_det_pt <- readRDS(here::here("figs", "average_detections.rds" ))
 mean_det_pt
 ```
 
-To account for these variable detection probabilities we fit CJS models to the mark-recapture data. Briefly, CJS models use recapture patterns to estimate detection probability ($p$) and survival ($\phi$), which may in turn vary among stages or other covariates. Since migration stages differed among stocks, $p$ and $\phi$ cannot be easily estimated hierarchically and a separate model was fit to each stock (except for Fraser River populations where all populations encountered were expected to migrate past the same marine and freshwater arrays with similar $p$). Year-specific survival deviations $\phi_y$ were estimated hierarchically, while stage-specific $\phi_s$, year-specific $p_y$, and stage-specific $p_s$ were estimated as fixed effects. Finally, we distinguished between stocks with high terminal $p_s$ and those with low or uncertain terminal $p_s$. Upriver Columbia, Fraser River, and south Puget Sound populations represent the former scenario because the spacing of their terminal arrays is sufficiently tight that high-powered tags are not expected to pass undetected. In this case, the final $p_s$ parameter was fixed at 0.99, allowing $\phi_s$ in the final migration stage to be estimated. For the other populations $p_s$ and $\phi_s$ could not be independently estimated in the terminal stage. Instead terminal estimates $\beta$ incorporate both terminal $p_s$ and $\phi_s$ and are consequently markedly lower. 
+To account for variable detection probabilities we fit CJS models to mark-recapture data. Briefly, CJS models use recapture patterns to estimate detection probability ($p$) and survival ($\phi$), which may in turn vary among stages or other covariates. Since migration stages differed among stocks, $p$ and $\phi$ cannot be easily estimated hierarchically and a separate model was fit to each stock (except for Fraser River populations where all populations encountered were expected to migrate past the same marine and freshwater arrays with similar $p$). Year-specific survival deviations $\phi_y$ were estimated hierarchically, while stage-specific $\phi_s$, year-specific $p_y$, and stage-specific $p_s$ were estimated as fixed effects. Finally, we distinguished between stocks with high terminal $p_s$ and those with low or uncertain terminal $p_s$. Upriver Columbia, Fraser River, and south Puget Sound populations represent the former scenario because the spacing of their terminal arrays is sufficiently tight that high-powered tags are not expected to pass undetected. In this case, the final $p_s$ parameter was fixed at 0.99, allowing $\phi_s$ in the final migration stage to be estimated. For the other populations $p_s$ and $\phi_s$ could not be independently estimated in the terminal stage. Instead terminal estimates $\beta$ incorporate both terminal $p_s$ and $\phi_s$ and are consequently markedly lower. 
 
-We fit CJS models in a Bayesian framework with weakly informative priors. We confirmed models sampled adequately (e.g., chain plots, $\hat{R}$, $n_{eff}$) and generated reasonable estimates with posterior predictive checks. We drew inference on stage-specific survival using posterior estimates of $\phi_s$ and cumulative survival.
+We fit CJS models in a Bayesian framework with weakly informative priors. We confirmed models sampled adequately (e.g., chain plots, $\hat{R}$, $n_{eff}$) and generated reasonable estimates with posterior predictive checks. We drew inference on stage-specific survival using posterior estimates of $\phi_s$, as well as the derived quantity cumulative survival (product of different $\phi_s$ estimates).
 
-Median estimates of $phi_s$ were typically between 0.8 and 0.95 indicating high survival during each portion of the return migration (Figure \@ref(fig:stage-phi)). Estimates were most uncertain for populations with low terminal detection probabilities (e.g., California) and relatively few observed stages (e.g., Washington/Oregon, WCVI). While survival rates were slightly lower for Fraser River individuals immediately after tagging and for Upriver Columbia River fish between freshwater entry and Bonneville, generally stage-specific survival estimates were relatively stable within a stock. Thus there is limited evidence for mortality bottlenecks during marine migrations. Similarly stable survival rates across stages suggest that there was not elevated mortality immediately after tagging.  
+Median estimates of $\phi_s$ were typically between 0.8 and 0.95 indicating relatively high survival during each portion of the return migration (Figure \@ref(fig:stage-phi)). Estimates were most uncertain for populations with low terminal detection probabilities (e.g., California) and relatively few observed stages (e.g., Washington/Oregon, WCVI). While survival rates were slightly lower for Fraser River individuals immediately after tagging and for Upriver Columbia River fish between freshwater entry and Bonneville, generally stage-specific survival estimates were stable within a stock. Thus there is limited evidence for mortality bottlenecks during marine migrations. Similarly stable survival rates across stages suggest that there was not elevated mortality immediately after tagging. Survival estimates do not distinguish between harvest, tagging, and natural mortality. We could exclude individuals that were harvested in marine areas to better account for exploitation; however, marine tag recoveries were rare relative to estimated exploitation rates (e.g. based on CTC ERA), which may suggest low reporting rates by marine harvesters.  
 
 ```{r stage-phi, echo=FALSE, fig.cap = "Stage-specific estimates of survival. Points represent median and whiskers 90th percentile intervals from posterior estimates. Survival is estimated between stages and here points are labelled based on the second stage (i.e., WCVI/Salish Sea survival for California Chinook represents the estimated survival rate between tagging and detection on arrays in those locations). Stages where survival and detection probability parameters are confounded are not shown."}
 mean_phi_s <- readRDS(here::here("figs", "cjs", "stage_spec_surv.rds"))
 mean_phi_s
 ```
 
-The product of $phi_s$ represents cumulative survival throughout migration, excluding among-year variation. Survival from tagging to terminal locations was typically 70-75% for stocks with high terminal detection probabilities (Figure \@ref(fig:cum-surv)). Estimates for the other stocks are significantly depressed reflecting the combined effect of survival and low detection probability. Survival was remarkably similar among stocks despite differences in migratory route and timing that might influence exposure to both fisheries and predators. Note that we could exclude individuals that were harvested in marine areas to better estimate natural mortality rates; however, these were rare relative to estimated exploitation rates, which may suggest low reporting rates by marine harvesters. Within the Fraser River stock there was relatively little variability in survival rates among stock units (Figure \@ref(fig:fraser-stk)). 
+The product of multiple $\phi_s$ estimates represents cumulative survival throughout migration. Survival from tagging to terminal locations was typically 70-75% for stocks with high terminal detection probabilities (Figure \@ref(fig:cum-surv)). Estimates for the other stocks are significantly depressed reflecting the combined effect of survival and low detection probability. Survival was remarkably similar among stocks despite differences in migratory route and timing that might influence exposure to both fisheries and predators. Within the Fraser River stock there was relatively little variability in survival rates among stock units (Figure \@ref(fig:fraser-stk)). Estimates of stage-specific detection probabilities were generated and will be included in manuscript submissions, but are not shown here to conserve space.
 
-```{r cum-surv, echo=FALSE, fig.cap = "Stock-specific cumulative survival rates. Points represent medians and whiskers 90th percentile intervals from posterior estimates. Red points represent estimates based on $\beta$, i.e. the combined estimate of survival and detection. Estimates exclude hierarchical effects due to interannual variability and, in the case of the Fraser River stock, variability among stock units."}
+```{r cum-surv, echo=FALSE, fig.cap = "Stock-specific cumulative survival rates. Points represent medians and whiskers 90th percentile intervals from posterior estimates. Red points represent estimates based on combined survival and detection probability estimates. Estimates exclude hierarchical effects due to interannual variability and, in the case of the Fraser River stock, variability among stock units."}
 cum_surv <- readRDS(here::here("figs", "cjs", "mean_cum_surv.rds"))
 cum_surv
 ```
@@ -103,10 +104,64 @@ fraser_stk <- readRDS(here::here("figs", "cjs", "frsr_stk_cum_surv.rds"))
 fraser_stk
 ```
 
+## Binomial (Logistic) GLMs ##
 
+CJS models are ideal for estimating stage-specific mortality rates and cumulative survival that account for variable detection probabilities. However, they are less suitable for drawing inference on factors influencing survival because the models are too highly parameterized to readily incorporate interacting covariates or fit multi-stock hierarchical models. 
 
+As an alternative we are developing hierarchical binomial GLMs to estimate how tagging date, individual condition, and exploitation rates influence survival. 
+We plan to use nested GLMs (analogous to a structural equation model) to account for indirect effects of variables such as stock identity, capture date, and sampling year on survival via individual condition. Directed acyclic graphs can be used to characterize these causal pathways (Figure \@ref(fig:logistic-dag)). This model structure will allow us to, for example, better isolate the effect of body size on survival independent of stock identity, which covaries with body size. Binomial GLMs are still being developed, however simulation testing suggests these models should be tractable given the available data.
 
-TODO:
-- Incorporate last batch of detections data 
-- Which stock groups should be modeled hierarchically
-- Estimate CWT derived exploitation rates for qualitative comparison and for logistic regression DAG
+```{r logistic-dag, echo=FALSE, fig.cap = "Directed acyclic graphs representing hypothesized causal paths among covariates influencing indivdual survival."}
+library(dagitty)
+online_dag <- dagitty('
+dag {
+condition [latent,pos="-0.175,0.579"]
+date [exposure,pos="-0.692,0.709"]
+harvest [exposure,pos="0.307,0.102"]
+injury [exposure,pos="-0.006,1.682"]
+lipid [exposure,pos="0.378,0.688"]
+size [exposure,pos="-0.009,0.897"]
+stock [exposure,pos="-1.085,1.049"]
+surv [outcome,pos="1.053,1.639"]
+year [exposure,pos="-0.409,0.158"]
+condition -> lipid
+condition -> size
+date -> condition
+date -> harvest
+date -> surv
+harvest -> surv
+injury -> surv
+lipid -> surv
+size -> surv
+stock -> condition
+stock -> date
+stock -> surv
+year -> condition
+year -> surv
+}
+'
+)
+plot(online_dag)
+```
+
+## Next Steps and Coauthor Questions ##
+
+Over the next couple months I plan to: 
+
+* Incorporate missing detections data 
+* Revise CJS models 
+* Incorporate CWT-based exploitation rate estimates 
+* Test logistic regression models and generate preliminary figures
+* Conduct sensitivity analysis to test maturation stage assumptions
+* Begin drafting manuscript
+
+This process will be improved by input from as many of you as possible on the following questions. 
+
+1. Do the arrays as defined in Figure \@ref(fig:receiver-map2) make sense as stages for the CJS model?
+2. Are there any obvious improvements that can be made to the CJS analysis?
+3. What, if any, other stocks should be modeled hiearchically. For example, in the lower and upper Columbia River stocks we could distinguish between five or six population groups. This might be less tractable in Puget Sound given the dominance of Green River/Soos Creek hatchery-origin fish.
+4. What should the response variable in the binomial GLM be?
+  + Intermediate survival: 0 if a fish is never detected, 1 if it is detected at all. This would minimize differences in terminal detection probability, but given that most (>90%) individuals were detected at least once there may be insufficient contrast.
+  + Terminal survival: 0 if a fish is never detected, 1 if it is detected in-river (or in Puget Sound). This seems more appropriate, though stock effects will be difficult to interpret given differences in terminal detection probability. Could resolve by excluding stocks with low terminal $p$ or focusing on stock identity as a confounding variable, rather than a variable of interest itself.
+
+Of course please feel free to weigh in with any additional comments or questions. 

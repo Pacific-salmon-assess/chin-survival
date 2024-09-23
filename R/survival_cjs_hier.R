@@ -795,7 +795,7 @@ names(fill_pal) <- c("phi", "beta")
 
 stage_spec_surv <- ggplot(med_seg_surv %>% filter(!par == "beta")) +
   geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up)) +
-  facet_wrap(~stock_group, scales = "free") +
+  facet_wrap(~stock_group, scales = "free_x") +
   ggsidekick::theme_sleek() +
   theme(
     axis.title = element_blank()
