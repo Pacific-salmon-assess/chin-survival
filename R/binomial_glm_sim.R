@@ -236,10 +236,10 @@ set.seed(73)
 
 samp_date <- rnorm(n)
 alpha_date <- 0.7
-cond <- rnorm(n, alpha_date * samp_date, 1)
+cond <- rnorm(n, alpha_date * samp_date, 0.5)
 beta_cond <- 0.6 #assume same effect on length and lipid for simplicity's sake
-size <- rnorm(n, beta_cond * cond, 1)
-lipid <- rnorm(n, beta_cond * cond, 1)
+size <- rnorm(n, beta_cond * cond, 0.5)
+lipid <- rnorm(n, beta_cond * cond, 0.5)
 gamma <- -1  # Intercept
 gamma_date <- 0.5   # Slope
 gamma_size <- 0.25
@@ -297,16 +297,10 @@ m3b <- ulam(
 )
 
 
-# parameter estimates are nearly identical but what happens to estimate of
-# sampling day effect
-samp_date_seq <- seq( from=-2 , to=2 , length.out=30 )
-# ss <- sim(m3 , data=sim_dat , vars=c("surv") )
-# plot(samp_date_seq , colMeans(ss) , ylim=c(0, 1) , type="l" ,
-#       xlab="date" , ylab="survival"  )
-
-
 # sim doesn't work with large number of variables so calc manually accounting 
 # for covariance
+samp_date_seq <- seq( from=-2 , to=2 , length.out=30 )
+
 post <- extract.samples(m3b)
 pred_mu_size <- purrr::map(
   samp_date_seq, ~ post$alpha_size + post$beta_ds * .x
@@ -319,7 +313,7 @@ pred_mu_lipid <- purrr::map(
 sigma <- post$Sigma
 rho <- post$Rho
 S <- vector(mode = "list", length = nrow(sigma))
-sim_surv <- sim_size <- sim_lipid <- matrix(NA, nrow = nrow(sigma), 
+sim_surv <- sim_size <- sim_lipid <-  matrix(NA, nrow = nrow(sigma), 
                                       ncol = length(samp_date_seq))
 for (j in seq_along(samp_date_seq)) {
   for (i in 1:nrow(sigma)) {
@@ -339,6 +333,19 @@ for (j in seq_along(samp_date_seq)) {
   sim_surv[ , j] <- rbinom(length(p), 1, p)
 }
 plot(samp_date_seq, colMeans(sim_surv) , ylim=c(0, 1) , type="l" ,
+     xlab="date" , ylab="survival"  )
+
+
+# parameter estimates are nearly identical but what happens to estimate of
+# sampling day effect
+post3 <- extract.samples(m3)
+sim_surv3 <- matrix(NA, nrow = nrow(sigma), ncol = length(samp_date_seq))
+for (j in seq_along(samp_date_seq)) {
+  sim_eta1 <- as.numeric(post3$gamma + post3$gamma_date * samp_date_seq[j])
+  p1 <- boot::inv.logit(sim_eta1) # Probability of survival
+  sim_surv3[ , j] <- rbinom(length(p1), 1, p1)
+}
+plot(samp_date_seq , colMeans(sim_surv3) , ylim=c(0, 1) , type="l" ,
      xlab="date" , ylab="survival"  )
 
 
@@ -507,9 +514,9 @@ gamma_date <- 0.5   # Slope
 gamma_size <- 0.25
 gamma_lipid <- 2
 eta <- gamma + 
-  # gamma_date * samp_date +
-  # gamma_size * size +
-  # gamma_lipid * lipid +
+  gamma_date * samp_date +
+  gamma_size * size +
+  gamma_lipid * lipid +
   inj_eff
 p <- boot::inv.logit(eta) # Probability of survival
 surv <- rbinom(n, 1, p)  # Binary outcome
@@ -527,55 +534,32 @@ dat_list <- list(
 m5 <- ulam(
   alist(
     # covariance among size and lipid
-    # c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho, Sigma),
-    # mu_size <- alpha_size + beta_ds * samp_date,
-    # mu_lipid <- alpha_lipid + beta_dl * samp_date,
+    c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho, Sigma),
+    mu_size <- alpha_size + beta_ds * samp_date,
+    mu_lipid <- alpha_lipid + beta_dl * samp_date,
     # survival
     surv ~ dbinom( 1 , p ) ,
-    logit(p) <- gamma + #gamma_date * samp_date +
-      # gamma_size * size +
-      # gamma_lipid * lipid +
+    logit(p) <- gamma + gamma_date * samp_date +
+      gamma_size * size +
+      gamma_lipid * lipid +
       gamma_inj * sum(delta_inj[1:inj])
     ,
     # priors
-    # c(alpha_size, alpha_lipid) ~ normal(0, 0.2),
-    # c(beta_ds, beta_dl) ~ normal(0, 0.5),
-    # Rho ~ lkj_corr( 2 ),
-    # Sigma ~ exponential( 1 ),
+    c(alpha_size, alpha_lipid) ~ normal(0, 0.2),
+    c(beta_ds, beta_dl) ~ normal(0, 0.5),
+    Rho ~ lkj_corr( 2 ),
+    Sigma ~ exponential( 1 ),
     gamma ~ normal(0, 2.5),
     gamma_inj ~ normal(0, 0.5),
     vector[4]: delta_inj <<- append_row(0, delta),
-    simplex[3]: delta ~ dirichlet(alpha)
-    # c(gamma_date, gamma_size, gamma_lipid) ~ normal(0, 0.5)
+    simplex[3]: delta ~ dirichlet(alpha),
+    c(gamma_date, gamma_size, gamma_lipid) ~ normal(0, 0.5)
   ),
   data=dat_list, chains=4 , cores = 4,#log_lik=TRUE,
   control = list(adapt_delta = 0.95)
 )
 
+# note order of estimates depends on order in which inj index appears
 precis(m5, depth = 2)
 
 
-
-
-library(rethinking) 
-data(Trolley)
-d <- Trolley
-levels(d$edu)
-edu_levels <- c( 6 , 1 , 8 , 4 , 7 , 2 , 5 , 3 )
-d$edu_new <- edu_levels[ d$edu ]
-
-dat <- list( R = d$response ,
-             action = d$action,
-             intention = d$intention,
-             contact = d$contact,
-             E = as.integer( d$edu_new ), # edu_new as an index
-             alpha = rep( 2 , 7 ) )
-m12.6 <- ulam(
-  alist(
-    R ~ ordered_logistic( phi , kappa ),
-    phi <- bE*sum( delta_j[1:E] ) + bA*action + bI*intention + bC*contact,
-    kappa ~ normal( 0 , 1.5 ),
-    c(bA,bI,bC,bE) ~ normal( 0 , 1 ),
-    vector[8]: delta_j <<- append_row( 0 , delta ),
-    simplex[7]: delta ~ dirichlet( alpha )
-  ), data=dat , chains=4 , cores=4 )
