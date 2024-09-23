@@ -81,6 +81,12 @@ multi_year_map <- base_map +
   theme(
     legend.position = "none"
   )
+
+png(here::here("figs", "multi-year-map.png"), 
+    height = 5, width = 6.5, units = "in", res = 200)
+multi_year_map
+dev.off()
+
 # export for use in Rmd
 saveRDS(multi_year_map, here::here("figs", "receiver_map1.rds"))
 

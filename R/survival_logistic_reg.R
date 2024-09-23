@@ -26,11 +26,11 @@ det_dat <- det_dat1 %>%
     lipid_z = scale(lipid) %>% as.numeric(),
     fl_z = scale(fl) %>% as.numeric(),
     day_z = scale(year_day) %>% as.numeric(),
-    stock_group = factor(
-      stock_group, levels = c("Cali", "Up Col.", "Low Col.", "WA_OR", "WCVI",
-                              "ECVI", "North Puget", "South Puget", 
-                              "Fraser Year.", "Fraser Sub.",  "Fraser 4.1",
-                              "Fraser Fall")
+    terminal_p = case_when(
+      stock_group %in% c("South Puget", "Up Col.") ~ 1,
+      grepl("Fraser", stock_group) ~ 1,
+      stock_group == "WCVI" & year %in% c("2021", "2022") ~ 1,
+      TRUE ~ 0
     )
   )
 saveRDS(det_dat,
@@ -162,7 +162,7 @@ dat_list <- list(
 )
 
 
-# multiple regression hierarchical model with no injury effects 
+# multiple regression hierarchical model with injury effects 
 m1 <- ulam(
   alist(
     surv ~ dbinom(1 , p) ,

@@ -9,15 +9,89 @@
 library(tidyverse)
 
 stock_key <- read.csv(
-  here::here("data", "harvest", "stock_key.csv"),
+  here::here("data", "ctc_decoder", "ctc_stock_decoder.csv"),
   stringsAsFactors = FALSE
 ) 
 
-ctc <- read.csv(
-  here::here("data", "harvest", "2023ERA_catchDistribution_CMZ_subset.csv"),
+cyer_dat <- read.csv(
+  here::here(
+    "data", "harvest", "Interim_ERA_CatchYr_ExploitationRates_2023.csv"
+    ),
   stringsAsFactors = FALSE
 ) %>% 
-  janitor::clean_names() 
+  janitor::clean_names() %>% 
+  filter(
+    mort_type == "TM"
+  )
+
+
+# CLEAN ------------------------------------------------------------------------
+
+sus_stocks <- cyer_dat %>% 
+  filter(is.na(escap)) %>% 
+  pull(stock) %>% 
+  unique()
+
+
+# calculate 2023 mean exp rate for SUS fisheries as placeholder
+mean_sus_exp_rates <- cyer_dat %>% 
+  filter(catch_year < 2023) %>% 
+  group_by(stock) %>% 
+  summarize(
+    mean_sus_isbm = mean(sus_isbm)
+  )  
+
+cyer_dat_long <- left_join(cyer_dat, mean_sus_exp_rates, by = "stock") %>% 
+  mutate(
+    sus_isbm = ifelse(catch_year == "2023", mean_sus_isbm, sus_isbm)
+  ) %>% 
+  select(stock, year = catch_year, seak_aabm:escap) %>% 
+  pivot_longer(cols = c("seak_aabm", "can_aabm", "can_isbm", "sus_isbm", 
+                        "term", "stray", "escap"),
+               names_to = "strata", 
+               values_to = "run_ppn") %>% 
+  # rescale to correct for missing 2022 data and ensure all stock-year 
+  # combinations sum to 100
+  group_by(
+    stock, year
+  ) %>% 
+  mutate(
+    total_percent = sum(run_ppn)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    scaled_percent = run_ppn / total_percent
+  ) %>% 
+  # drop missing SUS 2023 data that's empty
+  filter(
+    !(year == "2023" & stock %in% sus_stocks)
+  ) %>% 
+  glimpse()
+
+
+# ALL 2023 data missing for SUS stocks; replace with 2019-2022 mean
+mean_sus_stocks <- cyer_dat_long %>% 
+  filter(stock %in% sus_stocks) %>% 
+  group_by(stock, strata) %>% 
+  summarize(mean_ppn = mean(run_ppn)) %>% 
+  group_by(stock) %>% 
+  mutate(
+    total_percent = sum(mean_ppn),
+    scaled_percent = mean_ppn / total_percent,
+    year = 2023
+  ) %>% 
+  ungroup()
+
+cyer_dat_out <- rbind(
+  cyer_dat_long %>% 
+    select(stock, year, strata, scaled_percent),
+  mean_sus_stocks %>% 
+    select(stock, year, strata, scaled_percent)
+) 
+
+
+
+# OLD --------------------------------------------------------------------------
 
 col_fall <- read.csv(
   here::here("data", "harvest", "Fall Chinook for Cam2.csv"),
@@ -34,8 +108,6 @@ col_summer <- read.csv(
 ) %>% 
   janitor::clean_names() 
 
-
-# CLEAN ------------------------------------------------------------------------
 
 # annual ctc harvest rate estimates 
 marine_er <- ctc %>% 
