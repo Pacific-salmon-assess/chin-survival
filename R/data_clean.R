@@ -14,16 +14,18 @@ chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS")) %>%
 
 indicator_key <- read.csv(
   here::here("data", "ctc_decoder", "ctc_stock_decoder.csv")
-) 
+) %>% 
+  mutate(
+    ctc_indicator = ifelse(ctc_indicator == "SRH/ELK", "SRH", ctc_indicator)
+  )
+
+# TODO: currently excludes terminal harvest; should this be included?
+cyer_dat <- readRDS(here::here("data", "harvest", "cleaned_cyer_dat.rds")) %>% 
+  rename(ctc_indicator = stock)
 
 
 ## CLEAN AND EXPORT FOR MODEL FITTING ------------------------------------------
 
-
-## add exploitation rate indicator and redefine Fraser by SMU
-# TODO: add exploitation rate estimates by year
-# TODO: eventually replace stocks without stock IDs, but with aggregate IDs with
-# mean annual estimates for the aggregate
 # TODO: decide whether to split upriver Columbia, lower Columbia and Puget Sound
 # similarly to FR
 fr_sum_yr <- indicator_key %>% 
@@ -49,14 +51,14 @@ chin2 <- left_join(
       acoustic_year %in% c("7696_2019", "5353_2022") ~ "Fraser Fall",
       TRUE ~ agg_name
     )
-  ) 
+  ) %>% 
+  left_join(., cyer_dat, by = c("year", "ctc_indicator"))
 
 
 # define aggregate names for Fraser and add to tbl
 agg_names <- chin2 %>%
   filter(grepl("Fraser", agg_name)) %>%
   select(vemco_code = acoustic_year, agg = agg_name)
-
 
 
 ## Logistic Regression Dataset

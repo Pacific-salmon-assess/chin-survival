@@ -65,8 +65,7 @@ cyer_dat_long <- left_join(cyer_dat, mean_sus_exp_rates, by = "stock") %>%
   # drop missing SUS 2023 data that's empty
   filter(
     !(year == "2023" & stock %in% sus_stocks)
-  ) %>% 
-  glimpse()
+  )
 
 
 # ALL 2023 data missing for SUS stocks; replace with 2019-2022 mean
@@ -82,13 +81,74 @@ mean_sus_stocks <- cyer_dat_long %>%
   ) %>% 
   ungroup()
 
-cyer_dat_out <- rbind(
+
+# Nicola and Chilliwack missing from data provided by Noel; use 2019-2022 data
+# from published catch/escapement tables (cleaned in fraser-chinook-fsar)
+cyer_pub <- readRDS(here::here("data", "harvest", "cyer_est_22.rds")) %>% 
+  rename(stock = indicator)
+
+# create dummy 2023 data based on mean percent run (currently these are the 
+# 2022 SUS estimates as well)
+cyer_2023 <- expand.grid(
+  year = 2023,
+  strata = unique(cyer_pub$strata),
+  stock = c("CHI", "NIC")
+) %>% 
+  left_join(
+    ., cyer_pub %>% select(stock, strata, mean_percent_run) %>% distinct(), 
+    by = c("strata", "stock")
+  ) %>% 
+  filter(
+    grepl("isbm", strata),
+    !grepl("nbc", strata),
+    stock %in% c("CHI", "NIC")
+  ) %>% 
+  group_by(
+    year, stock
+  ) %>% 
+  summarize(
+    isbm_cyer = sum(mean_percent_run) / 100
+  ) %>% 
+  ungroup()
+
+
+cyer_pub2 <- cyer_pub %>% 
+  filter(
+    grepl("isbm", strata),
+    !grepl("nbc", strata),
+    stock %in% c("CHI", "NIC"),
+    year > 2018
+  ) %>% 
+  group_by(
+    year, stock
+  ) %>% 
+  summarize(
+    isbm_cyer = sum(percent_run) / 100
+  ) %>% 
+  ungroup() %>% 
+  rbind(., cyer_2023)
+
+
+## combine to join in data_clean.R
+cyer_dat_out<- rbind(
   cyer_dat_long %>% 
     select(stock, year, strata, scaled_percent),
   mean_sus_stocks %>% 
     select(stock, year, strata, scaled_percent)
-) 
+) %>% 
+  # exclude strata outside of sampling area
+  filter(
+    grepl("isbm", strata)
+  ) %>% 
+  group_by(stock, year) %>% 
+  summarize(
+    isbm_cyer = sum(scaled_percent)
+  ) %>% 
+  rbind(., cyer_pub2) %>% 
+  ungroup()
 
+saveRDS(cyer_dat_out,
+        here::here("data", "harvest", "cleaned_cyer_dat.rds"))
 
 
 # OLD --------------------------------------------------------------------------

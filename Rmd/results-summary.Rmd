@@ -163,5 +163,9 @@ This process will be improved by input from as many of you as possible on the fo
 4. What should the response variable in the binomial GLM be?
   + Intermediate survival: 0 if a fish is never detected, 1 if it is detected at all. This would minimize differences in terminal detection probability, but given that most (>90%) individuals were detected at least once there may be insufficient contrast.
   + Terminal survival: 0 if a fish is never detected, 1 if it is detected in-river (or in Puget Sound). This seems more appropriate, though stock effects will be difficult to interpret given differences in terminal detection probability. Could resolve by excluding stocks with low terminal $p$ or focusing on stock identity as a confounding variable, rather than a variable of interest itself.
+5. Given the location of arrays above, how important is it to include terminal exploitation rates. Mark provided some initial data on Columbia River harvest downstream of Bonneville, but the only other terminal data I have is from the CTC analyses and it's unclear what spatial domain that represents. Some thoughts:
+  + Probably not worth including freshwater harvest for Fraser since I think most is upstream of terminal array at Mission. Is marine harvest at Fraser mouth considered ISBM or terminal?
+  + Is marine harvest inside Puget Sound ISBM or terminal? If the former we should exclude terminal.
+  + Is marine harvest inside Barkley Sound/Alberni Canal ISBM or terminal? If the former we should exclude terminal for WCVI.
 
 Of course please feel free to weigh in with any additional comments or questions. 
