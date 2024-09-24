@@ -160,3 +160,118 @@ write.csv(
   ),
   row.names = FALSE
 )
+
+
+## PRELIM FIGURES --------------------------------------------------------------
+
+ppn_foo <- function(group, response) {
+  group_exp <- c("vemco_code", group)
+  labs <- det_dat1 %>% 
+    dplyr::select_at(group_exp) %>% 
+    distinct() %>% 
+    group_by_at(group) %>% 
+    tally() %>% 
+    mutate(year = as.factor(year))
+  
+  dat_out <- det_dat1 %>% 
+    group_by_at(group) %>% 
+    summarize(n = length(unique(vemco_code)),
+              ppn = sum(.data[[response]] / n),
+              se = sqrt((ppn * (1 - ppn)) / n),
+              up = pmin(1, ppn + (1.96 * se)),
+              lo = pmax(0, ppn - (1.96 * se)),
+              .groups = "drop") %>% 
+    mutate(year = as.factor(year))
+  
+  list("labs" = labs, "dat" = dat_out)
+}
+
+
+det_ppns <- ppn_foo(group = c("stock_group", "year"), response = "term_det") 
+ggplot(data = det_ppns$dat, aes(y = ppn)) +
+  geom_pointrange(aes(x = year, ymin = lo, ymax = up)) +
+  facet_wrap(~stock_group) +
+  ggsidekick::theme_sleek() +
+  geom_text(data = det_ppns$lab, aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+inj_ppns <- ppn_foo(group = c("injury", "year"), response = "term_det")
+ggplot(data = inj_ppns$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~injury) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = inj_ppns$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+inj_ppns2 <- ppn_foo(group = c("comp_inj", "year"), response = "term_det")
+ggplot(data = inj_ppns2$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~comp_inj) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = inj_ppns2$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+
+loc_ppns <- ppn_foo(group = c("hook_loc", "year"), response = "term_det")
+ggplot(data = loc_ppns$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~hook_loc) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = loc_ppns$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+fin_ppns <- ppn_foo(group = c("fin_dam", "year"), response = "term_det")
+ggplot(data = fin_ppns$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~fin_dam) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = fin_ppns$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+scale_ppns <- ppn_foo(group = c("scale_loss", "year"), response = "term_det")
+ggplot(data = scale_ppns$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~scale_loss) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = scale_ppns$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+redep_ppns <- ppn_foo(group = c("redeploy", "year"), response = "det")
+ggplot(data = redep_ppns$dat,  aes(x = year, y = ppn)) +
+  geom_pointrange(aes(ymin = lo, ymax = up)) +
+  facet_wrap(~redeploy) +
+  ggsidekick::theme_sleek()+
+  geom_text(data = redep_ppns$lab, 
+            aes(x = year, y = -Inf, label  = n),
+            position = position_dodge(width = 1),
+            vjust = -0.5)
+
+
+ggplot(det_dat1, aes(x = lipid_z, y = final_det)) +
+  geom_point() +
+  facet_wrap(~year) +
+  ggsidekick::theme_sleek()
+ggplot(det_dat1, aes(x = trough_time, y = det)) +
+  geom_point() +
+  facet_wrap(~year) +
+  ggsidekick::theme_sleek()
+ggplot(det_dat1, aes(x = mean_log_e, y = final_det)) +
+  geom_point() +
+  facet_wrap(~year) +
+  ggsidekick::theme_sleek()
+ggplot(det_dat1, aes(x = cyer_z, y = final_det)) +
+  geom_point() +
+  facet_wrap(~year) +
+  ggsidekick::theme_sleek()
+

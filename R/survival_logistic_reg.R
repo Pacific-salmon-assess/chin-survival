@@ -27,125 +27,10 @@ det_dat <- det_dat1 %>%
     fl_z = scale(fl) %>% as.numeric(),
     day_z = scale(year_day) %>% as.numeric(),
     cyer_z = scale(isbm_cyer) %>% as.numeric(),
-    terminal_p = as.factor(det_dat$terminal_p),
-    year = as.factor(det_dat$year),
-    stock_group = as.factor(det_dat$stock_group)
+    terminal_p = as.factor(terminal_p),
+    year = as.factor(year),
+    stock_group = as.factor(stock_group)
   )
-
-
-# PLOTS OF RAW DATA ------------------------------------------------------------
-
-ppn_foo <- function(group, response) {
-  group_exp <- c("vemco_code", group)
-  labs <- det_dat %>% 
-    dplyr::select_at(group_exp) %>% 
-    distinct() %>% 
-    group_by_at(group) %>% 
-    tally() %>% 
-    mutate(year = as.factor(year))
-  
-  dat_out <- det_dat %>% 
-    group_by_at(group) %>% 
-    summarize(n = length(unique(vemco_code)),
-              ppn = sum(.data[[response]] / n),
-              se = sqrt((ppn * (1 - ppn)) / n),
-              up = pmin(1, ppn + (1.96 * se)),
-              lo = pmax(0, ppn - (1.96 * se)),
-              .groups = "drop") %>% 
-    mutate(year = as.factor(year))
-  
-  list("labs" = labs, "dat" = dat_out)
-}
-
-
-det_ppns <- ppn_foo(group = c("stock_group", "year"), response = "term_det") 
-ggplot(data = det_ppns$dat, aes(y = ppn)) +
-  geom_pointrange(aes(x = year, ymin = lo, ymax = up)) +
-  facet_wrap(~stock_group) +
-  ggsidekick::theme_sleek() +
-  geom_text(data = det_ppns$lab, aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-inj_ppns <- ppn_foo(group = c("injury", "year"), response = "term_det")
-ggplot(data = inj_ppns$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~injury) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = inj_ppns$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-inj_ppns2 <- ppn_foo(group = c("comp_inj", "year"), response = "term_det")
-ggplot(data = inj_ppns2$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~comp_inj) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = inj_ppns2$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-
-loc_ppns <- ppn_foo(group = c("hook_loc", "year"), response = "term_det")
-ggplot(data = loc_ppns$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~hook_loc) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = loc_ppns$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-fin_ppns <- ppn_foo(group = c("fin_dam", "year"), response = "term_det")
-ggplot(data = fin_ppns$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~fin_dam) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = fin_ppns$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-scale_ppns <- ppn_foo(group = c("scale_loss", "year"), response = "term_det")
-ggplot(data = scale_ppns$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~scale_loss) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = scale_ppns$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-redep_ppns <- ppn_foo(group = c("redeploy", "year"), response = "det")
-ggplot(data = redep_ppns$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~redeploy) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = redep_ppns$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-
-ggplot(det_dat, aes(x = lipid_z, y = final_det)) +
-  geom_point() +
-  facet_wrap(~year) +
-  ggsidekick::theme_sleek()
-ggplot(det_dat, aes(x = trough_time, y = det)) +
-  geom_point() +
-  facet_wrap(~year) +
-  ggsidekick::theme_sleek()
-ggplot(det_dat, aes(x = mean_log_e, y = final_det)) +
-  geom_point() +
-  facet_wrap(~year) +
-  ggsidekick::theme_sleek()
-ggplot(det_dat, aes(x = cyer_z, y = final_det)) +
-  geom_point() +
-  facet_wrap(~year) +
-  ggsidekick::theme_sleek()
-
 
 
 # FIT LOGISTIC REG MODELS ------------------------------------------------------
@@ -164,6 +49,345 @@ dat_list <- list(
 )
 
 
+m4 <- ulam(
+  alist(
+    # stock-specific sampling dates
+    day_z ~ normal(mu_day, sigma_day),
+    mu_day <- beta_stk[stk, 4],
+    # unobserved latent condition
+    c(fl_z, lipid_z) ~ multi_normal(c(mu_fl, mu_lipid), Rho, Sigma),
+    mu_fl <- alpha_fl + beta_df * day_z + beta_yr[yr, 1] + beta_stk[stk, 1],
+    mu_lipid <- alpha_lipid + beta_dl * day_z + beta_yr[yr, 2] + 
+      beta_stk[stk, 2],
+    # survival
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- surv_bar + 
+      beta_term[term_p] +
+      beta_yr[yr, 3] +
+      beta_stk[stk, 3] +
+      beta_ds * day_z +
+      beta_fs * fl_z +
+      beta_ls * lipid_z +
+      beta_is * sum(delta_inj[1:inj])
+    ,
+    # adaptive priors
+    transpars> matrix[yr, 3]:beta_yr <-
+      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
+    matrix[3, yr]:z_yr ~ normal(0, 0.5),
+    transpars> matrix[stk, 4]:beta_stk <-
+      compose_noncentered(sigma_stk , L_Rho_stk , z_stk),
+    matrix[4, stk]:z_stk ~ normal(0, 0.5),
+    # fixed priors
+    c(alpha_fl, alpha_lipid) ~ normal(0, 0.5),
+    c(beta_df, beta_dl) ~ normal(0.1, 0.5),
+    Rho ~ lkj_corr(2),
+    Sigma ~ exponential(1),
+    sigma_day ~ exponential(1),
+    
+    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
+    vector[3]:sigma_yr ~ exponential(1),
+    cholesky_factor_corr[4]:L_Rho_stk ~ lkj_corr_cholesky(2),
+    vector[4]:sigma_stk ~ exponential(1),
+    
+    surv_bar ~ normal(0, 1.25),
+    beta_term[term_p] ~ normal(0, 0.5),
+    c(beta_ds, beta_fs, beta_ls, beta_is) ~ normal(0, 0.5),
+    
+    # constraints on ordinal effects of injury
+    vector[4]: delta_inj <<- append_row(0, delta),
+    simplex[3]: delta ~ dirichlet(alpha),
+    
+    # compute ordinary correlation matrixes from Cholesky factors
+    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
+    gq> matrix[4, 4]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
+  ),
+  data=dat_list, chains = 4 , cores = 4, iter = 2000,
+  control = list(adapt_delta = 0.96)
+)
+# as in simpler model, injury effects are very modest (overall effect broadly
+# spans zero and scales semi-linearly with injury)
+
+
+
+# POSTERIOR INFERENCE  ---------------------------------------------------------
+
+
+post <- extract.samples(m4)
+
+
+## Random Intercepts
+# representing among year and among stock variability in fork length,
+# lipid content, survival, and date
+
+# sigma_stock 
+sigma_stk_mat <- post$sigma_stk 
+colnames(sigma_stk_mat) <- c("fl", "lipid", "survival", "date")
+sigma_stk <- sigma_stk_mat %>% 
+  as.data.frame() %>%
+  pivot_longer(
+    cols = everything(), names_to = "parameter", values_to = "est"
+  ) %>% 
+  group_by(parameter) %>% 
+  summarize(
+    med = median(est),
+    lo = rethinking::HPDI(est, prob = 0.9)[1],
+    up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) %>% 
+  mutate(
+    sigma = "stock"
+  )
+
+# sigma_year
+sigma_yr_mat <- post$sigma_yr 
+colnames(sigma_yr_mat) <- c("fl", "lipid", "survival")
+sigma_yr <- sigma_yr_mat %>% 
+  as.data.frame() %>%
+  pivot_longer(
+    cols = everything(), names_to = "parameter", values_to = "est"
+  ) %>% 
+  group_by(parameter) %>% 
+  summarize(
+    med = median(est),
+    lo = rethinking::HPDI(est, prob = 0.9)[1],
+    up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) %>% 
+  mutate(
+    sigma = "year"
+  )
+
+sigma_stk_pt <- rbind(sigma_yr, sigma_stk) %>% 
+  mutate(
+    parameter = factor(parameter, levels = c("date", "fl", "lipid", "survival"))
+  ) %>% 
+  ggplot() +
+  geom_pointrange(aes(x = parameter, y = med, ymin = lo, ymax = up),
+                  shape = 21, fill = "#d95f02") +
+  facet_wrap(~sigma, ncol = 2) +
+  labs(x = "Parameter", y = "Posterior Variance Estimate") +
+  ggsidekick::theme_sleek() 
+
+
+
+## Submodel effects 
+
+## rho representing correlation between lipid and fork length
+# symmetrical matrix so extract single values
+rho <- post$Rho[ , 2, 1]
+rho_hist <- ggplot() +
+  geom_histogram(aes(x = rho), bins = 50, fill = "#1b9e77") +
+  geom_vline(aes(xintercept = 0), lty = 2 , colour = "black", linewidth = 1.25) +
+  ggsidekick::theme_sleek() +
+  theme(
+    axis.title = element_blank()
+  )
+
+## date effects on lipid content and fork length
+samp_date_seq <- seq(from = -2.9, to = 2.7, length.out = 30)
+
+pred_mu_fl <- purrr::map(
+  samp_date_seq, ~ post$alpha_fl + post$beta_df * .x
+) %>% 
+  do.call(cbind, .) 
+pred_mu_lipid <- purrr::map(
+  samp_date_seq, ~ post$alpha_lipid + post$beta_dl * .x
+) %>% 
+  do.call(cbind, .) 
+colnames(pred_mu_fl) <- colnames(pred_mu_lipid) <- samp_date_seq
+
+# combine posterior preds
+pred_mu <- rbind(
+  pred_mu_fl %>% 
+    as.data.frame() %>% 
+    pivot_longer(
+      cols = everything(), names_to = "yday", values_to = "est"
+    ) %>% 
+    mutate(
+      var = "fl"
+    ),
+  pred_mu_lipid %>% 
+    as.data.frame() %>% 
+    pivot_longer(
+      cols = everything(), names_to = "yday", values_to = "est"
+    ) %>% 
+    mutate(
+      var = "lipid"
+    )
+) %>%
+  mutate(
+    yday_z = as.numeric(yday),
+    year_day = (yday_z * sd(det_dat$year_day)) + mean(det_dat$year_day)
+  ) %>% 
+  group_by(year_day, var) %>% 
+  summarize(
+    med = median(est),
+    lo = rethinking::HPDI(est, prob = 0.9)[1],
+    up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) 
+
+# TODO: consider back converting pred_mu into real space
+pred_mu_ribbon <- ggplot(pred_mu, aes(x = year_day, y = med)) +
+  geom_line(
+    colour = "#1b9e77"
+  ) +
+  geom_ribbon(
+    aes(ymin = lo, ymax = up), fill = "#1b9e77", alpha = 0.3
+  ) +
+  facet_wrap(~var) +
+  labs(y = "Submodel Prediction", x = "Year Day") +
+  ggsidekick::theme_sleek()
+
+
+
+## Survival effects 
+
+# sampling day, including indirect effects on size/lipid
+# generate posterior covariance matrix for each draw, combine with pred mu to 
+# sample from mvrnorm, then iterate over exp var
+sigma <- post$Sigma
+rho <- post$Rho
+S <- vector(mode = "list", length = nrow(sigma))
+sim_surv <- sim_surv_d <- sim_fl <- sim_lipid <- matrix(
+  NA, 
+  nrow = nrow(sigma), 
+  ncol = length(samp_date_seq)
+)
+for (j in seq_along(samp_date_seq)) {
+  for (i in 1:nrow(sigma)) {
+    S <- diag(sigma[i,]) %*% rho[i,,] %*% diag(sigma[i,])
+    mu <- MASS::mvrnorm(
+      n = 1, mu = c(pred_mu_fl[i, j], pred_mu_lipid[i, j]),
+      Sigma = S
+    )
+    sim_fl[i, j] <- mu[1]
+    sim_lipid[i, j] <- mu[2]
+  }
+  # excludes hierarchical intercept; assumes high terminal det prob and low
+  # injury
+  sim_eta <- as.numeric(
+    post$surv_bar + 
+      post$beta_ds * samp_date_seq[j] +
+      post$beta_fs * sim_fl[ , j] +
+      post$beta_ls * sim_lipid[ , j] +
+      post$beta_is * post$delta[ , 1] +
+      post$beta_term[ , 2]
+  )
+  # as above but sets fl and lipid to zero (i.e. removes them)
+  sim_eta_direct <- as.numeric(
+    post$surv_bar + 
+      post$beta_ds * samp_date_seq[j] +
+      post$beta_is * post$delta[ , 1] +
+      post$beta_term[ , 2]
+  )
+  sim_surv[ , j] <- boot::inv.logit(sim_eta) # Probability of survival
+  sim_surv_d[ , j] <- boot::inv.logit(sim_eta_direct) # Probability of survival
+}
+
+pred_day_surv_total <- sim_surv %>% 
+  as.data.frame() %>% 
+  set_names(samp_date_seq) %>% 
+  pivot_longer(
+    cols = everything(), names_to = "yday_z", values_to = "est"
+  ) %>% 
+  mutate(
+    effect = "total"
+  )
+pred_day_surv_direct <- sim_surv_d %>% 
+  as.data.frame() %>% 
+  set_names(samp_date_seq) %>% 
+  pivot_longer(
+    cols = everything(), names_to = "yday_z", values_to = "est"
+  ) %>% 
+  mutate(
+    effect = "direct"
+  )
+
+day_effect_pal <- c(1, 2)
+names(day_effect_pal) <- c("direct", "total")
+
+pred_day_ribbon <- rbind(pred_day_surv_total, pred_day_surv_direct) %>% 
+  mutate(
+    yday_z = as.numeric(yday_z),
+    year_day = (yday_z * sd(det_dat$year_day)) + mean(det_dat$year_day)
+  ) %>% 
+  group_by(year_day, effect) %>% 
+  summarize(
+    med = median(est),
+    lo = rethinking::HPDI(est, prob = 0.9)[1],
+    up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) %>% 
+  ggplot(
+    ., aes(x = year_day, y = med, lty = effect)
+  ) +
+  geom_line(
+    colour = "#7570b3"
+  ) +
+  geom_ribbon(
+    aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
+  ) +
+  scale_linetype_manual(values = day_effect_pal) +
+  labs(y = "Predicted Survival", x = "Year Day") +
+  ggsidekick::theme_sleek()
+
+
+
+
+# plot posterior preds
+# post <- extract.samples(m1)
+# link_foo <- function(pred_dat) {
+#   logodds <- with(
+#     post,
+#     surv_bar + beta_ds * pred_dat$day_z + beta_fs * pred_dat$fl_z + beta_ls *
+#       pred_dat$lipid_z 
+#   )
+#   return( inv_logit(logodds) )
+# }
+
+
+pred_l <- sapply(
+  seq(-2, 2, length = 30), 
+  function (x) {
+    inv_logit(post$surv_bar + post$beta_ls * x)
+  }
+)
+pred_l_mu <- apply(pred_l, 2, mean)
+pred_l_pi <- apply(pred_l, 2, PI)
+plot( NULL , xlab="Lipid Scaled" , ylab="Proportion Terminal Det",
+      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
+lines(seq(-2, 2, length = 30) , pred_l_mu )
+shade( pred_l_pi , seq(-2, 2, length = 30))
+
+
+pred_f <- sapply(
+  seq(-2, 2, length = 30), 
+  function (x) {
+    inv_logit(post$surv_bar + post$beta_fs * x)
+  }
+)
+pred_f_mu <- apply(pred_f, 2, mean)
+pred_f_pi <- apply(pred_f, 2, PI)
+plot( NULL , xlab="FL Scaled" , ylab="Proportion Terminal Det",
+      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
+lines(seq(-2, 2, length = 30) , pred_f_mu )
+shade( pred_f_pi , seq(-2, 2, length = 30))
+
+
+# pred_d <- sapply(
+#   seq(-2, 2, length = 30), 
+#   function (x) {
+#     inv_logit(post$surv_bar + post$beta_ds * x)
+#   }
+# )
+# pred_d_mu <- apply(pred_d, 2, mean)
+# pred_d_pi <- apply(pred_d, 2, PI)
+# plot( NULL , xlab="Yday Scaled" , ylab="Proportion Terminal Det",
+#       ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
+# lines(seq(-2, 2, length = 30) , pred_d_mu )
+# shade( pred_d_pi , seq(-2, 2, length = 30))
+
+
+## SIMPLIFIED MODEL VERSIONS ---------------------------------------------------
+
+
 # multiple regression hierarchical model with injury effects 
 m1 <- ulam(
   alist(
@@ -176,7 +400,7 @@ m1 <- ulam(
       beta_fs * fl_z +
       beta_ls * lipid_z +
       beta_is * sum(delta_inj[1:inj])
-      ,
+    ,
     surv_bar ~ normal(0, 1.25),
     beta_yr[yr] ~ normal(0, 0.5),
     beta_stk[stk] ~ normal(0, 0.5),
@@ -301,167 +525,6 @@ m3 <- ulam(
 # covariance between stock effects on survival and lipid/fl much weaker (~0.05)
 # greater interstock and interannual variability in lipid content than fork
 # length or survival
-
-
-# as model 3 but includes injury effects
-m4 <- ulam(
-  alist(
-    # stock-specific sampling dates
-    day_z ~ normal(mu_day, sigma_day),
-    mu_day <- beta_stk[stk, 4],
-    # unobserved latent condition
-    c(fl_z, lipid_z) ~ multi_normal(c(mu_fl, mu_lipid), Rho, Sigma),
-    mu_fl <- alpha_fl + beta_df * day_z + beta_yr[yr, 1] + beta_stk[stk, 1],
-    mu_lipid <- alpha_lipid + beta_dl * day_z + beta_yr[yr, 2] + 
-      beta_stk[stk, 2],
-    # survival
-    surv ~ dbinom(1 , p) ,
-    logit(p) <- surv_bar + 
-      beta_term[term_p] +
-      beta_yr[yr, 3] +
-      beta_stk[stk, 3] +
-      beta_ds * day_z +
-      beta_fs * fl_z +
-      beta_ls * lipid_z +
-      beta_is * sum(delta_inj[1:inj])
-    ,
-    # adaptive priors
-    transpars> matrix[yr, 3]:beta_yr <-
-      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
-    matrix[3, yr]:z_yr ~ normal(0, 0.5),
-    transpars> matrix[stk, 4]:beta_stk <-
-      compose_noncentered(sigma_stk , L_Rho_stk , z_stk),
-    matrix[4, stk]:z_stk ~ normal(0, 0.5),
-    # fixed priors
-    c(alpha_fl, alpha_lipid) ~ normal(0, 0.5),
-    c(beta_df, beta_dl) ~ normal(0.1, 0.5),
-    Rho ~ lkj_corr(2),
-    Sigma ~ exponential(1),
-    sigma_day ~ exponential(1),
-    
-    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
-    vector[3]:sigma_yr ~ exponential(1),
-    cholesky_factor_corr[4]:L_Rho_stk ~ lkj_corr_cholesky(2),
-    vector[4]:sigma_stk ~ exponential(1),
-    
-    surv_bar ~ normal(0, 1.25),
-    beta_term[term_p] ~ normal(0, 0.5),
-    c(beta_ds, beta_fs, beta_ls, beta_is) ~ normal(0, 0.5),
-    
-    # constraints on ordinal effects of injury
-    vector[4]: delta_inj <<- append_row(0, delta),
-    simplex[3]: delta ~ dirichlet(alpha),
-    
-    # compute ordinary correlation matrixes from Cholesky factors
-    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
-    gq> matrix[4, 4]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
-  ),
-  data=dat_list, chains = 4 , cores = 4, iter = 2000,
-  control = list(adapt_delta = 0.96)
-)
-# as in simpler model, injury effects are very modest (overall effect broadly
-# spans zero and scales semi-linearly with injury)
-
-
-## posterior predictions
-# sampling day, including indirect effects on size/lipid
-samp_date_seq <- seq(from = -2, to = 2, length.out = 30)
-
-post <- extract.samples(m3)
-pred_mu_fl <- purrr::map(
-  samp_date_seq, ~ post$alpha_fl + post$beta_df * .x
-)
-pred_mu_lipid <- purrr::map(
-  samp_date_seq, ~ post$alpha_lipid + post$beta_dl * .x
-)
-
-# generate posterior covariance matrix for each draw, combine with pred mu to 
-# sample from mvrnorm, then iterate over exp var
-sigma <- post$Sigma
-rho <- post$Rho
-S <- vector(mode = "list", length = nrow(sigma))
-sim_surv_d <- sim_fl <- sim_lipid <- matrix(
-  NA, 
-  nrow = nrow(sigma), 
-  ncol = length(samp_date_seq)
-)
-for (j in seq_along(samp_date_seq)) {
-  for (i in 1:nrow(sigma)) {
-    S <- diag(sigma[i,]) %*% rho[i,,] %*% diag(sigma[i,])
-    mu <- MASS::mvrnorm(
-      n = 1, mu=c(pred_mu_fl[[j]][i], pred_mu_lipid[[j]][i]),
-      Sigma = S
-    )
-    sim_fl[i, j] <- mu[1]
-    sim_lipid[i, j] <- mu[2]
-  }
-  sim_eta <- as.numeric(post$surv_bar + post$beta_ds * samp_date_seq[j] +
-                          post$beta_fs * sim_fl[ , j] +
-                          post$beta_ls * sim_lipid[ , j]
-  )
-  sim_surv_d[ , j] <- boot::inv.logit(sim_eta) # Probability of survival
-  # sim_surv_d[ , j] <- rbinom(length(sim_eta), 1, boot::inv.logit(sim_eta))
-}
-pred_d_mu <- apply(sim_surv_d, 2, mean)
-pred_d_pi <- apply(sim_surv_d, 2, PI)
-plot( NULL , xlab="Date Scaled" , ylab="Proportion Terminal Det",
-      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
-lines(seq(-2, 2, length = 30) , pred_d_mu )
-shade( pred_d_pi , seq(-2, 2, length = 30))
-
-
-# plot posterior preds
-# post <- extract.samples(m1)
-# link_foo <- function(pred_dat) {
-#   logodds <- with(
-#     post,
-#     surv_bar + beta_ds * pred_dat$day_z + beta_fs * pred_dat$fl_z + beta_ls *
-#       pred_dat$lipid_z 
-#   )
-#   return( inv_logit(logodds) )
-# }
-
-
-pred_l <- sapply(
-  seq(-2, 2, length = 30), 
-  function (x) {
-    inv_logit(post$surv_bar + post$beta_ls * x)
-  }
-)
-pred_l_mu <- apply(pred_l, 2, mean)
-pred_l_pi <- apply(pred_l, 2, PI)
-plot( NULL , xlab="Lipid Scaled" , ylab="Proportion Terminal Det",
-      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
-lines(seq(-2, 2, length = 30) , pred_l_mu )
-shade( pred_l_pi , seq(-2, 2, length = 30))
-
-
-pred_f <- sapply(
-  seq(-2, 2, length = 30), 
-  function (x) {
-    inv_logit(post$surv_bar + post$beta_fs * x)
-  }
-)
-pred_f_mu <- apply(pred_f, 2, mean)
-pred_f_pi <- apply(pred_f, 2, PI)
-plot( NULL , xlab="FL Scaled" , ylab="Proportion Terminal Det",
-      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
-lines(seq(-2, 2, length = 30) , pred_f_mu )
-shade( pred_f_pi , seq(-2, 2, length = 30))
-
-
-# pred_d <- sapply(
-#   seq(-2, 2, length = 30), 
-#   function (x) {
-#     inv_logit(post$surv_bar + post$beta_ds * x)
-#   }
-# )
-# pred_d_mu <- apply(pred_d, 2, mean)
-# pred_d_pi <- apply(pred_d, 2, PI)
-# plot( NULL , xlab="Yday Scaled" , ylab="Proportion Terminal Det",
-#       ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
-# lines(seq(-2, 2, length = 30) , pred_d_mu )
-# shade( pred_d_pi , seq(-2, 2, length = 30))
 
 
 
