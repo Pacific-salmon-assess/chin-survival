@@ -54,14 +54,15 @@ adjustmentSets(dag_full, exposure = "I", outcome = "S")
 ## Updated version
 online_dag <- dagitty('
 dag {
-condition [latent,pos="-0.175,0.579"]
-date [exposure,pos="-0.692,0.709"]
+condition [latent,pos="-0.103,0.591"]
+date [exposure,pos="-0.696,0.751"]
 harvest [exposure,pos="0.307,0.102"]
 injury [exposure,pos="-0.006,1.682"]
 lipid [exposure,pos="0.378,0.688"]
-size [exposure,pos="-0.009,0.897"]
-stock [exposure,pos="-1.085,1.049"]
+size [exposure,pos="0.030,0.851"]
+stock [exposure,pos="-0.876,1.109"]
 surv [outcome,pos="1.053,1.639"]
+terminal_p [exposure,pos="-0.735,0.531"]
 year [exposure,pos="-0.409,0.158"]
 condition -> lipid
 condition -> size
@@ -75,6 +76,7 @@ size -> surv
 stock -> condition
 stock -> date
 stock -> surv
+terminal_p -> surv
 year -> condition
 year -> surv
 }

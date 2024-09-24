@@ -26,15 +26,11 @@ det_dat <- det_dat1 %>%
     lipid_z = scale(lipid) %>% as.numeric(),
     fl_z = scale(fl) %>% as.numeric(),
     day_z = scale(year_day) %>% as.numeric(),
-    terminal_p = case_when(
-      stock_group %in% c("South Puget", "Up Col.") ~ 1,
-      grepl("Fraser", stock_group) ~ 1,
-      stock_group == "WCVI" & year %in% c("2021", "2022") ~ 1,
-      TRUE ~ 0
-    )
+    cyer_z = scale(isbm_cyer) %>% as.numeric(),
+    terminal_p = as.factor(det_dat$terminal_p),
+    year = as.factor(det_dat$year),
+    stock_group = as.factor(det_dat$stock_group)
   )
-saveRDS(det_dat,
-        here::here("data", "cleaned_log_reg.rds"))
 
 
 # PLOTS OF RAW DATA ------------------------------------------------------------
@@ -145,19 +141,25 @@ ggplot(det_dat, aes(x = mean_log_e, y = final_det)) +
   geom_point() +
   facet_wrap(~year) +
   ggsidekick::theme_sleek()
+ggplot(det_dat, aes(x = cyer_z, y = final_det)) +
+  geom_point() +
+  facet_wrap(~year) +
+  ggsidekick::theme_sleek()
+
 
 
 # FIT LOGISTIC REG MODELS ------------------------------------------------------
-
 
 dat_list <- list(
   surv = as.integer(det_dat$term_det),
   fl_z = det_dat$fl_z,
   lipid_z = det_dat$lipid_z,
   day_z = det_dat$day_z,
-  inj = det_dat$injury,
-  yr = as.integer(as.factor(det_dat$year)),
-  stk = as.integer(as.factor(det_dat$stock_group)),
+  # cyer_z = det_dat$cyer_z,
+  inj = as.integer(det_dat$injury),
+  term_p = as.integer(det_dat$terminal_p),
+  yr = as.integer(det_dat$year),
+  stk = as.integer(det_dat$stock_group),
   alpha = rep(2, length(unique(det_dat$injury)) - 1)
 )
 
@@ -167,6 +169,7 @@ m1 <- ulam(
   alist(
     surv ~ dbinom(1 , p) ,
     logit(p) <- surv_bar + 
+      beta_term[term_p] +
       beta_yr[yr] * sigma_yr +
       beta_stk[stk] * sigma_stk +
       beta_ds * day_z +
@@ -177,6 +180,7 @@ m1 <- ulam(
     surv_bar ~ normal(0, 1.25),
     beta_yr[yr] ~ normal(0, 0.5),
     beta_stk[stk] ~ normal(0, 0.5),
+    beta_term[term_p] ~ normal(0, 0.5),
     c(beta_ds, beta_fs, beta_ls, beta_is) ~ normal(0, 0.5),
     c(sigma_yr, sigma_stk) ~ exponential(1),
     vector[4]: delta_inj <<- append_row(0, delta),
@@ -186,13 +190,14 @@ m1 <- ulam(
   control = list(adapt_delta = 0.96)
 )
 
-# check priors
+# check priors (look good, note following code doesn't work with dirichlet)
 # set.seed(1999)
-# prior <- extract.prior( m1 , n=1e4 )
+# prior <- extract.prior( m1 , n=1e3 )
 # prior_p_dat <- data.frame(
 #   fl_z = seq(-2, 2, length = 30),
 #   lipid_z = 0,
 #   day_z = 0,
+#   term_p = 1,
 #   yr = 1,
 #   stk = 1
 # )
@@ -215,6 +220,7 @@ m2 <- ulam(
     # survival
     surv ~ dbinom(1 , p) ,
     logit(p) <- surv_bar + 
+      beta_term[term_p] +
       beta_yr[yr] * sigma_yr +
       beta_stk[stk] * sigma_stk +
       beta_ds * day_z +
@@ -226,6 +232,7 @@ m2 <- ulam(
     Rho ~ lkj_corr(2),
     Sigma ~ exponential(1),
     surv_bar ~ normal(0, 1.25),
+    beta_term[term_p] ~ normal(0, 0.5),
     beta_yr[yr] ~ normal(0, 0.5),
     beta_stk[stk] ~ normal(0, 0.5),
     c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
@@ -234,11 +241,18 @@ m2 <- ulam(
   data=dat_list, chains = 4 , cores = 4, iter = 2000,
   control = list(adapt_delta = 0.96)
 )
+# modest covariance among fork length and lipid (~0.3); similar sigmas (0.9);
+# moderate day of year effects (0.3); other values unchanged
 
 
-# as model 2 but assume year- and stock-specific intercepts on size and lipid
+# as model 2 but assume a) year- and stock-specific intercepts on size and 
+# lipid and b) stock-specific effects on tagging date;
+# assume year and stock effects in each submodel are drawn from multivariate
 m3 <- ulam(
   alist(
+    # stock-specific sampling dates
+    day_z ~ normal(mu_day, sigma_day),
+    mu_day <- beta_stk[stk, 4],
     # unobserved latent condition
     c(fl_z, lipid_z) ~ multi_normal(c(mu_fl, mu_lipid), Rho, Sigma),
     mu_fl <- alpha_fl + beta_df * day_z + beta_yr[yr, 1] + beta_stk[stk, 1],
@@ -247,45 +261,54 @@ m3 <- ulam(
     # survival
     surv ~ dbinom(1 , p) ,
     logit(p) <- surv_bar + 
+      beta_term[term_p] +
       beta_yr[yr, 3] +
       beta_stk[stk, 3] +
       beta_ds * day_z +
       beta_fs * fl_z +
-      beta_ls * lipid_z
-    ,
+      beta_ls * lipid_z,
     # adaptive priors
     transpars> matrix[yr, 3]:beta_yr <-
       compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
     matrix[3, yr]:z_yr ~ normal(0, 0.5),
-    transpars> matrix[stk, 3]:beta_stk <-
+    transpars> matrix[stk, 4]:beta_stk <-
       compose_noncentered(sigma_stk , L_Rho_stk , z_stk),
-    matrix[3, stk]:z_stk ~ normal(0, 0.5),
+    matrix[4, stk]:z_stk ~ normal(0, 0.5),
     # fixed priors
     c(alpha_fl, alpha_lipid) ~ normal(0, 0.5),
     c(beta_df, beta_dl) ~ normal(0.1, 0.5),
     Rho ~ lkj_corr(2),
     Sigma ~ exponential(1),
+    sigma_day ~ exponential(1),
     
     cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
     vector[3]:sigma_yr ~ exponential(1),
-    cholesky_factor_corr[3]:L_Rho_stk ~ lkj_corr_cholesky(2),
-    vector[3]:sigma_stk ~ exponential(1),
+    cholesky_factor_corr[4]:L_Rho_stk ~ lkj_corr_cholesky(2),
+    vector[4]:sigma_stk ~ exponential(1),
     
     surv_bar ~ normal(0, 1.25),
+    beta_term[term_p] ~ normal(0, 0.5),
     c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
     
     # compute ordinary correlation matrixes from Cholesky factors
     gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
-    gq> matrix[3, 3]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
+    gq> matrix[4, 4]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
   ),
   data=dat_list, chains = 4 , cores = 4, iter = 2000,
   control = list(adapt_delta = 0.96)
 )
+# covariance between year effects on survival and lipid/fl much weaker (~0.05)
+# covariance between stock effects on survival and lipid/fl much weaker (~0.05)
+# greater interstock and interannual variability in lipid content than fork
+# length or survival
 
 
 # as model 3 but includes injury effects
-m3 <- ulam(
+m4 <- ulam(
   alist(
+    # stock-specific sampling dates
+    day_z ~ normal(mu_day, sigma_day),
+    mu_day <- beta_stk[stk, 4],
     # unobserved latent condition
     c(fl_z, lipid_z) ~ multi_normal(c(mu_fl, mu_lipid), Rho, Sigma),
     mu_fl <- alpha_fl + beta_df * day_z + beta_yr[yr, 1] + beta_stk[stk, 1],
@@ -294,40 +317,50 @@ m3 <- ulam(
     # survival
     surv ~ dbinom(1 , p) ,
     logit(p) <- surv_bar + 
+      beta_term[term_p] +
       beta_yr[yr, 3] +
       beta_stk[stk, 3] +
       beta_ds * day_z +
       beta_fs * fl_z +
-      beta_ls * lipid_z
+      beta_ls * lipid_z +
+      beta_is * sum(delta_inj[1:inj])
     ,
     # adaptive priors
     transpars> matrix[yr, 3]:beta_yr <-
       compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
     matrix[3, yr]:z_yr ~ normal(0, 0.5),
-    transpars> matrix[stk, 3]:beta_stk <-
+    transpars> matrix[stk, 4]:beta_stk <-
       compose_noncentered(sigma_stk , L_Rho_stk , z_stk),
-    matrix[3, stk]:z_stk ~ normal(0, 0.5),
+    matrix[4, stk]:z_stk ~ normal(0, 0.5),
     # fixed priors
     c(alpha_fl, alpha_lipid) ~ normal(0, 0.5),
     c(beta_df, beta_dl) ~ normal(0.1, 0.5),
     Rho ~ lkj_corr(2),
     Sigma ~ exponential(1),
+    sigma_day ~ exponential(1),
     
     cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
     vector[3]:sigma_yr ~ exponential(1),
-    cholesky_factor_corr[3]:L_Rho_stk ~ lkj_corr_cholesky(2),
-    vector[3]:sigma_stk ~ exponential(1),
+    cholesky_factor_corr[4]:L_Rho_stk ~ lkj_corr_cholesky(2),
+    vector[4]:sigma_stk ~ exponential(1),
     
     surv_bar ~ normal(0, 1.25),
-    c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
+    beta_term[term_p] ~ normal(0, 0.5),
+    c(beta_ds, beta_fs, beta_ls, beta_is) ~ normal(0, 0.5),
+    
+    # constraints on ordinal effects of injury
+    vector[4]: delta_inj <<- append_row(0, delta),
+    simplex[3]: delta ~ dirichlet(alpha),
     
     # compute ordinary correlation matrixes from Cholesky factors
     gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
-    gq> matrix[3, 3]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
+    gq> matrix[4, 4]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
   ),
   data=dat_list, chains = 4 , cores = 4, iter = 2000,
   control = list(adapt_delta = 0.96)
 )
+# as in simpler model, injury effects are very modest (overall effect broadly
+# spans zero and scales semi-linearly with injury)
 
 
 ## posterior predictions
@@ -432,9 +465,15 @@ shade( pred_f_pi , seq(-2, 2, length = 30))
 
 
 
+## FREQUENTIST MODELS ----------------------------------------------------------
+
+dum_fit <- glmmTMB(
+  lipid ~ day_z + (1 | stock_group) + (1 | year), 
+  data = det_dat
+)
 
 
-
+### EVALUATE HOW TO DEAL WITH INJURIES -----------------------------------------
 
 # injury vs redeployed tag effects
 

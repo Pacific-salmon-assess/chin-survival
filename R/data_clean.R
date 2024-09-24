@@ -27,7 +27,7 @@ cyer_dat <- readRDS(here::here("data", "harvest", "cleaned_cyer_dat.rds")) %>%
 ## CLEAN AND EXPORT FOR MODEL FITTING ------------------------------------------
 
 # TODO: decide whether to split upriver Columbia, lower Columbia and Puget Sound
-# similarly to FR
+# similarly to FR to fit hierarchical CJS
 fr_sum_yr <- indicator_key %>% 
   filter(agg_name == "Fraser Summer Year.") %>% 
   pull(stock)
@@ -72,15 +72,22 @@ det_dat1 <- dat_tbl %>%
       as.factor()
   ) %>% 
   left_join(., 
-            chin %>% 
+            chin2 %>% 
               mutate(month = lubridate::month(date)) %>% 
               select(vemco_code = acoustic_year, month, year, acoustic_type, 
                      fl, lipid, year_day, hook_loc, fin_dam, injury, scale_loss,
+                     ctc_indicator, isbm_cyer,
                      comment),
             by = "vemco_code") %>%
   mutate(
     comp_inj = (injury + scale_loss + fin_dam),
-    redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes")
+    redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes"),
+    terminal_p = case_when(
+      stock_group %in% c("South Puget", "Up Col.") ~ 1,
+      grepl("Fraser", stock_group) ~ 1,
+      stock_group == "WCVI" & year %in% c("2021", "2022") ~ 1,
+      TRUE ~ 0
+    )
   ) %>% 
   arrange(
     year, stock_group
