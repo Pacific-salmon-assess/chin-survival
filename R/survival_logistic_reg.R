@@ -326,63 +326,115 @@ pred_day_ribbon <- rbind(pred_day_surv_total, pred_day_surv_direct) %>%
   ) +
   scale_linetype_manual(values = day_effect_pal) +
   labs(y = "Predicted Survival", x = "Year Day") +
-  ggsidekick::theme_sleek()
+  ggsidekick::theme_sleek() +
+  scale_x_continuous(expand = c(0, 0)) +
+  theme(
+    legend.position = "none",
+    axis.title.y = element_blank()
+  )
 
 
-
-
-# plot posterior preds
-# post <- extract.samples(m1)
-# link_foo <- function(pred_dat) {
-#   logodds <- with(
-#     post,
-#     surv_bar + beta_ds * pred_dat$day_z + beta_fs * pred_dat$fl_z + beta_ls *
-#       pred_dat$lipid_z 
-#   )
-#   return( inv_logit(logodds) )
-# }
-
-
+## direct effects of lipid content
+lipid_seq <- seq(-3, 4, length = 40)
 pred_l <- sapply(
-  seq(-2, 2, length = 30), 
+  lipid_seq, 
   function (x) {
-    inv_logit(post$surv_bar + post$beta_ls * x)
+    inv_logit(post$surv_bar + 
+                post$beta_is * post$delta[ , 1] +
+                post$beta_term[ , 2] +
+                post$beta_ls * x)
   }
 )
-pred_l_mu <- apply(pred_l, 2, mean)
-pred_l_pi <- apply(pred_l, 2, PI)
-plot( NULL , xlab="Lipid Scaled" , ylab="Proportion Terminal Det",
-      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
-lines(seq(-2, 2, length = 30) , pred_l_mu )
-shade( pred_l_pi , seq(-2, 2, length = 30))
+pred_lipid_ribbon <- pred_l %>% 
+  as.data.frame() %>% 
+  set_names(lipid_seq) %>% 
+  pivot_longer(
+    cols = everything(), names_to = "lipid_z", values_to = "est"
+  ) %>% 
+  mutate(
+    lipid_z = as.numeric(lipid_z),
+    lipid = (lipid_z * sd(det_dat$lipid)) + mean(det_dat$lipid)
+  ) %>% 
+  group_by(lipid) %>% 
+  summarize(
+    med = median(est),
+    lo = rethinking::HPDI(est, prob = 0.9)[1],
+    up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) %>% 
+  ggplot(
+    ., aes(x = lipid, y = med)
+  ) +
+  geom_line(
+    colour = "#7570b3"
+  ) +
+  geom_ribbon(
+    aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
+  ) +
+  labs(y = "Predicted Survival", x = "Lipid Content") +
+  ggsidekick::theme_sleek() +
+  scale_x_continuous(expand = c(0, 0)) +
+  theme(
+    axis.title.y = element_blank()
+  )
 
 
-pred_f <- sapply(
-  seq(-2, 2, length = 30), 
+## direct effects of fork length
+fl_seq <- seq(-2.2, 3.3, length = 40)
+pred_fl <- sapply(
+  fl_seq, 
   function (x) {
-    inv_logit(post$surv_bar + post$beta_fs * x)
+    inv_logit(post$surv_bar + 
+                post$beta_is * post$delta[ , 1] +
+                post$beta_term[ , 2] +
+                post$beta_fs * x)
   }
 )
-pred_f_mu <- apply(pred_f, 2, mean)
-pred_f_pi <- apply(pred_f, 2, PI)
-plot( NULL , xlab="FL Scaled" , ylab="Proportion Terminal Det",
-      ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
-lines(seq(-2, 2, length = 30) , pred_f_mu )
-shade( pred_f_pi , seq(-2, 2, length = 30))
+pred_fl_ribbon <- pred_fl %>% 
+  as.data.frame() %>% 
+  set_names(fl_seq) %>% 
+  pivot_longer(
+    cols = everything(), names_to = "fl_z", values_to = "est"
+  ) %>% 
+  mutate(
+    fl_z = as.numeric(fl_z),
+    fl = (fl_z * sd(det_dat$fl)) + mean(det_dat$fl)
+  ) %>% 
+  group_by(fl) %>% 
+  summarize(
+    med = median(est),
+    lo = rethinking::HPDI(est, prob = 0.9)[1],
+    up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) %>% 
+  ggplot(
+    ., aes(x = fl, y = med)
+  ) +
+  geom_line(
+    colour = "#7570b3"
+  ) +
+  geom_ribbon(
+    aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
+  ) +
+  labs(y = "Predicted Survival", x = "Fork Length") +
+  ggsidekick::theme_sleek() +
+  scale_x_continuous(expand = c(0, 0)) +
+  theme(
+    axis.title.y = element_blank()
+  )
 
 
-# pred_d <- sapply(
-#   seq(-2, 2, length = 30), 
-#   function (x) {
-#     inv_logit(post$surv_bar + post$beta_ds * x)
-#   }
-# )
-# pred_d_mu <- apply(pred_d, 2, mean)
-# pred_d_pi <- apply(pred_d, 2, PI)
-# plot( NULL , xlab="Yday Scaled" , ylab="Proportion Terminal Det",
-#       ylim=c(0,1) , xaxt="n" , xlim=c(-2, 2) )
-# lines(seq(-2, 2, length = 30) , pred_d_mu )
-# shade( pred_d_pi , seq(-2, 2, length = 30))
+pp <- cowplot::plot_grid(
+  pred_day_ribbon, pred_lipid_ribbon, pred_fl_ribbon,
+  ncol = 1
+) 
+
+gridExtra::grid.arrange(
+  gridExtra::arrangeGrob(
+    pp, 
+    left = grid::textGrob(
+      "Survival Probability", rot = 90, 
+      gp = gpar(fontsize = 11))
+    )
+)
 
 
 ## SIMPLIFIED MODEL VERSIONS ---------------------------------------------------
