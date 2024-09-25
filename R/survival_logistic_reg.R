@@ -268,14 +268,12 @@ for (j in seq_along(samp_date_seq)) {
       post$beta_ds * samp_date_seq[j] +
       post$beta_fs * sim_fl[ , j] +
       post$beta_ls * sim_lipid[ , j] +
-      post$beta_is * post$delta[ , 1] +
       post$beta_term[ , 2]
   )
   # as above but sets fl and lipid to zero (i.e. removes them)
   sim_eta_direct <- as.numeric(
     post$surv_bar + 
       post$beta_ds * samp_date_seq[j] +
-      post$beta_is * post$delta[ , 1] +
       post$beta_term[ , 2]
   )
   sim_surv[ , j] <- boot::inv.logit(sim_eta) # Probability of survival
@@ -328,6 +326,7 @@ pred_day_ribbon <- rbind(pred_day_surv_total, pred_day_surv_direct) %>%
   labs(y = "Predicted Survival", x = "Year Day") +
   ggsidekick::theme_sleek() +
   scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0.2, 1.0), expand = c(0, 0)) +
   theme(
     legend.position = "none",
     axis.title.y = element_blank()
@@ -339,10 +338,7 @@ lipid_seq <- seq(-3, 4, length = 40)
 pred_l <- sapply(
   lipid_seq, 
   function (x) {
-    inv_logit(post$surv_bar + 
-                post$beta_is * post$delta[ , 1] +
-                post$beta_term[ , 2] +
-                post$beta_ls * x)
+    inv_logit(post$surv_bar + post$beta_term[ , 2] + post$beta_ls * x)
   }
 )
 pred_lipid_ribbon <- pred_l %>% 
@@ -373,6 +369,7 @@ pred_lipid_ribbon <- pred_l %>%
   labs(y = "Predicted Survival", x = "Lipid Content") +
   ggsidekick::theme_sleek() +
   scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0.2, 1.0), expand = c(0, 0)) +
   theme(
     axis.title.y = element_blank()
   )
@@ -383,10 +380,7 @@ fl_seq <- seq(-2.2, 3.3, length = 40)
 pred_fl <- sapply(
   fl_seq, 
   function (x) {
-    inv_logit(post$surv_bar + 
-                post$beta_is * post$delta[ , 1] +
-                post$beta_term[ , 2] +
-                post$beta_fs * x)
+    inv_logit(post$surv_bar + post$beta_term[ , 2] + post$beta_fs * x)
   }
 )
 pred_fl_ribbon <- pred_fl %>% 
@@ -417,6 +411,7 @@ pred_fl_ribbon <- pred_fl %>%
   labs(y = "Predicted Survival", x = "Fork Length") +
   ggsidekick::theme_sleek() +
   scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0.2, 1.0), expand = c(0, 0)) +
   theme(
     axis.title.y = element_blank()
   )
@@ -426,8 +421,7 @@ pp <- cowplot::plot_grid(
   pred_day_ribbon, pred_lipid_ribbon, pred_fl_ribbon,
   ncol = 1
 ) 
-
-gridExtra::grid.arrange(
+pred_surv_ribbon <- gridExtra::grid.arrange(
   gridExtra::arrangeGrob(
     pp, 
     left = grid::textGrob(
@@ -435,6 +429,51 @@ gridExtra::grid.arrange(
       gp = gpar(fontsize = 11))
     )
 )
+
+
+## Injury effects on survival
+# Note scales so that cumsum(delta) * beta = total effect first stage = 0 
+# absorbed in intercept
+
+pred_inj <- matrix(NA, nrow = nrow(post$delta), ncol = (ncol(post$delta) + 1))
+for (i in 1:(ncol(post$delta) + 1)) {
+    if (i == 1) delta_eff <- 0
+    if (i > 1) delta_eff <- apply(as.matrix(post$delta[ , 1:(i - 1)]), 1, sum)
+    pred_inj[ , i] <- inv_logit(
+      post$surv_bar + post$beta_is * delta_eff + post$beta_term[ , 2]
+      )
+  }
+
+injury_point <- pred_inj %>% 
+  as.data.frame() %>% 
+  set_names(
+    seq(0, 3, by = 1)
+  ) %>% 
+  pivot_longer(
+    cols = everything(), names_to = "injury", values_to = "est"
+  ) %>% 
+  group_by(injury) %>% 
+  summarize(
+    med = median(est),
+    lo = rethinking::HPDI(est, prob = 0.9)[1],
+    up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) %>% 
+  ggplot() +
+  geom_pointrange(aes(x = injury, y = med, ymin = lo, ymax = up),
+                  shape = 21, fill = "#7570b3") +
+  labs(x = "Injury Score", y = "Survival Probability") +
+  ggsidekick::theme_sleek() 
+
+#calculate difference in survival between lowest and highest injury score
+injury_diff <- ggplot() +
+  geom_histogram(aes(x = pred_inj[ , 1] - pred_inj[ , 4]), 
+                 bins = 50, fill = "#7570b3") +
+  geom_vline(aes(xintercept = 0), lty = 2 , colour = "black", linewidth = 1) +
+  ggsidekick::theme_sleek() +
+  labs(x = "Difference in Survival Probability Between Injury Scores") +
+  theme(
+    axis.title.y = element_blank()
+  )
 
 
 ## SIMPLIFIED MODEL VERSIONS ---------------------------------------------------
