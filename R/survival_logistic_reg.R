@@ -152,6 +152,14 @@ for (i in 1:nrow(det_dat)) {
 }
 sim_mat_binom <- apply(sim_mat, c(1, 2), function (p) rbinom(1, 1, p))
 
+nobs <- nrow(det_dat)
+pit_resid <- rep(NA, nobs)
+for (i in 1:nobs) {
+  pit_resid[i] <- mean(sim_mat_binom[i, ] <= det_dat$term_det[i])
+}
+qqplot(qunif(ppoints(length(pit_resid))), pit_resid,
+       main = "QQ-plot of PIT Residuals")
+
 
 # POSTERIOR INFERENCE  ---------------------------------------------------------
 
