@@ -29,7 +29,12 @@ det_dat <- det_dat1 %>%
     cyer_z = scale(isbm_cyer) %>% as.numeric(),
     terminal_p = as.factor(terminal_p),
     year = as.factor(year),
-    stock_group = as.factor(stock_group)
+    stock_group = as.factor(stock_group),
+    scale = as.integer(det_dat$scale_loss),
+    inj = as.integer(det_dat$injury),
+    term_p = as.integer(det_dat$terminal_p),
+    yr = as.integer(det_dat$year),
+    stk = as.integer(det_dat$stock_group)
   )
 
 
@@ -41,11 +46,13 @@ dat_list <- list(
   lipid_z = det_dat$lipid_z,
   day_z = det_dat$day_z,
   # cyer_z = det_dat$cyer_z,
-  inj = as.integer(det_dat$injury),
-  term_p = as.integer(det_dat$terminal_p),
-  yr = as.integer(det_dat$year),
-  stk = as.integer(det_dat$stock_group),
-  alpha = rep(2, length(unique(det_dat$injury)) - 1)
+  scale = det_dat$scale,
+  inj = det_dat$injury,
+  term_p = det_dat$terminal_p,
+  yr = det_dat$year,
+  stk = det_dat$stock_group,
+  alpha = rep(2, length(unique(det_dat$injury)) - 1),
+  alpha_scale = rep(2, length(unique(det_dat$scale_loss)) - 1)
 )
 
 
@@ -68,7 +75,8 @@ m4 <- ulam(
       beta_ds * day_z +
       beta_fs * fl_z +
       beta_ls * lipid_z +
-      beta_is * sum(delta_inj[1:inj])
+      beta_is * sum(delta_inj[1:inj]) +
+      beta_ss * sum(delta_scale[1:scale])
     ,
     # adaptive priors
     transpars> matrix[yr, 3]:beta_yr <-
@@ -91,11 +99,13 @@ m4 <- ulam(
     
     surv_bar ~ normal(0, 1.25),
     beta_term[term_p] ~ normal(0, 0.5),
-    c(beta_ds, beta_fs, beta_ls, beta_is) ~ normal(0, 0.5),
+    c(beta_ds, beta_fs, beta_ls, beta_is, beta_ss) ~ normal(0, 0.5),
     
     # constraints on ordinal effects of injury
     vector[4]: delta_inj <<- append_row(0, delta),
     simplex[3]: delta ~ dirichlet(alpha),
+    vector[4]: delta_scale <<- append_row(0, delta2),
+    simplex[3]: delta2 ~ dirichlet(alpha_scale),
     
     # compute ordinary correlation matrixes from Cholesky factors
     gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
@@ -107,6 +117,40 @@ m4 <- ulam(
 # as in simpler model, injury effects are very modest (overall effect broadly
 # spans zero and scales semi-linearly with injury)
 
+
+# POSTERIOR PREDICTIONS --------------------------------------------------------
+
+
+post_pred_foo <- function(dat_in) {
+  
+  # delta_inj_eff <- cbind(0, post$delta)
+  # delta_scale_eff <- cbind(0, post$delta2)
+  # delta_inj_vec <- delta_scale_vec <- rep(NA, nrow(delta_inj_eff))
+  # for (i in seq_along(delta_inj_vec)) {
+  #   delta_inj_vec <- sum(delta_inj_eff[1:dat_list$inj[i]])
+  # }
+  
+  logodds <- with(
+    post,
+    surv_bar + 
+      beta_term[ , dat_in$term_p] +
+      beta_yr[ , dat_in$yr, 3] +
+      beta_stk[ , dat_in$stk, 3] +
+      beta_ds * dat_in$day_z +
+      beta_fs * dat_in$fl_z +
+      beta_ls * dat_in$lipid_z #+
+      # beta_is * sum(delta_inj_eff[1:dat_list$inj]) +
+      # beta_ss * sum(delta_scale[1:scale])
+  )
+  return( inv_logit(logodds) )
+}
+
+
+sim_mat <- matrix(NA, nrow = nrow(det_dat), ncol = dim(post[[1]])[[1]])
+for (i in 1:nrow(det_dat)) {
+  sim_mat[i , ] <- post_pred_foo(det_dat[i, ]) 
+}
+sim_mat_binom <- apply(sim_mat, c(1, 2), function (p) rbinom(1, 1, p))
 
 
 # POSTERIOR INFERENCE  ---------------------------------------------------------
@@ -431,53 +475,111 @@ pred_surv_ribbon <- gridExtra::grid.arrange(
 )
 
 
-## Injury effects on survival
+## Injury and scale loss effects on survival
 # Note scales so that cumsum(delta) * beta = total effect first stage = 0 
 # absorbed in intercept
 
-pred_inj <- matrix(NA, nrow = nrow(post$delta), ncol = (ncol(post$delta) + 1))
+pred_scale <- pred_inj <- matrix(
+  NA, nrow = nrow(post$delta), ncol = (ncol(post$delta) + 1)
+  )
 for (i in 1:(ncol(post$delta) + 1)) {
-    if (i == 1) delta_eff <- 0
-    if (i > 1) delta_eff <- apply(as.matrix(post$delta[ , 1:(i - 1)]), 1, sum)
+    if (i == 1) {
+      delta_inj <- delta_scale <- 0 
+    }
+    if (i > 1) {
+      delta_inj <- apply(as.matrix(post$delta[ , 1:(i - 1)]), 1, sum) 
+      delta_scale <- apply(as.matrix(post$delta2[ , 1:(i - 1)]), 1, sum) 
+    }
     pred_inj[ , i] <- inv_logit(
-      post$surv_bar + post$beta_is * delta_eff + post$beta_term[ , 2]
+      post$surv_bar + post$beta_is * delta_inj + post$beta_term[ , 2]
       )
+    pred_scale[ , i] <- inv_logit(
+      post$surv_bar + post$beta_ss * delta_scale + post$beta_term[ , 2]
+    )
   }
 
-injury_point <- pred_inj %>% 
-  as.data.frame() %>% 
-  set_names(
-    seq(0, 3, by = 1)
-  ) %>% 
-  pivot_longer(
-    cols = everything(), names_to = "injury", values_to = "est"
-  ) %>% 
-  group_by(injury) %>% 
+# combine data
+pred_capture_dat <- purrr::map2(
+  list(pred_inj, pred_scale), c("injury", "scale"),
+  function (x, y) {
+    x %>% 
+      as.data.frame() %>% 
+      set_names(
+        seq(0, 3, by = 1)
+      ) %>% 
+      pivot_longer(
+        cols = everything(), names_to = "score", values_to = "est"
+      ) %>% 
+      mutate(
+        metric = y
+      )
+  }
+)  %>% 
+  bind_rows()
+
+injury_point <- pred_capture_dat %>% 
+  group_by(score, metric) %>% 
   summarize(
     med = median(est),
     lo = rethinking::HPDI(est, prob = 0.9)[1],
     up = rethinking::HPDI(est, prob = 0.9)[2]
   ) %>% 
   ggplot() +
-  geom_pointrange(aes(x = injury, y = med, ymin = lo, ymax = up),
+  geom_pointrange(aes(x = score, y = med, ymin = lo, ymax = up),
                   shape = 21, fill = "#7570b3") +
-  labs(x = "Injury Score", y = "Survival Probability") +
-  ggsidekick::theme_sleek() 
+  labs(x = "Score", y = "Survival Probability") +
+  ggsidekick::theme_sleek() +
+  facet_wrap(~metric)
+
 
 #calculate difference in survival between lowest and highest injury score
-injury_diff <- ggplot() +
-  geom_histogram(aes(x = pred_inj[ , 1] - pred_inj[ , 4]), 
+# diff_pt <- data.frame(
+#   diff_inj = pred_inj[ , 1] - pred_inj[ , 4],
+#   diff_scale = pred_scale[ , 1] - pred_scale[ , 4]
+# ) %>% 
+#   pivot_longer(
+#     cols = everything(), names_to = "metric", values_to = "diff", 
+#     names_prefix = "diff_"
+#   ) %>% 
+#   group_by(metric) %>% 
+#   summarize(
+#     med = median(diff),
+#     lo = rethinking::HPDI(diff, prob = 0.9)[1],
+#     up = rethinking::HPDI(diff, prob = 0.9)[2]
+#   ) %>% 
+#   ggplot() +
+#   geom_pointrange(aes(x = metric, y = med, ymin = lo, ymax = up),
+#                   shape = 21, fill = "#7570b3") +
+#   labs(x = "Metric", 
+#        y = "Difference in Survival Probability Between Max/Min Scores") +
+#   ggsidekick::theme_sleek() +
+#   geom_hline(aes(yintercept = 0), lty = 2) +
+#   theme(
+#     axis.title.y = element_blank()
+#   ) 
+
+diff_hist <- data.frame(
+  diff_inj = pred_inj[ , 1] - pred_inj[ , 4],
+  diff_scale = pred_scale[ , 1] - pred_scale[ , 4]
+) %>% 
+  pivot_longer(
+    cols = everything(), names_to = "metric", values_to = "diff", 
+    names_prefix = "diff_"
+  ) %>% 
+  ggplot() +
+  geom_histogram(aes(x = diff), 
                  bins = 50, fill = "#7570b3") +
   geom_vline(aes(xintercept = 0), lty = 2 , colour = "black", linewidth = 1) +
   ggsidekick::theme_sleek() +
-  labs(x = "Difference in Survival Probability Between Injury Scores") +
+  labs(x = "Difference in Survival Probability Between Max/Min Scores") +
   theme(
     axis.title.y = element_blank()
-  )
+  ) +
+  facet_wrap(~metric, ncol = 1)
+
 
 
 ## SIMPLIFIED MODEL VERSIONS ---------------------------------------------------
-
 
 # multiple regression hierarchical model with injury effects 
 m1 <- ulam(
