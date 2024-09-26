@@ -30,8 +30,8 @@ det_dat <- det_dat1 %>%
     terminal_p = as.factor(terminal_p),
     year = as.factor(year),
     stock_group = as.factor(stock_group),
-    scale = as.integer(det_dat$scale_loss),
-    inj = as.integer(det_dat$injury),
+    scale = as.integer(as.factor(det_dat$scale_loss)),
+    inj = as.integer(as.factor(det_dat$injury)),
     term_p = as.integer(det_dat$terminal_p),
     yr = as.integer(det_dat$year),
     stk = as.integer(det_dat$stock_group)
@@ -47,9 +47,9 @@ dat_list <- list(
   day_z = det_dat$day_z,
   # cyer_z = det_dat$cyer_z,
   scale = det_dat$scale,
-  inj = det_dat$injury,
+  inj = det_dat$inj,
   term_p = det_dat$terminal_p,
-  yr = det_dat$year,
+  yr = det_dat$yr,
   stk = det_dat$stock_group,
   alpha = rep(2, length(unique(det_dat$injury)) - 1),
   alpha_scale = rep(2, length(unique(det_dat$scale_loss)) - 1)
@@ -117,18 +117,20 @@ m4 <- ulam(
 # as in simpler model, injury effects are very modest (overall effect broadly
 # spans zero and scales semi-linearly with injury)
 
+saveRDS(m4, here::here("data", "model_outputs", "hier_binomial.rds"))
+
+post <- extract.samples(m4)
+
 
 # POSTERIOR PREDICTIONS --------------------------------------------------------
 
 
 post_pred_foo <- function(dat_in) {
-  
-  # delta_inj_eff <- cbind(0, post$delta)
-  # delta_scale_eff <- cbind(0, post$delta2)
-  # delta_inj_vec <- delta_scale_vec <- rep(NA, nrow(delta_inj_eff))
-  # for (i in seq_along(delta_inj_vec)) {
-  #   delta_inj_vec <- sum(delta_inj_eff[1:dat_list$inj[i]])
-  # }
+  delta_inj_eff <- cbind(0, post$delta)
+  delta_scale_eff <- cbind(0, post$delta2)
+  #as matrix necessary for cases where only first column selected
+  delta_inj2 <- apply(as.matrix(delta_inj_eff[ , 1:dat_in$inj]), 1, sum)
+  delta_scale2 <- apply(as.matrix(delta_scale_eff[ , 1:dat_in$scale]), 1, sum)
   
   logodds <- with(
     post,
@@ -138,9 +140,9 @@ post_pred_foo <- function(dat_in) {
       beta_stk[ , dat_in$stk, 3] +
       beta_ds * dat_in$day_z +
       beta_fs * dat_in$fl_z +
-      beta_ls * dat_in$lipid_z #+
-      # beta_is * sum(delta_inj_eff[1:dat_list$inj]) +
-      # beta_ss * sum(delta_scale[1:scale])
+      beta_ls * dat_in$lipid_z +
+      beta_is * delta_inj2 +
+      beta_ss * delta_scale2
   )
   return( inv_logit(logodds) )
 }
@@ -152,20 +154,34 @@ for (i in 1:nrow(det_dat)) {
 }
 sim_mat_binom <- apply(sim_mat, c(1, 2), function (p) rbinom(1, 1, p))
 
-nobs <- nrow(det_dat)
-pit_resid <- rep(NA, nobs)
-for (i in 1:nobs) {
-  pit_resid[i] <- mean(sim_mat_binom[i, ] <= det_dat$term_det[i])
+
+# Define a function to calculate PIT residuals
+calc_pit <- function(y, posterior_pred) {
+  # Get the proportion of posterior samples that are less than or equal to the observed value
+  n_obs <- length(y)
+  pit_residuals <- numeric(n_obs)
+  
+  for (i in 1:n_obs) {
+    # Calculate pmin and pmax for each observation
+    y_prime <- posterior_pred[i, ]  # posterior predictions for i-th observation
+    pmin_i <- mean(y_prime < y[i])
+    pmax_i <- mean(y_prime <= y[i])
+    
+    # Generate the PIT residuals as a random draw from uniform(pmin, pmax)
+    pit_residuals[i] <- runif(1, pmin_i, pmax_i)
+  }
+  
+  return(pit_residuals)
 }
-qqplot(qunif(ppoints(length(pit_resid))), pit_resid,
+
+# Calculate PIT residuals
+pit_residuals <- calc_pit(y = det_dat$term_det, posterior_pred = sim_mat_binom)
+qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
        main = "QQ-plot of PIT Residuals")
 
 
+
 # POSTERIOR INFERENCE  ---------------------------------------------------------
-
-
-post <- extract.samples(m4)
-
 
 ## Random Intercepts
 # representing among year and among stock variability in fork length,
