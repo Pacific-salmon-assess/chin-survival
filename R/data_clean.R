@@ -24,6 +24,14 @@ cyer_dat <- readRDS(here::here("data", "harvest", "cleaned_cyer_dat.rds")) %>%
   rename(ctc_indicator = stock)
 
 
+# ID tag codes to retain
+kept_tags <- dat_tbl %>%
+  # unnest and filter out stage 3
+  unnest(cols = bio_dat) %>%
+  filter(redeploy == "no") %>%
+  pull(vemco_code)
+
+
 ## CLEAN AND EXPORT FOR MODEL FITTING ------------------------------------------
 
 # TODO: decide whether to split upriver Columbia, lower Columbia and Puget Sound
@@ -52,7 +60,7 @@ chin2 <- left_join(
       TRUE ~ agg_name
     )
   ) %>% 
-  left_join(., cyer_dat, by = c("year", "ctc_indicator"))
+  left_join(., cyer_dat, by = c("year", "ctc_indicator")) 
 
 
 # define aggregate names for Fraser and add to tbl
@@ -104,18 +112,13 @@ interp_lipid <- bio_dat %>%
   select(-ends_with("imp")) 
 det_dat1$lipid <- interp_lipid$lipid
 
+ 
 # export 
 saveRDS(det_dat1, here::here("data", "surv_log_reg_data.rds"))
 
 
 
 ## CJS Model Data
-# ID tag codes to retain
-kept_tags <- dat_tbl %>%
-  # unnest and filter out stage 3
-  unnest(cols = bio_dat) %>%
-  filter(redeploy == "no") %>%
-  pull(vemco_code)
 
 # add updated Fraser groupings and imputed lipid content
 dat_tbl_trim <- dat_tbl %>% 

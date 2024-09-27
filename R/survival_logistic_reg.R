@@ -29,12 +29,16 @@ det_dat <- det_dat1 %>%
     cyer_z = scale(isbm_cyer) %>% as.numeric(),
     terminal_p = as.factor(terminal_p),
     year = as.factor(year),
-    stock_group = as.factor(stock_group),
-    scale = as.integer(as.factor(det_dat$scale_loss)),
-    inj = as.integer(as.factor(det_dat$injury)),
-    term_p = as.integer(det_dat$terminal_p),
-    yr = as.integer(det_dat$year),
-    stk = as.integer(det_dat$stock_group)
+    stock_group = factor(
+      stock_group, 
+      levels = c("Cali", "Low Col.", "Up Col.", "WA_OR", "WCVI", "ECVI", 
+                 "Fraser 4.1", "Fraser Fall", "Fraser Spr. Yr.", 
+                 "Fraser Sum. Yr.", "North Puget", "South Puget")),
+    scale = as.integer(as.factor(scale_loss)),
+    inj = as.integer(as.factor(injury)),
+    term_p = as.integer(terminal_p),
+    yr = as.integer(year),
+    stk = as.integer(stock_group)
   )
 
 
@@ -50,7 +54,7 @@ dat_list <- list(
   inj = det_dat$inj,
   term_p = det_dat$terminal_p,
   yr = det_dat$yr,
-  stk = det_dat$stock_group,
+  stk = det_dat$stk,
   alpha = rep(2, length(unique(det_dat$injury)) - 1),
   alpha_scale = rep(2, length(unique(det_dat$scale_loss)) - 1)
 )
@@ -118,6 +122,7 @@ m4 <- ulam(
 # spans zero and scales semi-linearly with injury)
 
 saveRDS(m4, here::here("data", "model_outputs", "hier_binomial.rds"))
+m4 <- readRDS(here::here("data", "model_outputs", "hier_binomial.rds"))
 
 post <- extract.samples(m4)
 
@@ -502,7 +507,6 @@ pred_surv_ribbon <- gridExtra::grid.arrange(
 ## Injury and scale loss effects on survival
 # Note scales so that cumsum(delta) * beta = total effect first stage = 0 
 # absorbed in intercept
-
 pred_scale <- pred_inj <- matrix(
   NA, nrow = nrow(post$delta), ncol = (ncol(post$delta) + 1)
   )
@@ -565,22 +569,22 @@ injury_point <- pred_capture_dat %>%
 #     cols = everything(), names_to = "metric", values_to = "diff", 
 #     names_prefix = "diff_"
 #   ) %>% 
-#   group_by(metric) %>% 
-#   summarize(
-#     med = median(diff),
-#     lo = rethinking::HPDI(diff, prob = 0.9)[1],
-#     up = rethinking::HPDI(diff, prob = 0.9)[2]
-#   ) %>% 
-#   ggplot() +
-#   geom_pointrange(aes(x = metric, y = med, ymin = lo, ymax = up),
-#                   shape = 21, fill = "#7570b3") +
-#   labs(x = "Metric", 
-#        y = "Difference in Survival Probability Between Max/Min Scores") +
-#   ggsidekick::theme_sleek() +
-#   geom_hline(aes(yintercept = 0), lty = 2) +
-#   theme(
-#     axis.title.y = element_blank()
-#   ) 
+  # group_by(metric) %>%
+  # summarize(
+  #   med = median(diff),
+  #   lo = rethinking::HPDI(diff, prob = 0.9)[1],
+  #   up = rethinking::HPDI(diff, prob = 0.9)[2]
+  # ) %>%
+  # ggplot() +
+  # geom_pointrange(aes(x = metric, y = med, ymin = lo, ymax = up),
+  #                 shape = 21, fill = "#7570b3") +
+  # labs(x = "Metric",
+  #      y = "Difference in Survival Probability Between Max/Min Scores") +
+  # ggsidekick::theme_sleek() +
+  # geom_hline(aes(yintercept = 0), lty = 2) +
+  # theme(
+  #   axis.title.y = element_blank()
+  # )
 
 diff_hist <- data.frame(
   diff_inj = pred_inj[ , 1] - pred_inj[ , 4],
@@ -600,6 +604,109 @@ diff_hist <- data.frame(
     axis.title.y = element_blank()
   ) +
   facet_wrap(~metric, ncol = 1)
+
+
+
+# stock, including indirect effects on date/size/lipid
+
+# mean date by stock
+pred_mu_date <- post$beta_stk[ , , 4]
+
+stk_seq <- unique(dat_list$stk) %>% sort()
+
+sigma <- post$Sigma
+rho <- post$Rho
+S <- vector(mode = "list", length = nrow(sigma))
+pred_mu_fl <- pred_mu_lipid <- matrix(
+  NA, nrow = nrow(pred_mu_date), ncol = ncol(pred_mu_date)
+)
+sim_surv <- sim_surv_d <- sim_fl <- sim_lipid <- matrix(
+  NA, 
+  nrow = nrow(sigma), 
+  ncol = length(stk_seq)
+)
+for (j in seq_along(stk_seq)) {
+  pred_mu_fl[ , j] <- post$alpha_fl + post$beta_df * pred_mu_date[ , j] + 
+    post$beta_stk[ , j, 1]
+  pred_mu_lipid[ , j] <- post$alpha_lipid + post$beta_dl * pred_mu_date[ , j] + 
+    post$beta_stk[ , j, 2]
+  
+  for (i in 1:nrow(sigma)) {
+    S <- diag(sigma[i,]) %*% rho[i,,] %*% diag(sigma[i,])
+    mu <- MASS::mvrnorm(
+      n = 1, mu = c(pred_mu_fl[i, j], pred_mu_lipid[i, j]),
+      Sigma = S
+    )
+    sim_fl[i, j] <- mu[1]
+    sim_lipid[i, j] <- mu[2]
+  }
+  # excludes hierarchical intercept; assumes high terminal det prob and low
+  # injury
+  sim_eta <- as.numeric(
+    post$surv_bar + 
+      post$beta_ds * pred_mu_date[ , j] +
+      post$beta_fs * sim_fl[ , j] +
+      post$beta_ls * sim_lipid[ , j] +
+      post$beta_term[ , 2] +
+      post$beta_stk[ , j, 3]
+  )
+  # as above but sets fl and lipid to zero (i.e. removes them)
+  sim_eta_direct <- as.numeric(
+    post$surv_bar + 
+      post$beta_stk[ , j, 3] +
+      post$beta_term[ , 2]
+  )
+  sim_surv[ , j] <- boot::inv.logit(sim_eta) # Probability of survival
+  sim_surv_d[ , j] <- boot::inv.logit(sim_eta_direct) # Probability of survival
+}
+
+stk_key <- det_dat %>% 
+  select(stock_group, stk) %>% 
+  mutate(stk = as.character(stk)) %>% 
+  distinct()
+
+pred_stk_surv_total <- sim_surv %>% 
+  as.data.frame() %>% 
+  set_names(stk_seq) %>% 
+  pivot_longer(
+    cols = everything(), names_to = "stk", values_to = "est"
+  ) %>% 
+  mutate(
+    effect = "total"
+  )
+pred_stk_surv_direct <- sim_surv_d %>% 
+  as.data.frame() %>% 
+  set_names(stk_seq) %>% 
+  pivot_longer(
+    cols = everything(), names_to = "stk", values_to = "est"
+  ) %>% 
+  mutate(
+    effect = "direct"
+  )
+
+alpha_pal <- c(0.2, 1)
+names(alpha_pal) <- c("direct", "total")
+
+pred_stk_comb <- rbind(pred_stk_surv_total, pred_stk_surv_direct) %>% 
+  group_by(stk, effect) %>%
+  summarize(
+    med = median(est),
+    lo = rethinking::HPDI(est, prob = 0.9)[1],
+    up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) %>%
+  left_join(., stk_key, by = "stk") %>% 
+  ggplot() +
+  geom_pointrange(aes(x = stock_group, y = med, ymin = lo, ymax = up, 
+                      alpha = effect),
+                  position = position_dodge(width = 0.4),
+                  shape = 21, fill = "#7570b3") +
+  scale_alpha_manual(values = alpha_pal) +
+  labs(x = "Effect",
+       y = "Predicted Survival Probability") +
+  ggsidekick::theme_sleek() +
+  theme(
+    axis.title.y = element_blank()
+  )
 
 
 
