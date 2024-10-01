@@ -772,16 +772,15 @@ med_seg_surv <- purrr::map2(
     group_by(
       segment, stock_group
     ) %>% 
-    reframe(
+    summarize(
       med = median(Freq),
-      lo = rethinking::HPDI(Freq, 0.05),
-      up = rethinking::HPDI(Freq, 0.95)
+      lo = rethinking::HPDI(Freq, prob = 0.9)[1],
+      up = rethinking::HPDI(Freq, prob = 0.9)[2]
     ) %>% 
     left_join(., seg_key, by = c("stock_group", "segment")) 
 ) %>% 
   bind_rows() %>% 
   mutate(
-    segment_name = fct_reorder(as.factor(segment_name), segment),
     par = ifelse(
       stock_group %in% c("Cali", "Low Col.", "WA_OR", "WCVI") & 
         segment_name == "In\nRiver",
@@ -794,7 +793,8 @@ fill_pal <- c("white", "red")
 names(fill_pal) <- c("phi", "beta")
 
 stage_spec_surv <- ggplot(med_seg_surv %>% filter(!par == "beta")) +
-  geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up)) +
+  geom_pointrange(aes(x = fct_reorder(as.factor(segment_name), segment),
+                      y = med, ymin = lo, ymax = up)) +
   facet_wrap(~stock_group, scales = "free_x") +
   ggsidekick::theme_sleek() +
   theme(
@@ -827,8 +827,8 @@ yr_p_mat_plots <- purrr::map2(
     ) %>% 
     reframe(
       med = median(est),
-      lo = rethinking::HPDI(est, 0.05),
-      up = rethinking::HPDI(est, 0.95),
+      lo = rethinking::HPDI(est, prob = 0.9)[1],
+      up = rethinking::HPDI(est, prob = 0.9)[2],
       stock_group = y
       ) %>% 
     left_join(., seg_key, by = c("stock_group", "array_num")) %>% 
@@ -900,6 +900,52 @@ dev.off()
 saveRDS(
   surv_plot_mean, here::here("figs", "cjs", "mean_cum_surv.rds")
 )
+
+
+# plot terminal survival rate (absolute and scaled by migration distance) of 
+# high detection probability stocks 
+term_surv_dat <- dat_tbl_trim$cum_survival_mean %>% 
+  bind_rows() %>% 
+  filter(stock_group %in% c("Fraser", "South Puget", "Up Col."),
+         segment_name %in% c("In\nRiver", "Terminal\nMarine"))
+
+p_total <- term_surv_dat %>% 
+  select(stock_group, median, low, up) %>% 
+  distinct() %>% 
+  ggplot(.) +
+  geom_pointrange(aes(x = stock_group, y = median, ymin = low, ymax = up)) +
+  labs(y = "Posterior Cumulative Terminal Survival Rate") +
+  ggsidekick::theme_sleek() +
+  theme(axis.title.x = element_blank())
+
+# import terminal migration distance
+term_dist <- read.csv(here::here("data", "terminal_locations.csv"))
+
+p_dist <- term_surv_dat %>% 
+  select(iter, est, stock_group) %>%
+  left_join(., term_dist, by = "stock_group") %>% 
+  mutate(
+    scaled_surv = est^(1 / (distance_km / 100))
+  ) %>% 
+  group_by(
+    stock_group
+  ) %>% 
+  summarize(
+    med = median(scaled_surv),
+    lo = rethinking::HPDI(scaled_surv, prob = 0.9)[1],
+    up = rethinking::HPDI(scaled_surv, prob = 0.9)[2]
+  ) %>% 
+  ggplot(.) +
+  geom_pointrange(aes(x = stock_group, y = med, ymin = lo, ymax = up)) +
+  labs(y = "Posterior Cumulative Survival Rate per 100 km") +
+  ggsidekick::theme_sleek() +
+  theme(axis.title.x = element_blank())
+
+
+png(here::here("figs", "cjs", "terminal_surv_comp.png"), 
+    height = 7.5, width = 5, units = "in", res = 200)
+cowplot::plot_grid(p_total, p_dist, ncol = 1)
+dev.off()
 
 
 ## Calculate cumulative survival for Fraser by stock ---------------------------
