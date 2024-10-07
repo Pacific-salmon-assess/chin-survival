@@ -26,9 +26,16 @@ dat_tbl_trim <- readRDS(here::here("data", "surv_cjs_data.rds"))
 seg_key <- read.csv(here::here("data", 
                                "surv_segment_key_2023.csv")) %>%
   mutate(segment = array_num - 1,
-         segment_name = str_replace(segment_name, " ", "\n")) %>% 
-  dplyr::select(stock_group, segment, array_num, segment_name) %>% 
+         segment_name = str_replace(segment_name, " ", "\n"),
+         array_key_name = paste(segment, segment + 1, sep = "_")) %>% 
+  dplyr::select(stock_group, segment, segment_name, array_key_name) %>% 
   distinct()
+
+
+# Import duration and distance estimates for scaling survival
+array_dat <- readRDS(here::here("data", "distance_duration_array.rds"))
+
+
 
 
 # Average survival by segment and year -----------------------------------------
