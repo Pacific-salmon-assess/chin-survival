@@ -27,15 +27,14 @@ seg_key <- read.csv(here::here("data",
                                "surv_segment_key_2023.csv")) %>%
   mutate(segment = array_num - 1,
          segment_name = str_replace(segment_name, " ", "\n"),
-         array_key_name = paste(segment, segment + 1, sep = "_")) %>% 
-  dplyr::select(stock_group, segment, segment_name, array_key_name) %>% 
+         array_num_key = paste(segment, segment + 1, sep = "_")) %>% 
+  dplyr::select(stock_group, segment, segment_name, array_num_key) %>% 
   distinct()
 
 
 # Import duration and distance estimates for scaling survival
 array_dat <- readRDS(here::here("data", "distance_duration_array.rds"))
-
-
+array_dat$iter <- as.numeric(as.factor(array_dat$iteration))
 
 
 # Average survival by segment and year -----------------------------------------
@@ -952,6 +951,83 @@ p_dist <- term_surv_dat %>%
 png(here::here("figs", "cjs", "terminal_surv_comp.png"), 
     height = 7.5, width = 5, units = "in", res = 200)
 cowplot::plot_grid(p_total, p_dist, ncol = 1)
+dev.off()
+
+
+# plot stage-specific mean survival but scaled by either migration distance
+# or duration (calculated in chinTagging repo segment_distance_duration.R)
+scaled_dat_list <- purrr::map2(
+  dat_tbl_trim$phi_mat_mean, dat_tbl_trim$stock_group,
+  ~ .x %>% 
+    as.table() %>% 
+    as.data.frame() %>% 
+    mutate(segment = as.integer(Var2),
+           iter = rep(1:nrow(.x), 
+                      times = length(unique(Var2))),
+           key_stock_group = .y
+    ) %>% 
+    group_by(
+      segment, key_stock_group
+    ) %>%
+    select(key_stock_group, iter, segment, est = Freq) %>% 
+    left_join(., seg_key %>% rename(key_stock_group = stock_group), 
+              by = c("key_stock_group", "segment")) %>% 
+    full_join(., array_dat, 
+              by = c("key_stock_group", "iter", "array_num_key")) %>% 
+    filter(iter %in% array_dat$iter,
+           !segment_name == "Release") %>% 
+    mutate(
+      scaled_surv_dist = est^(1 / (dist_km / 100)),
+      scaled_surv_dur = est^(1 / (time_dat)),
+      par = ifelse(
+        key_stock_group %in% c("Cali", "Low Col.", "WA_OR", "WCVI") & 
+          segment_name == "In\nRiver",
+        "beta",
+        "phi"
+      )
+      ) 
+) %>% 
+  bind_rows() %>% 
+  select(-dist_km, -time_dat) %>% 
+  pivot_longer(
+    cols = c("scaled_surv_dist", "scaled_surv_dur"),
+    names_to = "metric",
+    values_to = "surv",
+    names_prefix = "scaled_surv_"
+  ) %>% 
+  group_by(
+    key_stock_group, segment, segment_name, par, metric
+  ) %>% 
+  summarize(
+    med = median(surv),
+    lo = rethinking::HPDI(surv, prob = 0.9)[1],
+    up = rethinking::HPDI(surv, prob = 0.9)[2]
+  ) 
+
+
+png(here::here("figs", "cjs", "stage_surv_duration.png"), 
+    width = 7.5, height = 5, units = "in", res = 200)
+scaled_dat_list %>% filter(!par == "beta", metric == "dur") %>% 
+  ggplot() +
+  geom_pointrange(aes(x = fct_reorder(as.factor(segment_name), segment),
+                      y = med, ymin = lo, ymax = up)) +
+  labs(y = "Posterior Cumulative Survival Rate per Day") +
+  ggsidekick::theme_sleek() +
+  theme(axis.title.x = element_blank()) +
+  facet_wrap(~key_stock_group, scales = "free")
+dev.off()
+  
+
+png(here::here("figs", "cjs", "stage_surv_distance.png"), 
+    width = 7.5, height = 5, units = "in", res = 200)
+scaled_dat_list %>% filter(!par == "beta", metric == "dist") %>% 
+  ggplot() +
+  geom_pointrange(aes(x = fct_reorder(as.factor(segment_name), segment),
+                      y = med, ymin = lo, ymax = up)) +
+  labs(y = "Posterior Cumulative Survival Rate per 100 km") +
+  ggsidekick::theme_sleek() +
+  theme(axis.title.x = element_blank()) +
+  facet_wrap(~key_stock_group, scales = "free")
 dev.off()
 
 

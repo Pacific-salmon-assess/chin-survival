@@ -45,11 +45,12 @@ deploy_map <- base_map +
     legend.position = "none"
   )
 # export for use in Rmd
-saveRDS(deploy_map, here::here("figs", "deploy_map.rds"))
+# saveRDS(deploy_map, here::here("figs", "deploy_map.rds"))
 
 
 ## RECEIVER LOCATIONS _---------------------------------------------------------
 
+# NOTE: these locations only show VR and PIT arrays, not recaptures
 rec_all <- readRDS(here::here("data", 
                               "receivers_all.RDS"))$rec_all %>%
   dplyr::rename(latitude = station_latitude,
@@ -84,13 +85,13 @@ multi_year_map <- base_map +
     legend.position = "none"
   )
 
-png(here::here("figs", "multi-year-map.png"), 
-    height = 5, width = 6.5, units = "in", res = 200)
-multi_year_map
-dev.off()
+# png(here::here("figs", "multi-year-map.png"), 
+#     height = 5, width = 6.5, units = "in", res = 200)
+# multi_year_map
+# dev.off()
 
 # export for use in Rmd
-saveRDS(multi_year_map, here::here("figs", "receiver_map1.rds"))
+# saveRDS(multi_year_map, here::here("figs", "receiver_map1.rds"))
 
 
 # import PIT detections to include in receiver map
@@ -116,7 +117,7 @@ rec <- rec_all  %>%
     # chinTagging/prep_detection_histories
     region = case_when(
       grepl("BO", station_name) ~ "bonn",
-      region %in% c("river", "columbia", "swwa_or") & 
+      (region %in% c("river", "columbia", "swwa_or") | marine == "no") & 
         (longitude > -124.15 & longitude < -121.94 & 
            latitude < 46.3 & latitude > 45) ~ "lower_col",
       region == "river" ~ "in_river", #fish caught in terminal locations 
@@ -131,15 +132,17 @@ rec <- rec_all  %>%
   )
 
 # use array key to plot array number by stock group 
-array_tbl <- read.csv(here::here("data", 
-                                 "surv_segment_key_2023.csv"))  %>% 
+array_key <- read.csv(here::here("data", 
+                                 "surv_segment_key_2023.csv")) %>% 
   # exclude stocks missing from CJS analysis
   filter(
-    !stock_group %in% c("ECVI", "North Puget")
+    !stock_group %in% c("ECVI", "North Puget", "WA_OR")
   ) %>%
   mutate(segment = array_num - 1,
          segment_name = str_replace(segment_name, " ", "\n")) %>% 
-  distinct() %>%
+  distinct() 
+  
+array_tbl <- array_key %>% 
   group_by(stock_group) %>% 
   group_nest()
 
@@ -156,15 +159,17 @@ col <- rec %>%
 puget <- rec %>% 
   filter(!region == "bonn",
          !(region == "in_river" & 
-             (latitude < 47 | latitude > 48.25)))
-wa_or <- rec %>% 
-  filter(!region == "bonn",
-         !(region == "in_river"))
+             (latitude < 47 | latitude > 48.25)),
+         !(region == "in_river" & longitude > -121.45))
+# wa_or <- rec %>% 
+#   filter(!region == "bonn",
+#          !(region == "in_river"))
 wcvi <- rec %>% 
   filter(!region == "bonn",
          !(region == "in_river" & 
              (latitude < 49.1 | longitude > -124)))
-rec_dummy_list <- list(cali, fraser, col, puget, col, wa_or, wcvi)
+rec_dummy_list <- list(cali, fraser, col, puget, col,# wa_or,
+                       wcvi)
 
 # make plots
 array_list <- purrr::pmap(
@@ -185,28 +190,28 @@ cali_segs <- base_map +
     shape = 21
   ) +
   scale_fill_viridis_d() +
-  theme(#legend.position = "none",
+  theme(legend.position = "none",
         axis.ticks = element_blank()
         ) +
   facet_wrap(~stock_group)
 seg_list <- purrr::map(
   array_list[-1],
   ~ base_map +
-    coord_sf(xlim = c(-126, -119), ylim = c(45.5, 51)) +
+    coord_sf(xlim = c(-126, -121), ylim = c(45.5, 51)) +
     geom_point(
       data = .x,
       aes(x = longitude, y = latitude, fill = segment_name),
       shape = 21
     ) +
     scale_fill_viridis_d() +
-    theme(#legend.position = "none",
+    theme(legend.position = "none",
           axis.ticks = element_blank()) +
     facet_wrap(~stock_group)
 )
 
 array_map2 <- cowplot::plot_grid(
   seg_list[[1]], seg_list[[2]], seg_list[[3]], seg_list[[4]], 
-  seg_list[[5]], seg_list[[6]],  ncol = 3
+  seg_list[[5]],  ncol = 3
   )
 array_map <- cowplot::plot_grid(
   cali_segs, array_map2, rel_widths = c(0.16, 0.5)
