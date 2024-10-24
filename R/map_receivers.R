@@ -30,7 +30,7 @@ base_map <- ggplot() +
 ## DEPLOYMENTS MAP -------------------------------------------------------------
 
 chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS"))
-tag_dat <- readRDS(here::here("data", "cleaned_log_reg.rds"))
+tag_dat <- readRDS(here::here("data", "surv_log_reg_data.rds"))
 
 deploy_pts <- chin %>% 
   filter(acoustic_year %in% tag_dat$vemco_code)
@@ -51,7 +51,9 @@ saveRDS(deploy_map, here::here("figs", "deploy_map.rds"))
 ## RECEIVER LOCATIONS _---------------------------------------------------------
 
 rec_all <- readRDS(here::here("data", 
-                              "receivers_all.RDS"))$rec_all
+                              "receivers_all.RDS"))$rec_all %>%
+  dplyr::rename(latitude = station_latitude,
+                longitude = station_longitude)
 rec_all2 <- readRDS(here::here("data", 
                                "receivers_all.RDS"))$dup_rec_all %>%
   dplyr::rename(name = station_name,
@@ -94,34 +96,39 @@ saveRDS(multi_year_map, here::here("figs", "receiver_map1.rds"))
 # import PIT detections to include in receiver map
 pit_dat <- readRDS(here::here("data", "cleanedPIT_detections.RDS")) %>% 
   mutate(region = "in_river",
-         project_name = "pit") %>% 
+         project_name = "pit",
+         marine = "no") %>% 
   select(
-    station_name = site, project_name, region, station_latitude = latitude, 
-    station_longitude = longitude 
+    station_name = site, project_name, region, latitude, longitude, marine
   ) %>% 
   distinct()
 
-rec <- rec_all %>% 
-  mutate(
-    project_name = ifelse(is.na(project_name), "Instream", project_name),
-    region = case_when(
-      region %in% c("columbia", "swwa_or") & 
-        (station_longitude > -124.15 & station_longitude < -122.9 & 
-           station_latitude < 46.3 & station_latitude > 45) ~ "col_est",
-      marine == "no" ~ "in_river",
-      region == "fraser" ~ "in_river",
-      region == "bark_snd" & station_latitude > 49.1 ~ "in_river",
-      region == "bark_snd" & station_latitude < 49.1 ~ "wcvi",
-      region == "disc_isl" & station_latitude > 49.25 ~ "nevi",
-      TRUE ~ region
-    )
-  ) %>% 
+rec <- rec_all  %>% 
   filter(
     !region == "alaska",
     !recover_year == "2024"
   ) %>% 
-  select(station_name, project_name, region, station_latitude, station_longitude) %>% 
-  rbind(., pit_dat)
+  select(station_name, project_name, region, latitude, longitude, marine) %>% 
+  rbind(., pit_dat) %>% 
+  mutate(
+    project_name = ifelse(is.na(project_name), "Instream", project_name),
+    # make sure regional definitions approximate those in 
+    # chinTagging/prep_detection_histories
+    region = case_when(
+      grepl("BO", station_name) ~ "bonn",
+      region %in% c("river", "columbia", "swwa_or") & 
+        (longitude > -124.15 & longitude < -121.94 & 
+           latitude < 46.3 & latitude > 45) ~ "lower_col",
+      region == "river" ~ "in_river", #fish caught in terminal locations 
+      marine == "no" ~ "in_river",
+      region == "wcvi" & latitude < 48.405 & longitude > -125.5 ~ "nwwa",
+      region == "fraser" ~ "in_river",
+      region == "bark_snd" & latitude > 49.1 ~ "in_river",
+      region == "bark_snd" & latitude < 49.1 ~ "wcvi",
+      region == "disc_isl" & latitude > 49.25 ~ "nevi",
+      TRUE ~ region
+    )
+  )
 
 # use array key to plot array number by stock group 
 array_tbl <- read.csv(here::here("data", 
@@ -138,22 +145,26 @@ array_tbl <- read.csv(here::here("data",
 
 # specify in-river receivers to drop 
 cali <- rec %>% 
-  filter(!(region == "in_river" & station_latitude > 44))
+  filter(!region == "bonn",
+         !(region == "in_river" & latitude > 44))
 fraser <- rec %>% 
-  filter(!(region == "in_river" & !(project_name %in% c("Instream", "Kintama"))))
+  filter(!region == "bonn",
+         !(region == "in_river" & !(project_name %in% c("Instream", "Kintama"))))
 col <- rec %>% 
   filter(!(region == "in_river" & 
-             (station_latitude < 45 | station_latitude > 47)))
+             (latitude < 45 | latitude > 47)))
 puget <- rec %>% 
-  filter(!(region == "in_river" & 
-             (station_latitude < 47 | station_latitude > 48.25)))
+  filter(!region == "bonn",
+         !(region == "in_river" & 
+             (latitude < 47 | latitude > 48.25)))
 wa_or <- rec %>% 
-  filter(!(region == "in_river"))
+  filter(!region == "bonn",
+         !(region == "in_river"))
 wcvi <- rec %>% 
-  filter(!(region == "in_river" & 
-             (station_latitude < 49.1 | station_longitude > -124)))
-rec_dummy_list <- list(
-  cali, fraser, col, puget, col, wa_or, wcvi)
+  filter(!region == "bonn",
+         !(region == "in_river" & 
+             (latitude < 49.1 | longitude > -124)))
+rec_dummy_list <- list(cali, fraser, col, puget, col, wa_or, wcvi)
 
 # make plots
 array_list <- purrr::pmap(
@@ -170,25 +181,25 @@ cali_segs <- base_map +
   coord_sf(xlim = c(-126, -121), expand = FALSE) +
   geom_point(
     data = array_list[[1]],
-    aes(x = station_longitude, y = station_latitude, fill = segment_name),
+    aes(x = longitude, y = latitude, fill = segment_name),
     shape = 21
   ) +
   scale_fill_viridis_d() +
-  theme(legend.position = "none",
+  theme(#legend.position = "none",
         axis.ticks = element_blank()
         ) +
   facet_wrap(~stock_group)
 seg_list <- purrr::map(
   array_list[-1],
   ~ base_map +
-    coord_sf(xlim = c(-126, -122), ylim = c(45.5, 51)) +
+    coord_sf(xlim = c(-126, -119), ylim = c(45.5, 51)) +
     geom_point(
       data = .x,
-      aes(x = station_longitude, y = station_latitude, fill = segment_name),
+      aes(x = longitude, y = latitude, fill = segment_name),
       shape = 21
     ) +
     scale_fill_viridis_d() +
-    theme(legend.position = "none",
+    theme(#legend.position = "none",
           axis.ticks = element_blank()) +
     facet_wrap(~stock_group)
 )
