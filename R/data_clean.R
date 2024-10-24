@@ -55,7 +55,7 @@ chin2 <- left_join(
       stock %in% fr_spr_yr ~ "Fraser Spr. Yr.",
       # define subyearlings based on run bubble_ts plots
       acoustic_year %in% c("7719_2019", "7701_2019", "7692_2019", "7691_2019",
-                           "7692_2019", "7690_2019") ~ "Fraser 4.1",
+                           "7692_2019", "7690_2019") ~ "Fraser Sum. 4.1",
       acoustic_year %in% c("7696_2019", "5353_2022") ~ "Fraser Fall",
       TRUE ~ agg_name
     )
