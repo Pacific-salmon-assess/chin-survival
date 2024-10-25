@@ -19,7 +19,11 @@ set.seed(123)
 
 ## Import occurence matrix (generated in chinTagging/prep_detection_histories.R 
 # and cleaned in data_clean.R)
-dat_tbl_trim <- readRDS(here::here("data", "surv_cjs_data.rds"))
+dat_tbl_trim <- readRDS(here::here("data", "surv_cjs_data.rds")) %>% 
+  # drop WA/OR coastal
+  filter(
+    !stock_group == "WA_OR"
+  )
 
 
 ## Import survival segment key for labelling plots 
@@ -28,7 +32,8 @@ seg_key <- read.csv(here::here("data",
   mutate(segment = array_num - 1,
          segment_name = str_replace(segment_name, " ", "\n"),
          array_num_key = paste(segment, segment + 1, sep = "_")) %>% 
-  dplyr::select(stock_group, segment, segment_name, array_num_key) %>% 
+  dplyr::select(stock_group, segment, segment_name, array_num, array_num_key,
+                max_array_num) %>% 
   distinct()
 
 
@@ -132,9 +137,10 @@ prep_cjs_dat <- function(dat, fixp = NULL, grouping_vars = NULL) {
 
 # fix terminal value for p for Fraser/Col where detection probability v. high
 dat_tbl_trim$fixp <- ifelse(
-  grepl("Fraser", dat_tbl_trim$stock_group) | 
-    grepl("Up Col", dat_tbl_trim$stock_group) | 
-    grepl("South Puget", dat_tbl_trim$stock_group) , 
+  grepl("Fraser", dat_tbl_trim$stock_group) #| 
+    # grepl("Up Col", dat_tbl_trim$stock_group) | 
+    # grepl("South Puget", dat_tbl_trim$stock_group) 
+  , 
   0.99, 
   NA)
 dat_tbl_trim$years <- purrr::map(dat_tbl_trim$wide_array_dat, function (x) {
@@ -160,6 +166,7 @@ dat_tbl_trim$dat_in <- pmap(
 hier_mod_sims <- stan_model(
   here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_v3.stan")
 )
+# not needed unless we fix p for stock's other than fraser
 hier_mod_sims_fixp <- stan_model(
   here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_fixp_v3.stan")
 )
@@ -319,7 +326,7 @@ params_fixp <- c(
   "Rho_yr", "alpha_yr_phi", "phi_yr", "p_yr", "y_hat"
 )
 
-## TODO: replace Fraser w/ hier stock model
+## TODO: remove fixp since not used and replace Fraser w/ hier stock model
 cjs_hier_sims <- pmap(
   list(x = dat_tbl_trim$dat_in, fixp = dat_tbl_trim$fixp, 
        stock_group = dat_tbl_trim$stock_group), 
@@ -575,8 +582,7 @@ cum_surv_list <- pmap(
       rename(est = Freq) %>% 
       #add segment key
       left_join(., seg_key, by = c("stock_group", "segment")) %>% 
-      mutate(segment_name = fct_reorder(as.factor(segment_name), segment),
-             hab = case_when(
+      mutate(hab = case_when(
                segment == max(segment) ~ "river",
                TRUE ~ "marine"
              )) %>% 
@@ -597,7 +603,6 @@ cum_surv_list <- pmap(
 dat_tbl_trim$cum_survival <- cum_surv_list
 
 
-
 ## calculate average among years
 phi_mat_mean <- map2(
   dat_tbl_trim$cjs_hier, dat_tbl_trim$fixp,
@@ -611,7 +616,7 @@ phi_mat_mean <- map2(
       return(mean_phi)
     } else {
       # calculate average beta per iteration among years, then replace mean
-      # phi for alst stage when p isn't fixed
+      # phi for last stage when p isn't fixed
       mean_beta <- apply(
         extract(x)[["beta_yr"]], 1, mean
       )
@@ -761,7 +766,9 @@ dev.off()
 
 # posterior estimates of det probability for Upper Col
 p_mat <- extract(dat_tbl_trim$cjs_hier[[5]])[["p_yr"]]
-hist(p_mat[ , 1:5, 5]) # second to last stage, ignore last year when rec missing
+hist(p_mat[ , 1:5, 5], main = "Lower River p") 
+hist(p_mat[ , 1:5, 6], main = "Bonneville p") 
+hist(p_mat[ , 1:5, 7], main = "Upriver p") 
 
 
 # estimates of stage specific mean survival rates
@@ -788,8 +795,7 @@ med_seg_surv <- purrr::map2(
   bind_rows() %>% 
   mutate(
     par = ifelse(
-      stock_group %in% c("Cali", "Low Col.", "WA_OR", "WCVI") & 
-        segment_name == "In\nRiver",
+      stock_group != "Fraser" & array_num == max_array_num,
       "beta",
       "phi"
     )
@@ -870,20 +876,30 @@ dat_tbl_trim <- readRDS(
 
 surv_plot_trials <- purrr::map(dat_tbl_trim$cum_survival, function (x) {
   x %>% 
-    mutate(agg_name_f = as.factor(stock_group)) %>% 
+    mutate(agg_name_f = as.factor(stock_group),
+           segment_name = fct_reorder(as.factor(segment_name), segment)) %>% 
     plot_surv(., show_mcmc = T) +
     facet_wrap(~group)
 })
 surv_plot_clean  <- purrr::map(dat_tbl_trim$cum_survival, function (x) {
   x %>% 
-    mutate(agg_name_f = as.factor(stock_group)) %>%
+    mutate(agg_name_f = as.factor(stock_group),
+           segment_name = fct_reorder(as.factor(segment_name), segment)) %>%
     plot_surv(., show_mcmc = F) +
     facet_wrap(~group)
 })
 
 surv_plot_mean <- dat_tbl_trim$cum_survival_mean %>% 
   bind_rows() %>% 
-  mutate(agg_name_f = NA) %>% 
+  mutate(agg_name_f = NA,
+         segment_name = factor(
+           segment_name, 
+           levels = c(
+             "Release", "WCVI/\nSalish\nSea", "Marine", "NW\nWA", "SW\nWA", "Central\nCA",
+             "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia", 
+             "Puget\nSound", "Lower\nCol.", "Bonneville", "In\nRiver"   
+           ))
+         ) %>% 
   plot_surv(., show_mcmc = F) + 
   facet_wrap(~stock_group, scales = "free_x", nrow = 2)
 
@@ -912,8 +928,13 @@ saveRDS(
 # high detection probability stocks 
 term_surv_dat <- dat_tbl_trim$cum_survival_mean %>% 
   bind_rows() %>% 
-  filter(stock_group %in% c("Fraser", "South Puget", "Up Col."),
-         segment_name %in% c("In\nRiver", "Terminal\nMarine"))
+  filter(
+    stock_group == "Fraser" & segment_name == "In\nRiver" |
+    stock_group == "Up Col." & segment_name == "Bonneville" |
+    stock_group == "Low Col." & segment_name == "Lower\nCol." |
+    stock_group == "South Puget" & segment_name == "Puget\nSound"
+    # stock_group %in% c("Fraser", "South Puget", "Up Col.", "Low Col.")
+    )
 
 p_total <- term_surv_dat %>% 
   select(stock_group, median, low, up) %>% 
