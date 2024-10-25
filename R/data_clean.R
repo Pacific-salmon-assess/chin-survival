@@ -54,10 +54,18 @@ chin2 <- left_join(
       stock %in% fr_sum_yr ~ "Fraser Sum. Yr.",
       stock %in% fr_spr_yr ~ "Fraser Spr. Yr.",
       # define subyearlings based on run bubble_ts plots
+      agg_name == "Fraser 4.1" ~ "Fraser Sum. 4.1",
       acoustic_year %in% c("7719_2019", "7701_2019", "7692_2019", "7691_2019",
                            "7692_2019", "7690_2019") ~ "Fraser Sum. 4.1",
       acoustic_year %in% c("7696_2019", "5353_2022") ~ "Fraser Fall",
       TRUE ~ agg_name
+    ),
+    # define injury scores as per SJ's analyses
+    adj_inj = case_when(
+      hook_loc == "eye" ~ 3,
+      injury == "3" | fin_dam == "3" | scale_loss == "3" ~ 2,
+      injury == "2" | fin_dam == "2" | scale_loss == "2" ~ 1,
+      TRUE ~ 0
     )
   ) %>% 
   left_join(., cyer_dat, by = c("year", "ctc_indicator")) 
