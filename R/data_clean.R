@@ -92,12 +92,10 @@ det_dat1 <- dat_tbl %>%
               mutate(month = lubridate::month(date)) %>% 
               select(vemco_code = acoustic_year, month, year, acoustic_type, 
                      lat, lon, 
-                     fl, lipid, year_day, hook_loc, fin_dam, injury, scale_loss,
-                     ctc_indicator, isbm_cyer,
+                     fl, lipid, year_day, adj_inj, ctc_indicator, isbm_cyer,
                      comment),
             by = "vemco_code") %>%
   mutate(
-    comp_inj = (injury + scale_loss + fin_dam),
     redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes"),
     terminal_p = case_when(
       stock_group %in% c("South Puget", "Up Col.") ~ 1,

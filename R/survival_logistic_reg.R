@@ -8,6 +8,7 @@
 
 library(tidyverse)
 library(rethinking)
+library(grid)
 
 rstan::rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
@@ -17,11 +18,11 @@ options(mc.cores = parallel::detectCores())
 det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds"))
 
 
-# remove redeployed tags and scale continuous covariates
+# scale continuous covariates
 det_dat <- det_dat1 %>% 
-  filter(
-    !redeploy == "yes"
-  ) %>% 
+  # filter(
+  #   !redeploy == "yes"
+  # ) %>% 
   mutate(
     lipid_z = scale(lipid) %>% as.numeric(),
     fl_z = scale(fl) %>% as.numeric(),
@@ -32,10 +33,9 @@ det_dat <- det_dat1 %>%
     stock_group = factor(
       stock_group, 
       levels = c("Cali", "Low Col.", "Up Col.", "WA_OR", "WCVI", "ECVI", 
-                 "Fraser 4.1", "Fraser Fall", "Fraser Spr. Yr.", 
+                 "Fraser Sum. 4.1", "Fraser Fall", "Fraser Spr. Yr.", 
                  "Fraser Sum. Yr.", "North Puget", "South Puget")),
-    scale = as.integer(as.factor(scale_loss)),
-    inj = as.integer(as.factor(injury)),
+    inj = as.integer(as.factor(adj_inj)),
     term_p = as.integer(terminal_p),
     yr = as.integer(year),
     stk = as.integer(stock_group)
@@ -50,13 +50,11 @@ dat_list <- list(
   lipid_z = det_dat$lipid_z,
   day_z = det_dat$day_z,
   # cyer_z = det_dat$cyer_z,
-  scale = det_dat$scale,
   inj = det_dat$inj,
   term_p = det_dat$terminal_p,
   yr = det_dat$yr,
   stk = det_dat$stk,
-  alpha = rep(2, length(unique(det_dat$injury)) - 1),
-  alpha_scale = rep(2, length(unique(det_dat$scale_loss)) - 1)
+  alpha = rep(2, length(unique(det_dat$inj)) - 1)
 )
 
 
@@ -79,8 +77,7 @@ m4 <- ulam(
       beta_ds * day_z +
       beta_fs * fl_z +
       beta_ls * lipid_z +
-      beta_is * sum(delta_inj[1:inj]) +
-      beta_ss * sum(delta_scale[1:scale])
+      beta_is * sum(delta_inj[1:inj])
     ,
     # adaptive priors
     transpars> matrix[yr, 3]:beta_yr <-
@@ -108,8 +105,6 @@ m4 <- ulam(
     # constraints on ordinal effects of injury
     vector[4]: delta_inj <<- append_row(0, delta),
     simplex[3]: delta ~ dirichlet(alpha),
-    vector[4]: delta_scale <<- append_row(0, delta2),
-    simplex[3]: delta2 ~ dirichlet(alpha_scale),
     
     # compute ordinary correlation matrixes from Cholesky factors
     gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
@@ -132,11 +127,9 @@ post <- extract.samples(m4)
 
 post_pred_foo <- function(dat_in) {
   delta_inj_eff <- cbind(0, post$delta)
-  delta_scale_eff <- cbind(0, post$delta2)
   #as matrix necessary for cases where only first column selected
   delta_inj2 <- apply(as.matrix(delta_inj_eff[ , 1:dat_in$inj]), 1, sum)
-  delta_scale2 <- apply(as.matrix(delta_scale_eff[ , 1:dat_in$scale]), 1, sum)
-  
+
   logodds <- with(
     post,
     surv_bar + 
@@ -146,8 +139,7 @@ post_pred_foo <- function(dat_in) {
       beta_ds * dat_in$day_z +
       beta_fs * dat_in$fl_z +
       beta_ls * dat_in$lipid_z +
-      beta_is * delta_inj2 +
-      beta_ss * delta_scale2
+      beta_is * delta_inj2
   )
   return( inv_logit(logodds) )
 }
@@ -494,59 +486,55 @@ pp <- cowplot::plot_grid(
   pred_day_ribbon, pred_lipid_ribbon, pred_fl_ribbon,
   ncol = 1
 ) 
-pred_surv_ribbon <- gridExtra::grid.arrange(
-  gridExtra::arrangeGrob(
-    pp, 
-    left = grid::textGrob(
-      "Survival Probability", rot = 90, 
-      gp = gpar(fontsize = 11))
-    )
-)
 
 
 ## Injury and scale loss effects on survival
 # Note scales so that cumsum(delta) * beta = total effect first stage = 0 
 # absorbed in intercept
-pred_scale <- pred_inj <- matrix(
+pred_inj <- matrix(
   NA, nrow = nrow(post$delta), ncol = (ncol(post$delta) + 1)
   )
 for (i in 1:(ncol(post$delta) + 1)) {
     if (i == 1) {
-      delta_inj <- delta_scale <- 0 
+      delta_inj <- 0 
     }
     if (i > 1) {
       delta_inj <- apply(as.matrix(post$delta[ , 1:(i - 1)]), 1, sum) 
-      delta_scale <- apply(as.matrix(post$delta2[ , 1:(i - 1)]), 1, sum) 
     }
     pred_inj[ , i] <- inv_logit(
       post$surv_bar + post$beta_is * delta_inj + post$beta_term[ , 2]
       )
-    pred_scale[ , i] <- inv_logit(
-      post$surv_bar + post$beta_ss * delta_scale + post$beta_term[ , 2]
-    )
   }
 
 # combine data
-pred_capture_dat <- purrr::map2(
-  list(pred_inj, pred_scale), c("injury", "scale"),
-  function (x, y) {
-    x %>% 
-      as.data.frame() %>% 
-      set_names(
-        seq(0, 3, by = 1)
-      ) %>% 
-      pivot_longer(
-        cols = everything(), names_to = "score", values_to = "est"
-      ) %>% 
-      mutate(
-        metric = y
-      )
-  }
-)  %>% 
-  bind_rows()
-
-injury_point <- pred_capture_dat %>% 
-  group_by(score, metric) %>% 
+# pred_capture_dat <- purrr::map2(
+#   list(pred_inj), c("injury"),
+#   function (x, y) {
+#     x %>% 
+#       as.data.frame() %>% 
+#       set_names(
+#         seq(0, 3, by = 1)
+#       ) %>% 
+#       pivot_longer(
+#         cols = everything(), names_to = "score", values_to = "est"
+#       ) %>% 
+#       mutate(
+#         metric = y
+#       )
+#   }
+# )  %>% 
+#   bind_rows()
+pred_injury_dat <- pred_inj %>% 
+  as.data.frame() %>%
+  set_names(
+    seq(0, 3, by = 1)
+  ) %>% 
+  pivot_longer(
+    cols = everything(), names_to = "score", values_to = "est"
+  )
+  
+injury_point <- pred_injury_dat %>% 
+  group_by(score) %>% 
   summarize(
     med = median(est),
     lo = rethinking::HPDI(est, prob = 0.9)[1],
@@ -555,9 +543,8 @@ injury_point <- pred_capture_dat %>%
   ggplot() +
   geom_pointrange(aes(x = score, y = med, ymin = lo, ymax = up),
                   shape = 21, fill = "#7570b3") +
-  labs(x = "Score", y = "Survival Probability") +
-  ggsidekick::theme_sleek() +
-  facet_wrap(~metric)
+  labs(x = "Injury Score", y = "Survival Probability") +
+  ggsidekick::theme_sleek() 
 
 
 #calculate difference in survival between lowest and highest injury score
@@ -587,13 +574,8 @@ injury_point <- pred_capture_dat %>%
   # )
 
 diff_hist <- data.frame(
-  diff_inj = pred_inj[ , 1] - pred_inj[ , 4],
-  diff_scale = pred_scale[ , 1] - pred_scale[ , 4]
+  diff = pred_inj[ , 1] - pred_inj[ , 4]
 ) %>% 
-  pivot_longer(
-    cols = everything(), names_to = "metric", values_to = "diff", 
-    names_prefix = "diff_"
-  ) %>% 
   ggplot() +
   geom_histogram(aes(x = diff), 
                  bins = 50, fill = "#7570b3") +
@@ -602,8 +584,7 @@ diff_hist <- data.frame(
   labs(x = "Difference in Survival Probability Between Max/Min Scores") +
   theme(
     axis.title.y = element_blank()
-  ) +
-  facet_wrap(~metric, ncol = 1)
+  ) 
 
 
 
@@ -701,13 +682,56 @@ pred_stk_comb <- rbind(pred_stk_surv_total, pred_stk_surv_direct) %>%
                   position = position_dodge(width = 0.4),
                   shape = 21, fill = "#7570b3") +
   scale_alpha_manual(values = alpha_pal) +
-  labs(x = "Effect",
-       y = "Predicted Survival Probability") +
+  labs(y = "Predicted Survival Probability") +
   ggsidekick::theme_sleek() +
   theme(
-    axis.title.y = element_blank()
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1)
   )
 
+
+## export figs
+png(here::here("figs", "binomial-glm", "ri_sigmas.png"), units = "in", 
+    res = 250, height = 3.5, width = 6)
+sigma_stk_pt
+dev.off()
+
+png(here::here("figs", "binomial-glm", "fl_lipid_corr.png"), units = "in", 
+    res = 250, height = 3, width = 3.5)
+rho_hist
+dev.off()
+
+png(here::here("figs", "binomial-glm", "fl_lipid_pred.png"), units = "in", 
+    res = 250, height = 3.5, width = 6)
+pred_mu_ribbon
+dev.off()
+
+png(here::here("figs", "binomial-glm", "surv_pred.png"), units = "in", 
+    res = 250, height = 6.5, width = 3.5)
+gridExtra::grid.arrange(
+  gridExtra::arrangeGrob(
+    pp, 
+    left = textGrob(
+      "Survival Probability", rot = 90, 
+      gp = gpar(fontsize = 11))
+  )
+)
+dev.off()
+
+png(here::here("figs", "binomial-glm", "inj_pred.png"), units = "in", 
+    res = 250, height = 3, width = 3.5)
+injury_point
+dev.off()
+
+png(here::here("figs", "binomial-glm", "inj_delta.png"), units = "in", 
+    res = 250, height = 3, width = 3.5)
+diff_hist
+dev.off()
+
+png(here::here("figs", "binomial-glm", "stock_surv.png"), units = "in", 
+    res = 250, height = 3.5, width = 6)
+pred_stk_comb
+dev.off()
 
 
 ## SIMPLIFIED MODEL VERSIONS ---------------------------------------------------
