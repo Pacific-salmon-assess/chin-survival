@@ -5,6 +5,10 @@ library(tidyverse)
 library(rethinking)
 
 
+rstan::rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
+
 # Set seed for reproducibility
 set.seed(123)
 
@@ -563,3 +567,128 @@ m5 <- ulam(
 precis(m5, depth = 2)
 
 
+## EXAMPLE 6 -------------------------------------------------------------------
+
+# Model interaction between capture date, exploitation rate and survival
+
+# create empty data frame
+dat <- data.frame(
+  yr = yr,
+  x = rep(NA, n_years), # intercept to predict x as a function of yr
+  beta_yr = rep(NA, n_years)
+)
+
+# Simulate predictor variable (length) as a function of categorical variable
+# (year)
+x_sigma <- 0.6 
+# make covariance matrix for year effects
+yr_rho <- 0.6 
+mu_yr <- c(0, 0) #average effects both centered on zero
+yr_sigmas <- c(0.4, 0.2)
+Rho <- matrix(c(1, yr_rho, yr_rho, 1), nrow = 2)
+Sigma <- diag(yr_sigmas) %*% Rho %*% diag(yr_sigmas) 
+yr_ints <- MASS::mvrnorm(n_years, mu_yr, Sigma)
+alpha_yr <- yr_ints[ , 1]
+beta_yr <- yr_ints[ , 2]
+
+# simulate covariate data
+for (i in seq_along(dat$yr)) { 
+  dat$x[i] <- rnorm(1, alpha_yr[yr[i]], x_sigma)
+  dat$beta_yr[i] <- beta_yr[yr[i]]
+}
+
+# choose 10 plausible exploitation rate vals then sample to length dat
+cyer_vals <- runif(10, 0.3, 0.8)
+cyer_vec <- sample(cyer_vals, size = nrow(dat), replace = TRUE)
+dat$cyer <- scale(cyer_vec) %>% as.numeric()
+
+
+# Simulate binary outcome based on int (beta), x and yr (beta_yr)
+# define cyer to have negative imapct on survival and negative interaction
+# with date (i.e. effect of CYER weaker late in year)
+beta <- -1  # Intercept
+beta_x <- 0.5 # Slope
+beta_cyer <- -1
+beta_x_cyer <- 0.5
+
+eta <- beta + 
+  dat$beta_yr +
+  beta_x * dat$x +
+  beta_cyer * dat$cyer +
+  (beta_x_cyer * dat$x * dat$cyer)
+  
+p <- 1 / (1 + exp(-(eta)))  # Probability of survival
+y <- rbinom(n, 1, p)  # Binary outcome
+dat$y <- y
+
+dat_list <- list(
+  y = dat$y,
+  x = dat$x,
+  yr = dat$yr,
+  cyer = dat$cyer
+)
+
+m6 <- ulam(
+  alist(
+    # length
+    x ~ dnorm(mu, sigma_x),
+    mu <- alpha_bar + alpha_yr[yr]*sigma_yr2,
+    alpha_yr[yr] ~ dnorm(0, 1),
+    sigma_yr2 ~ exponential(1),
+    
+    # survival
+    y ~ dbinom( 1 , p ) ,
+    logit(p) <- beta_bar + beta_yr[yr]*sigma_yr + beta_x * x + 
+      beta_cyer * cyer + (beta_x_cyer * x * cyer),
+    
+    # priors
+    beta_yr[yr] ~ dnorm(0, 0.5),
+    alpha_bar ~ normal(0, 1.25),
+    beta_bar ~ normal(0, 1.25),
+    c(beta_x, beta_cyer, beta_x_cyer) ~ normal(0, 0.5),
+    sigma_yr ~ exponential(1),
+    sigma_x ~ exponential(1)
+  ),
+  data=dat_list, chains=4 , log_lik=TRUE, cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+precis(m6 , depth=2)
+
+post <- extract.samples(m6)
+prior <- extract.prior(m6)
+
+x_seq <- c(-2, 0, 2)
+cyer_seq <- seq(-1.3, 1.3, length = 40)
+preds <- vector(mode = "list", length = length(x_seq))
+
+for(i in seq_along(x_seq)) {
+  pred_x <- sapply(
+    cyer_seq, 
+    function (x) {
+      inv_logit(
+        post$beta_bar + post$beta_x * x_seq[i] + post$beta_cyer * x +
+                  (post$beta_x_cyer * x_seq[i] * x)
+                )
+    }
+  )
+  preds[[i]] <- pred_x[1:20, ] %>% 
+    as.data.frame() %>% 
+    set_names(cyer_seq) %>% 
+    mutate(iter = seq(1, nrow(.), by = 1)) %>% 
+    pivot_longer(
+      cols = -iter, names_to = "cyer", values_to = "est"
+    ) %>% 
+    mutate(
+      cyer = as.numeric(cyer),
+      x = x_seq[i]
+    )
+}
+
+bind_rows(preds) %>% 
+  ggplot(
+    ., aes(x = cyer, y = est, group = iter)
+  ) +
+  geom_line(
+  ) +
+  ggsidekick::theme_sleek() +
+  facet_wrap(~x)

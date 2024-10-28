@@ -895,7 +895,8 @@ surv_plot_mean <- dat_tbl_trim$cum_survival_mean %>%
          segment_name = factor(
            segment_name, 
            levels = c(
-             "Release", "WCVI/\nSalish\nSea", "Marine", "NW\nWA", "SW\nWA", "Central\nCA",
+             "Release", "WCVI/\nSalish\nSea", "Marine", "NW\nWA", "SW\nWA",
+             "Central\nCA",
              "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia", 
              "Puget\nSound", "Lower\nCol.", "Bonneville", "In\nRiver"   
            ))

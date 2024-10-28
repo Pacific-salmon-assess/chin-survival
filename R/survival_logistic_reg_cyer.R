@@ -3,6 +3,8 @@
 # not stage-specific, does not account for detection probability)
 # Excludes immature tags and fish with unknown stock ID, but does not exclude
 # redeployed tags or injured fish
+# Identical to survival_logistic_reg.R but excludes stocks without exploitation
+# rate estimates and models interaction between exploitation and capture date
 # Feb. 22, 2021
 # Updated July 4, 2022
 
@@ -15,7 +17,10 @@ options(mc.cores = parallel::detectCores())
 
 
 
-det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds"))
+det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds")) %>% 
+  filter(
+    !is.na(isbm_cyer)
+  )
 
 
 # scale continuous covariates
@@ -46,10 +51,9 @@ det_dat <- det_dat1 %>%
 dat_list <- list(
   surv = as.integer(det_dat$term_det),
   fl_z = det_dat$fl_z,
-  wt_z = det_dat$wt_z,
   lipid_z = det_dat$lipid_z,
   day_z = det_dat$day_z,
-  # cyer_z = det_dat$cyer_z,
+  cyer_z = det_dat$cyer_z,
   inj = det_dat$inj,
   term_p = det_dat$terminal_p,
   yr = det_dat$yr,
