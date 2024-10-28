@@ -20,12 +20,11 @@ det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds"))
 
 # scale continuous covariates
 det_dat <- det_dat1 %>% 
-  # filter(
-  #   !redeploy == "yes"
-  # ) %>% 
   mutate(
     lipid_z = scale(lipid) %>% as.numeric(),
     fl_z = scale(fl) %>% as.numeric(),
+    wt_z = scale(wt) %>% as.numeric(),
+    log_wt_z = scale(log(wt)) %>% as.numeric(),
     day_z = scale(year_day) %>% as.numeric(),
     cyer_z = scale(isbm_cyer) %>% as.numeric(),
     terminal_p = as.factor(terminal_p),
@@ -47,6 +46,7 @@ det_dat <- det_dat1 %>%
 dat_list <- list(
   surv = as.integer(det_dat$term_det),
   fl_z = det_dat$fl_z,
+  wt_z = det_dat$wt_z,
   lipid_z = det_dat$lipid_z,
   day_z = det_dat$day_z,
   # cyer_z = det_dat$cyer_z,
@@ -57,26 +57,25 @@ dat_list <- list(
   alpha = rep(2, length(unique(det_dat$inj)) - 1)
 )
 
-
-m4 <- ulam(
+m3 <- ulam(
   alist(
     # stock-specific sampling dates
     day_z ~ normal(mu_day, sigma_day),
     mu_day <- beta_stk[stk, 4],
     # unobserved latent condition
-    c(fl_z, lipid_z) ~ multi_normal(c(mu_fl, mu_lipid), Rho, Sigma),
+    c(fl_z, wt_z) ~ multi_normal(c(mu_fl, mu_lipid), Rho, Sigma),
     mu_fl <- alpha_fl + beta_df * day_z + beta_yr[yr, 1] + beta_stk[stk, 1],
-    mu_lipid <- alpha_lipid + beta_dl * day_z + beta_yr[yr, 2] + 
+    mu_lipid <- alpha_lipid + beta_dl * day_z + beta_yr[yr, 2] +
       beta_stk[stk, 2],
     # survival
     surv ~ dbinom(1 , p) ,
-    logit(p) <- surv_bar + 
+    logit(p) <- surv_bar +
       beta_term[term_p] +
       beta_yr[yr, 3] +
       beta_stk[stk, 3] +
       beta_ds * day_z +
       beta_fs * fl_z +
-      beta_ls * lipid_z +
+      beta_ls * wt_z +
       beta_is * sum(delta_inj[1:inj])
     ,
     # adaptive priors
@@ -92,20 +91,20 @@ m4 <- ulam(
     Rho ~ lkj_corr(2),
     Sigma ~ exponential(1),
     sigma_day ~ exponential(1),
-    
+
     cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
     vector[3]:sigma_yr ~ exponential(1),
     cholesky_factor_corr[4]:L_Rho_stk ~ lkj_corr_cholesky(2),
     vector[4]:sigma_stk ~ exponential(1),
-    
+
     surv_bar ~ normal(0, 1.25),
     beta_term[term_p] ~ normal(0, 0.5),
-    c(beta_ds, beta_fs, beta_ls, beta_is, beta_ss) ~ normal(0, 0.5),
-    
+    c(beta_ds, beta_fs, beta_ls, beta_is) ~ normal(0, 0.5),
+
     # constraints on ordinal effects of injury
     vector[4]: delta_inj <<- append_row(0, delta),
     simplex[3]: delta ~ dirichlet(alpha),
-    
+
     # compute ordinary correlation matrixes from Cholesky factors
     gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
     gq> matrix[4, 4]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
@@ -113,17 +112,77 @@ m4 <- ulam(
   data=dat_list, chains = 4 , cores = 4, iter = 2000,
   control = list(adapt_delta = 0.96)
 )
-# as in simpler model, injury effects are very modest (overall effect broadly
-# spans zero and scales semi-linearly with injury)
 
-saveRDS(m4, here::here("data", "model_outputs", "hier_binomial.rds"))
-m4 <- readRDS(here::here("data", "model_outputs", "hier_binomial.rds"))
+
+
+## below model with both length and weight converges, but qqplot shows 
+# irregularities consistent with skewness (even w/ logtransform); remove 
+# m4 <- ulam(
+#   alist(
+#     # stock-specific sampling dates
+#     day_z ~ normal(mu_day, sigma_day),
+#     mu_day <- beta_stk[stk, 5],
+#     # unobserved latent condition
+#     c(fl_z, wt_z, lipid_z) ~ multi_normal(c(mu_fl, mu_wt, mu_lipid), Rho, Sigma),
+#     mu_fl <- alpha_fl + beta_df * day_z + beta_yr[yr, 1] + beta_stk[stk, 1],
+#     mu_wt <- alpha_wt + beta_dw * day_z + beta_yr[yr, 2] + beta_stk[stk, 2],
+#     mu_lipid <- alpha_lipid + beta_dl * day_z + beta_yr[yr, 3] + 
+#       beta_stk[stk, 3],
+#     # survival
+#     surv ~ dbinom(1 , p) ,
+#     logit(p) <- surv_bar + 
+#       beta_term[term_p] +
+#       beta_yr[yr, 4] +
+#       beta_stk[stk, 4] +
+#       beta_ds * day_z +
+#       beta_fs * fl_z +
+#       beta_ws * wt_z +
+#       beta_ls * lipid_z +
+#       beta_is * sum(delta_inj[1:inj])
+#     ,
+#     # adaptive priors
+#     transpars> matrix[yr, 4]:beta_yr <-
+#       compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
+#     matrix[4, yr]:z_yr ~ normal(0, 0.5),
+#     transpars> matrix[stk, 5]:beta_stk <-
+#       compose_noncentered(sigma_stk , L_Rho_stk , z_stk),
+#     matrix[5, stk]:z_stk ~ normal(0, 0.5),
+#     # fixed priors
+#     c(alpha_fl, alpha_wt, alpha_lipid) ~ normal(0, 0.5),
+#     c(beta_df, beta_dw, beta_dl) ~ normal(0.1, 0.5),
+#     Rho ~ lkj_corr(2),
+#     Sigma ~ exponential(1),
+#     sigma_day ~ exponential(1),
+#     
+#     cholesky_factor_corr[4]:L_Rho_yr ~ lkj_corr_cholesky(2),
+#     vector[4]:sigma_yr ~ exponential(1),
+#     cholesky_factor_corr[5]:L_Rho_stk ~ lkj_corr_cholesky(2),
+#     vector[5]:sigma_stk ~ exponential(1),
+#     
+#     surv_bar ~ normal(0, 1.25),
+#     beta_term[term_p] ~ normal(0.1, 0.5),
+#     c(beta_ds, beta_fs, beta_ws, beta_ls, beta_is) ~ normal(0, 0.5),
+#     
+#     # constraints on ordinal effects of injury
+#     vector[4]: delta_inj <<- append_row(0, delta),
+#     simplex[3]: delta ~ dirichlet(alpha),
+#     
+#     # compute ordinary correlation matrices from Cholesky factors
+#     gq> matrix[4, 4]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
+#     gq> matrix[5, 5]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
+#   ),
+#   data=dat_list, chains = 4 , cores = 4, iter = 2000,
+#   control = list(adapt_delta = 0.97)
+# )
+
+
+saveRDS(m3, here::here("data", "model_outputs", "hier_binomial.rds"))
+m3 <- readRDS(here::here("data", "model_outputs", "hier_binomial.rds"))
 
 post <- extract.samples(m4)
 
 
 # POSTERIOR PREDICTIONS --------------------------------------------------------
-
 
 post_pred_foo <- function(dat_in) {
   delta_inj_eff <- cbind(0, post$delta)
@@ -138,6 +197,7 @@ post_pred_foo <- function(dat_in) {
       beta_stk[ , dat_in$stk, 3] +
       beta_ds * dat_in$day_z +
       beta_fs * dat_in$fl_z +
+      beta_ws * dat_in$log_wt_z +
       beta_ls * dat_in$lipid_z +
       beta_is * delta_inj2
   )
@@ -175,8 +235,10 @@ calc_pit <- function(y, posterior_pred) {
 pit_residuals <- calc_pit(y = det_dat$term_det, posterior_pred = sim_mat_binom)
 qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
        main = "QQ-plot of PIT Residuals")
+abline(0, 1)
 
 
+traceplot(m4, pars = c("sigma_stk[1]"))
 
 # POSTERIOR INFERENCE  ---------------------------------------------------------
 

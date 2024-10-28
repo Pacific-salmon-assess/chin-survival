@@ -83,7 +83,6 @@ det_dat1 <- dat_tbl %>%
   unnest(cols = c(agg_det)) %>%
   left_join(., agg_names, by = "vemco_code") %>% 
   mutate(
-    term_det = ifelse(final_det + river_det > 0, 1, 0),
     stock_group = ifelse(stock_group == "Fraser", agg, stock_group) %>% 
       as.factor()
   ) %>% 
@@ -91,14 +90,14 @@ det_dat1 <- dat_tbl %>%
             chin2 %>% 
               mutate(month = lubridate::month(date)) %>% 
               select(vemco_code = acoustic_year, month, year, acoustic_type, 
-                     lat, lon, 
-                     fl, lipid, year_day, adj_inj, ctc_indicator, isbm_cyer,
+                     lat, lon, year_day, 
+                     fl, wt, lipid, adj_inj, ctc_indicator, isbm_cyer,
                      comment),
             by = "vemco_code") %>%
   mutate(
     redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes"),
     terminal_p = case_when(
-      stock_group %in% c("South Puget", "Up Col.") ~ 1,
+      stock_group %in% c("South Puget", "Up Col.", "Low Col.") ~ 1,
       grepl("Fraser", stock_group) ~ 1,
       stock_group == "WCVI" & year %in% c("2021", "2022") ~ 1,
       TRUE ~ 0
@@ -110,7 +109,7 @@ det_dat1 <- dat_tbl %>%
 
 # small number of tags (<2% missing lipid data; impute)
 bio_dat <- det_dat1 %>% 
-  select(vemco_code, fl, lipid, stock_group, year) %>%
+  select(vemco_code, fl, wt, lipid, stock_group, year) %>%
   distinct() 
 interp_lipid <- bio_dat %>%
   select(-vemco_code) %>% 
