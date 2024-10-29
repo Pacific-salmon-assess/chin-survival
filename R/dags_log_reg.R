@@ -67,7 +67,6 @@ year [exposure,pos="-0.409,0.158"]
 condition -> lipid
 condition -> size
 date -> condition
-date -> harvest
 date -> surv
 harvest -> surv
 injury -> surv

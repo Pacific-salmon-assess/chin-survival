@@ -652,7 +652,34 @@ m6 <- ulam(
   data=dat_list, chains=4 , log_lik=TRUE, cores = 4,
   control = list(adapt_delta = 0.95)
 )
-precis(m6 , depth=2)
+precis(m6)
+
+m6b <- ulam(
+  alist(
+    # length
+    x ~ dnorm(mu, sigma_x),
+    mu <- alpha_bar + alpha_yr[yr]*sigma_yr2,
+    alpha_yr[yr] ~ dnorm(0, 1),
+    sigma_yr2 ~ exponential(1),
+    
+    # survival
+    y ~ dbinom( 1 , p ) ,
+    logit(p) <- beta_bar + beta_yr[yr]*sigma_yr + beta_x * x + 
+      beta_cyer * cyer + (beta_x_cyer * x * cyer),
+    
+    # priors
+    beta_yr[yr] ~ dnorm(0, 0.5),
+    alpha_bar ~ normal(0, 1.25),
+    beta_bar ~ normal(0, 1.25),
+    c(beta_x, beta_x_cyer) ~ normal(0, 0.5),
+    beta_cyer ~ normal(-0.5, 0.5),
+    sigma_yr ~ exponential(1),
+    sigma_x ~ exponential(1)
+  ),
+  data=dat_list, chains=4 , log_lik=TRUE, cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+precis(m6b , depth=2)
 
 post <- extract.samples(m6)
 prior <- extract.prior(m6)
