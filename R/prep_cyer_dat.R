@@ -4,7 +4,7 @@
 # 1) CTC estimates for exploitation in marine areas (southern BC, Puget Sound; 
 # coastal WA outstanding)
 # 2) In-river harvest estimates for Columbia River summer and fall MUs
-
+# TODO: update with Area G AABM data
 
 library(tidyverse)
 

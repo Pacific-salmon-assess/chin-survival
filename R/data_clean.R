@@ -34,8 +34,7 @@ kept_tags <- dat_tbl %>%
 
 ## CLEAN AND EXPORT FOR MODEL FITTING ------------------------------------------
 
-# TODO: decide whether to split upriver Columbia, lower Columbia and Puget Sound
-# similarly to FR to fit hierarchical CJS
+
 fr_sum_yr <- indicator_key %>% 
   filter(agg_name == "Fraser Summer Year.") %>% 
   pull(stock)

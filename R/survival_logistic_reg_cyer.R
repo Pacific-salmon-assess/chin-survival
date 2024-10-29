@@ -616,7 +616,7 @@ pp <- cowplot::plot_grid(
 ) 
 
 
-## Injury and scale loss effects on survival
+## Injury effects on survival
 # Note scales so that cumsum(delta) * beta = total effect first stage = 0 
 # absorbed in intercept
 pred_inj <- matrix(
