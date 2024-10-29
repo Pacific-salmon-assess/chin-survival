@@ -904,6 +904,29 @@ surv_plot_mean <- dat_tbl_trim$cum_survival_mean %>%
   plot_surv(., show_mcmc = F) + 
   facet_wrap(~stock_group, scales = "free_x", nrow = 2)
 
+# as above but remove beta estimates and subset to high res stocks
+surv_plot_mean_trim <- dat_tbl_trim$cum_survival_mean %>% 
+  bind_rows() %>% 
+  filter(
+    par == "phi",
+    !stock_group %in% c("Cali", "WA_OR", "WCVI")
+  ) %>% 
+  mutate(agg_name_f = NA,
+         segment_name = factor(
+           segment_name, 
+           levels = c(
+             "Release", "WCVI/\nSalish\nSea", "Marine", "NW\nWA", "SW\nWA",
+             "Central\nCA",
+             "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia", 
+             "Puget\nSound", "Lower\nCol.", "Bonneville", "In\nRiver"   
+           )),
+         stock_group = factor(
+           stock_group, levels = c("Up Col.", "Low Col.", "Fraser", "South Puget"))
+  ) %>% 
+  plot_surv(., show_mcmc = F) + 
+  ylim(c(0.5, 1)) +
+  facet_wrap(~stock_group, scales = "free_x", nrow = 2)
+
 
 pdf(here::here("figs", "cjs", "cum_surv_ind_hier_trials.pdf"), 
     height = 6, width = 7.5)
@@ -919,6 +942,12 @@ png(here::here("figs", "cjs", "cum_surv_mean_hier_clean.png"),
     height = 5, width = 9.5, units = "in", res = 200)
 surv_plot_mean
 dev.off()
+
+png(here::here("figs", "cjs", "cum_surv_mean_hier_clean_trim.png"), 
+    height = 5, width = 7.5, units = "in", res = 200)
+surv_plot_mean_trim
+dev.off()
+
 
 saveRDS(
   surv_plot_mean, here::here("figs", "cjs", "mean_cum_surv.rds")
