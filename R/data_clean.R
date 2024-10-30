@@ -98,7 +98,9 @@ det_dat1 <- dat_tbl %>%
     terminal_p = case_when(
       stock_group %in% c("South Puget", "Up Col.", "Low Col.") ~ 1,
       grepl("Fraser", stock_group) ~ 1,
+      # specify years when extensive in-river detections available
       stock_group == "WCVI" & year %in% c("2021", "2022") ~ 1,
+      stock_group == "Cali" & year %in% c("2019", "2021", "2022") ~ 1,
       TRUE ~ 0
     )
   ) %>% 
