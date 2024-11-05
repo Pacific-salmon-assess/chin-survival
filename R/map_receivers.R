@@ -7,27 +7,44 @@ library(rmapshaper)
 library(mapdata)
 library(marmap)
 library(sf)
+library(cowplot)
 
 
-w_can <- map_data("worldHires", region = c("usa", "canada")) %>%
-  filter(long < -110) 
+# w_can <- map_data("worldHires", region = c("usa", "canada")) %>%
+#   filter(long < -110) 
 coast_plotting <- readRDS(here::here("data",
                                      "coast_major_river_sf_plotting.RDS"))
 
 
-
 base_map <- ggplot() +
-  geom_sf(data = coast_plotting, fill = "white", colour = "white") +
+  geom_sf(data = coast_plotting, color = "black", fill = "white") +
   labs(x = "", y = "") +
-  ggsidekick::theme_sleek() +
-  theme(strip.background = element_rect(colour="white", fill="white"),
-        panel.background = element_rect(fill = "grey40"),
+  theme_void() +
+  theme(panel.background = element_rect(colour="black", fill="darkgrey"),
         legend.position = "top", 
-        axis.text = element_blank()) +
+        axis.text = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1)) +
   coord_sf(expand = FALSE)
 
 
 ## DEPLOYMENTS MAP -------------------------------------------------------------
+
+# path to high res shapefiles for bc coast only
+if (Sys.info()['sysname'] == "Windows") {
+  coast_path <- "G:/My Drive/spatial/coastline_shapefiles/High_res_coastline"
+} else {
+  coast_path <- "/Users/cam/Google Drive/spatial/coastline_shapefiles/High_res_coastline"
+}
+
+bc_coast <- st_read(
+  here::here(coast_path, "lpr_000b16a_e_dissolve_NAD83BCAlbers.shp")
+) %>% 
+  st_transform("+proj=longlat +datum=WGS84") %>% 
+  st_make_valid() %>% 
+  st_crop(
+    xmin = -128, xmax = -121.5, ymin = 45.5, ymax = 51.5
+  )
+
 
 chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS"))
 tag_dat <- readRDS(here::here("data", "surv_log_reg_data.rds"))
@@ -35,17 +52,34 @@ tag_dat <- readRDS(here::here("data", "surv_log_reg_data.rds"))
 deploy_pts <- chin %>% 
   filter(acoustic_year %in% tag_dat$vemco_code)
 
-deploy_map <- base_map + 
-  coord_sf(xlim = c(-126.25, -124.5), ylim = c(48.4, 49.25)) + 
+# primary map
+deploy_map <- ggplot() +
+  geom_sf(data = bc_coast, color = "black", fill = "darkgrey") +
+  labs(x = "", y = "") +
+  ggsidekick::theme_sleek() +
+  theme(strip.background = element_rect(colour="white", fill="white"),
+        legend.position = "top") +
+  coord_sf(expand = FALSE) + 
+  coord_sf(xlim = c(-126.2, -124.75), ylim = c(48.25, 49.2)) + 
   geom_jitter(data = deploy_pts, 
-              aes(x = lon, y = lat, fill = as.factor(year)),
-              inherit.aes = FALSE, shape = 21,
-              width = 0.025) +
-  theme(
-    legend.position = "none"
-  )
+              aes(x = lon, y = lat),
+              fill = "red", inherit.aes = FALSE, shape = 21, alpha = 0.6,
+              width = 0.025) 
 # export for use in Rmd
 # saveRDS(deploy_map, here::here("figs", "deploy_map.rds"))
+
+# inset map
+deploy_inset <- base_map +
+  coord_sf(expand = FALSE, ylim = c(45, 51)) +
+  geom_rect(aes(xmin = -126.2, xmax = -124.75, ymin = 48.25, ymax = 49.2), 
+            color = "red", fill = NA, linewidth = 1.2)
+
+png(here::here("figs", "maps", "deploy_map.png"), height = 5, width = 5,
+    units = "in", res = 250)
+ggdraw() + 
+  draw_plot(deploy_map) +
+  draw_plot(deploy_inset, x = 0.68, y = 0.13, width = 0.3, height = 0.3) 
+dev.off()
 
 
 ## RECEIVER LOCATIONS _---------------------------------------------------------
@@ -78,17 +112,17 @@ multi_year_map <- base_map +
   coord_sf(xlim = c(-127.7, -122), ylim = c(46, 51)) + 
   geom_point(data = rec_all2, 
              aes(x = longitude, y = latitude),
-             fill = "red",
+             fill = "blue", alpha = 0.5,
              inherit.aes = FALSE, shape = 21) +
   facet_wrap(~field_season) +
   theme(
     legend.position = "none"
   )
 
-# png(here::here("figs", "multi-year-map.png"), 
-#     height = 5, width = 6.5, units = "in", res = 200)
-# multi_year_map
-# dev.off()
+png(here::here("figs", "maps", "multi-year-map.png"),
+    height = 5, width = 6.5, units = "in", res = 200)
+multi_year_map
+dev.off()
 
 # export for use in Rmd
 # saveRDS(multi_year_map, here::here("figs", "receiver_map1.rds"))
@@ -149,10 +183,12 @@ array_tbl <- array_key %>%
 # specify in-river receivers to drop 
 cali <- rec %>% 
   filter(!region == "bonn",
-         !(region == "in_river" & latitude > 44))
+         !(region == "in_river" & latitude > 44),
+         !(region == "lower_col" & longitude > -123.7))
 fraser <- rec %>% 
   filter(!region == "bonn",
-         !(region == "in_river" & !(project_name %in% c("Instream", "Kintama"))))
+         !(region == "in_river" & !(project_name %in% c("Instream", "Kintama"))),
+         !(region == "lower_col" & longitude > -123.7))
 col <- rec %>% 
   filter(!(region == "in_river" & 
              (latitude < 45 | latitude > 47)))
@@ -160,14 +196,16 @@ puget <- rec %>%
   filter(!region == "bonn",
          !(region == "in_river" & 
              (latitude < 47 | latitude > 48.25)),
-         !(region == "in_river" & longitude > -121.45))
+         !(region == "in_river" & longitude > -12.45),
+         !(region == "lower_col" & longitude > -123.7))
 # wa_or <- rec %>% 
 #   filter(!region == "bonn",
 #          !(region == "in_river"))
 wcvi <- rec %>% 
   filter(!region == "bonn",
          !(region == "in_river" & 
-             (latitude < 49.1 | longitude > -124)))
+             (latitude < 49.1 | longitude > -124)),
+         !(region == "lower_col" & longitude > -123.7))
 rec_dummy_list <- list(cali, fraser, col, puget, col,# wa_or,
                        wcvi)
 
@@ -217,4 +255,10 @@ array_map <- cowplot::plot_grid(
   cali_segs, array_map2, rel_widths = c(0.16, 0.5)
   )
 # export for use in Rmd
-saveRDS(array_map, here::here("figs", "array_map.rds"))
+saveRDS(array_map, here::here("figs", "maps", "array_map.rds"))
+
+
+png(here::here("figs", "maps", "array-map.png"),
+    height = 5, width = 6.5, units = "in", res = 200)
+array_map
+dev.off()
