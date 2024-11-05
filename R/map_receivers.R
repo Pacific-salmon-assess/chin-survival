@@ -8,6 +8,8 @@ library(mapdata)
 library(marmap)
 library(sf)
 library(cowplot)
+library(patchwork)
+library(ggspatial)
 
 
 # w_can <- map_data("worldHires", region = c("usa", "canada")) %>%
@@ -52,34 +54,40 @@ tag_dat <- readRDS(here::here("data", "surv_log_reg_data.rds"))
 deploy_pts <- chin %>% 
   filter(acoustic_year %in% tag_dat$vemco_code)
 
-# primary map
+# primary map (now combined as inset with receiver maps)
 deploy_map <- ggplot() +
   geom_sf(data = bc_coast, color = "black", fill = "darkgrey") +
   labs(x = "", y = "") +
   ggsidekick::theme_sleek() +
-  theme(strip.background = element_rect(colour="white", fill="white"),
-        legend.position = "top") +
   coord_sf(expand = FALSE) + 
-  coord_sf(xlim = c(-126.2, -124.75), ylim = c(48.25, 49.2)) + 
+  coord_sf(xlim = c(-126.1, -125.15), ylim = c(48.5, 49.01)) +
   geom_jitter(data = deploy_pts, 
               aes(x = lon, y = lat),
               fill = "red", inherit.aes = FALSE, shape = 21, alpha = 0.6,
-              width = 0.025) 
+              width = 0.025) +
+  theme_void() +
+  theme(
+    strip.background = element_rect(colour="white", fill="white"),
+    legend.position = "none",
+    axis.text = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1)
+  )
+  # scale_x_continuous(breaks = c(-126, -125.6, -125.2, -124.8)) 
 # export for use in Rmd
 # saveRDS(deploy_map, here::here("figs", "deploy_map.rds"))
 
-# inset map
-deploy_inset <- base_map +
-  coord_sf(expand = FALSE, ylim = c(45, 51)) +
-  geom_rect(aes(xmin = -126.2, xmax = -124.75, ymin = 48.25, ymax = 49.2), 
-            color = "red", fill = NA, linewidth = 1.2)
-
-png(here::here("figs", "maps", "deploy_map.png"), height = 5, width = 5,
-    units = "in", res = 250)
-ggdraw() + 
-  draw_plot(deploy_map) +
-  draw_plot(deploy_inset, x = 0.68, y = 0.13, width = 0.3, height = 0.3) 
-dev.off()
+# inset map (defunct after combining with receiver locations)
+# deploy_inset <- base_map +
+#   coord_sf(expand = FALSE, ylim = c(45, 51)) +
+#   geom_rect(aes(xmin = -126.2, xmax = -124.75, ymin = 48.25, ymax = 49.2), 
+#             color = "red", fill = NA, linewidth = 1.2)
+# 
+# png(here::here("figs", "maps", "deploy_map.png"), height = 5, width = 5,
+#     units = "in", res = 250)
+# ggdraw() + 
+#   draw_plot(deploy_map) +
+#   draw_plot(deploy_inset, x = 0.68, y = 0.175, width = 0.3, height = 0.3) 
+# dev.off()
 
 
 ## RECEIVER LOCATIONS _---------------------------------------------------------
@@ -107,25 +115,34 @@ rec_all2 <- readRDS(here::here("data",
     !field_season == "2024"
   )
 
-
-multi_year_map <- base_map + 
-  coord_sf(xlim = c(-127.7, -122), ylim = c(46, 51)) + 
+rect_data <- data.frame(xmin = -126.05, xmax = -125.2, ymin = 48.45, ymax = 49)
+multi_year_map <- ggplot() +
+  geom_sf(data = coast_plotting, color = "black", fill = "white") +
+  labs(x = "", y = "") +
+  theme_void() +
+  geom_rect(data = rect_data,
+            aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            inherit.aes = FALSE,  
+            color = "red", fill = NA) + 
+  coord_sf(xlim = c(-127.7, -122), ylim = c(46, 51), expand = FALSE) +
   geom_point(data = rec_all2, 
              aes(x = longitude, y = latitude),
              fill = "blue", alpha = 0.5,
              inherit.aes = FALSE, shape = 21) +
   facet_wrap(~field_season) +
   theme(
-    legend.position = "none"
+    legend.position = "none",
+    panel.background = element_rect(colour="black", fill="darkgrey"),
+    axis.text = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1)
   )
 
 png(here::here("figs", "maps", "multi-year-map.png"),
     height = 5, width = 6.5, units = "in", res = 200)
-multi_year_map
+ggdraw() + 
+  draw_plot(multi_year_map) +
+  draw_plot(deploy_map, x = 0.64, y = 0.1, width = 0.29, height = 0.29) 
 dev.off()
-
-# export for use in Rmd
-# saveRDS(multi_year_map, here::here("figs", "receiver_map1.rds"))
 
 
 # import PIT detections to include in receiver map
@@ -248,14 +265,12 @@ seg_list <- purrr::map(
 )
 
 array_map2 <- cowplot::plot_grid(
-  seg_list[[1]], seg_list[[2]], seg_list[[3]], seg_list[[4]], 
-  seg_list[[5]],  ncol = 3
+  seg_list[[2]], seg_list[[4]], 
+  seg_list[[5]], seg_list[[1]], seg_list[[3]],   ncol = 3
   )
 array_map <- cowplot::plot_grid(
   cali_segs, array_map2, rel_widths = c(0.16, 0.5)
   )
-# export for use in Rmd
-saveRDS(array_map, here::here("figs", "maps", "array_map.rds"))
 
 
 png(here::here("figs", "maps", "array-map.png"),
