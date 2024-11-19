@@ -93,7 +93,7 @@ m4 <- ulam(
     matrix[4, stk]:z_stk ~ normal(0, 0.5),
     # fixed priors
     c(alpha_fl, alpha_lipid) ~ normal(0, 0.5),
-    c(beta_df, beta_dl) ~ normal(0.1, 0.5),
+    c(beta_df, beta_dl) ~ normal(0.2, 0.5),
     Rho ~ lkj_corr(2),
     Sigma ~ exponential(1),
     sigma_day ~ exponential(1),
@@ -105,10 +105,11 @@ m4 <- ulam(
 
     surv_bar ~ normal(0, 1.25),
     beta_term[term_p] ~ normal(0, 0.5),
-    c(beta_ds, beta_fs, beta_ls, beta_is, beta_ds_cs) ~ normal(0, 0.5),
-    # strong rationale for negative effect of exploitation; assign weakly 
-    # informative negative prior
-    beta_cs ~ normal(0.25, 0.5),
+    c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
+    # strong rationale for negative effect of exploitation and pos effect of 
+    # interaction; assign weakly informative priors
+    c(beta_is, beta_cs) ~ normal(-0.2, 0.5),
+    beta_ds_cs ~ normal(0.2, 0.5),
     
     # constraints on ordinal effects of injury
     vector[4]: delta_inj <<- append_row(0, delta),
@@ -134,18 +135,22 @@ prior <- extract.prior(m4)
 day_seq <- c(-2, 0, 2)
 cyer_seq <- seq(-1.5, 4.5, length = 40)
 preds <- vector(mode = "list", length = length(day_seq))
+prior_sbar <- rnorm(1000, 0, 1.25)
+prior_term <- rnorm(1000, 0, 0.5)
+prior_ds <- rnorm(1000, 0, 0.5)
+prior_cs <- rnorm(1000, -0.25, 0.5)
+prior_ds_cs <- rnorm(1000, 0.25, 0.5)
 
-dd <- rnorm(1000, -0.5, 0.5)
 
 for(i in seq_along(day_seq)) {
   pred_x <- sapply(
     cyer_seq, 
     function (x) {
       inv_logit(
-        prior$surv_bar +
-          prior$beta_term[ , 2] + prior$beta_ds * day_seq[i] +
-          dd * x + 
-          (prior$beta_ds_cs * day_seq[i] * x)
+        prior_sbar +
+          prior_term + prior_ds * day_seq[i] +
+          prior_cs * x + 
+          (prior_ds_cs * day_seq[i] * x)
       )
     }
   )
