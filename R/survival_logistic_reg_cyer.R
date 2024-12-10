@@ -669,7 +669,7 @@ diff_hist <- data.frame(
                  bins = 50, fill = "#7570b3") +
   geom_vline(aes(xintercept = 0), lty = 2 , colour = "black", linewidth = 1) +
   ggsidekick::theme_sleek() +
-  labs(x = "Difference in Survival Probability Between Max/Min Scores") +
+  labs(x = "Difference in Survival Prob.\nBetween Max/Min Scores") +
   theme(
     axis.title.y = element_blank()
   ) 
