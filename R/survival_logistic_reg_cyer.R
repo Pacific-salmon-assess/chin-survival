@@ -127,7 +127,6 @@ saveRDS(m4, here::here("data", "model_outputs", "hier_binomial_cyer.rds"))
 m4 <- readRDS(here::here("data", "model_outputs", "hier_binomial_cyer.rds"))
 
 
-
 # PRIOR PREDICTIONS ------------------------------------------------------------
 
 prior <- extract.prior(m4)
