@@ -416,36 +416,72 @@ m4 <- ulam(
   alist(
     # date
     samp_date ~ dnorm(mu_date, sigma_date),
-    mu_date <- date_bar + alpha_yr[yr, 1],
+    mu_date <- alpha_yr[yr, 1],
     # covariance among size and lipid
     c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho_sl, Sigma_sl),
-    mu_size <- size_bar + alpha_yr[yr, 2] + beta_df * samp_date,
-    mu_lipid <- lipid_bar + alpha_yr[yr, 2] + beta_dl * samp_date,
+    mu_size <- alpha_yr[yr, 2] + beta_df * samp_date,
+    mu_lipid <- alpha_yr[yr, 3] + beta_dl * samp_date,
     # survival
     surv ~ dbinom(1 , p) ,
-    logit(p) <- surv_bar + alpha_yr[yr, 3] +
+    logit(p) <- surv_bar + alpha_yr[yr, 4] +
       beta_ds * samp_date +
       beta_fs * size +
       beta_ls * lipid,
     # adaptive priors
-    transpars> matrix[yr,3]:alpha_yr <-
+    transpars> matrix[yr, 4]:alpha_yr <-
       compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
-    matrix[3, yr]:z_yr ~ normal(0 , 1),
+    matrix[4, yr]:z_yr ~ normal(0 , 1),
     # priors
     c(beta_df, beta_dl) ~ normal(0, 1),
     c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
-    c(date_bar, size_bar, lipid_bar, surv_bar) ~ normal(0, 1.5),
+    c(surv_bar) ~ normal(0, 1.5),
     Rho_sl ~ lkj_corr( 2 ),
-    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
-    vector[3]:sigma_yr ~ exponential(1),
+    cholesky_factor_corr[4]:L_Rho_yr ~ lkj_corr_cholesky(2),
+    vector[4]:sigma_yr ~ exponential(1),
     c(Sigma_sl, sigma_date) ~ exponential(1),
     # compute ordinary correlation matrixes from Cholesky factors
-    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr)
+    gq> matrix[4, 4]:Rho_yr <<- Chol_to_Corr(L_Rho_yr)
   ),
   data=dat_list, chains=4 , cores = 4,
   control = list(adapt_delta = 0.95)
 )
+precis(m4, depth = 2)
 
+# as above but ignores covariance between lipid and size
+m4b <- ulam(
+  alist(
+    # date
+    samp_date ~ dnorm(mu_date, sigma_date),
+    mu_date <- alpha_yr[yr, 1],
+    # covariance among size and lipid
+    size ~ dnorm(mu_size, sigma_size),
+    mu_size <- alpha_yr[yr, 2] + beta_df * samp_date,
+    lipid ~ dnorm(mu_lipid, sigma_lipid),
+    mu_lipid <- alpha_yr[yr, 3] + beta_dl * samp_date,
+    # survival
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- surv_bar + alpha_yr[yr, 4] +
+      beta_ds * samp_date +
+      beta_fs * size +
+      beta_ls * lipid,
+    # adaptive priors
+    transpars> matrix[yr, 4]:alpha_yr <-
+      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
+    matrix[4, yr]:z_yr ~ normal(0 , 1),
+    # priors
+    c(beta_df, beta_dl) ~ normal(0, 1),
+    c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
+    c(surv_bar) ~ normal(0, 1.5),
+    cholesky_factor_corr[4]:L_Rho_yr ~ lkj_corr_cholesky(2),
+    vector[4]:sigma_yr ~ exponential(1),
+    c(sigma_date, sigma_size, sigma_lipid) ~ exponential(1),
+    # compute ordinary correlation matrixes from Cholesky factors
+    gq> matrix[4, 4]:Rho_yr <<- Chol_to_Corr(L_Rho_yr)
+  ),
+  data=dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+precis(m4b, depth = 2)
 
 # sim doesn't work with large number of variables so calc manually accounting 
 # for covariance (excludes year effects)
@@ -654,6 +690,7 @@ m6 <- ulam(
 )
 precis(m6)
 
+# equivalent model with informative prior
 m6b <- ulam(
   alist(
     # length
@@ -719,3 +756,138 @@ bind_rows(preds) %>%
   ) +
   ggsidekick::theme_sleek() +
   facet_wrap(~x)
+
+
+## EXAMPLE 7 -------------------------------------------------------------------
+
+# model where stock is also present as random intercept, detection probability
+# influences apparent survival,  and is confounded with stock/year; otherwise 
+# same as model 4
+
+set.seed(73)
+
+pop <- sample(c("a", "b", "c", "d", "e"), size = 1000, replace = T)
+
+## correlated annual intercepts for condition, date, survival
+Rho <- diag(3)
+Rho[upper.tri(Rho)] <- c(0.2, 0.7, 0.8)
+Rho[lower.tri(Rho)] <- t(Rho)[lower.tri(Rho)]
+mu_yr <- c(0, 0, 0) #average effects both centered on zero
+yr_sigmas <- c(0.4, 0.2, 0.3)
+Sigma <- diag(yr_sigmas) %*% Rho %*% diag(yr_sigmas) 
+yr_ints <- MASS::mvrnorm(n_years, mu_yr, Sigma)
+alpha_yd <- yr_ints[ , 1]
+alpha_yc <- yr_ints[ , 2]
+alpha_ys <- yr_ints[ , 3]
+
+# detection probability qq
+det_key <- expand.grid(
+  yr = seq(1, 5, by = 1),
+  pop = unique(pop)
+) %>% 
+  mutate(
+    pop_n = as.numeric(as.factor(pop)),
+    qq = case_when(
+      yr < 3 & pop_n < 3 ~ 0,
+      yr == "4" & pop_n == "3" ~ 0,
+      TRUE ~ 1
+    )
+  )
+
+dat <- data.frame(
+  yr = yr,
+  pop = pop
+) %>% 
+  mutate(
+    samp_date = NA,
+    cond = NA,
+    size = NA,
+    lipid = NA
+  ) %>% 
+  left_join(
+    ., det_key, by = c("yr", "pop")
+  )
+
+# simulate covariate data
+beta_dc <- 0.7
+beta_cl <- beta_cf <- 0.6
+for (i in seq_along(dat$yr)) { 
+  dat$samp_date[i] <- rnorm(1, alpha_yd[yr[i]], 1)
+  dat$cond[i] <- rnorm(1, alpha_yc[yr[i]] + beta_dc * dat$samp_date[i], 1)
+  dat$size[i] <- rnorm(1, beta_cf * dat$cond[i], 1)
+  dat$lipid[i] <- rnorm(1, beta_cl * dat$cond[i], 1)
+  dat$alpha_ys[i] <- alpha_ys[yr[i]]
+}
+
+# random intercepts for pop survival 
+alpha_ps <- rnorm(length(unique(pop)), 0, 1)
+for (i in seq_along(dat$pop)) {
+  dat$alpha_ps[i] <- alpha_ps[dat$pop_n[i]]
+}
+
+
+surv_bar <- -1  # Intercept
+beta_ds <- 0.5   # date effect
+beta_fs <- 0.25 # fork length
+beta_ls <- 1 # lipid
+beta_qs <- 0.5 # detection probability effect
+eta <- surv_bar + dat$alpha_ys + dat$alpha_ps +
+  beta_ds * dat$samp_date +
+  beta_fs * dat$size +
+  beta_ls * dat$lipid + 
+  beta_qs * dat$qq
+p <- boot::inv.logit(eta) # Probability of survival
+dat$surv <- rbinom(n, 1, p)  # Binary outcome
+
+dat_list <- list(
+  samp_date = dat$samp_date,
+  yr = dat$yr, 
+  size = dat$size,
+  lipid = dat$lipid,
+  surv = dat$surv,
+  pop_n = dat$pop_n,
+  qq = dat$qq
+)
+
+m8 <- ulam(
+  alist(
+    # date
+    samp_date ~ dnorm(mu_date, sigma_date),
+    mu_date <- alpha_yr[yr, 1],
+    # covariance among size and lipid
+    c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho_sl, Sigma_sl),
+    mu_size <- alpha_yr[yr, 2] + beta_df * samp_date,
+    mu_lipid <- alpha_yr[yr, 3] + beta_dl * samp_date,
+    # survival
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- surv_bar + alpha_yr[yr, 4] + alpha_pop[pop_n] * sigma_pop +
+      beta_ds * samp_date +
+      beta_fs * size +
+      beta_ls * lipid +
+      beta_qs * qq,
+    # adaptive priors
+    transpars> matrix[yr, 4]:alpha_yr <-
+      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
+    matrix[4, yr]:z_yr ~ normal(0 , 1),
+    # priors
+    alpha_pop[pop_n] ~ dnorm(0, 1),
+    c(beta_df, beta_dl) ~ normal(0, 1),
+    c(beta_ds, beta_fs, beta_ls, beta_qs) ~ normal(0, 0.5),
+    c(surv_bar) ~ normal(0, 1.5),
+    Rho_sl ~ lkj_corr( 2 ),
+    cholesky_factor_corr[4]:L_Rho_yr ~ lkj_corr_cholesky(2),
+    vector[4]:sigma_yr ~ exponential(1),
+    c(Sigma_sl, sigma_date, sigma_pop) ~ exponential(1),
+    # compute ordinary correlation matrixes from Cholesky factors
+    gq> matrix[4, 4]:Rho_yr <<- Chol_to_Corr(L_Rho_yr)
+  ),
+  data=dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+precis(m8, depth = 2)
+
+
+mu <- alpha_bar + alpha_yr[yr]*sigma_yr2
+alpha_yr[yr] ~ dnorm(0, 1)
+sigma_yr2 ~ exponential(1)
+
