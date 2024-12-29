@@ -55,15 +55,15 @@ adjustmentSets(dag_full, exposure = "I", outcome = "S")
 online_dag <- dagitty('
 dag {
 "apparent survival" [outcome,pos="0.665,1.409"]
-"detection probability" [exposure,pos="-0.735,0.531"]
-"fork length" [exposure,pos="0.030,0.851"]
-"tagging date" [exposure,pos="-0.696,0.751"]
+"detection probability" [pos="-0.770,0.090"]
+"fork length" [exposure,pos="0.106,0.772"]
+"tagging date" [exposure,pos="-0.713,1.122"]
 condition [latent,pos="-0.103,0.591"]
 exploitation [exposure,pos="0.307,0.102"]
 injury [exposure,pos="-0.012,1.599"]
 lipid [exposure,pos="0.378,0.688"]
-stock [exposure,pos="-0.876,1.109"]
-year [exposure,pos="-0.409,0.158"]
+stock [adjusted,pos="-0.869,0.298"]
+year [adjusted,pos="-0.397,-0.024"]
 "detection probability" -> "apparent survival"
 "fork length" -> "apparent survival"
 "tagging date" -> "apparent survival"
@@ -74,10 +74,14 @@ exploitation -> "apparent survival"
 injury -> "apparent survival"
 lipid -> "apparent survival"
 stock -> "apparent survival"
+stock -> "detection probability"
 stock -> "tagging date"
 stock -> condition
+stock -> exploitation
 year -> "apparent survival"
+year -> "detection probability"
 year -> condition
+year -> exploitation
 }
 ')
 

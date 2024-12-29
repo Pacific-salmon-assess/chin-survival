@@ -760,6 +760,188 @@ bind_rows(preds) %>%
 
 ## EXAMPLE 7 -------------------------------------------------------------------
 
+library(glmmTMB)
+
+set.seed(73)
+
+pop_int <- data.frame(
+  pop = c("a", "b", "c", "d", "e")
+) %>% 
+  mutate(
+    alpha = rnorm(length(unique(pop)), 0, 0.5)
+  )
+surv_bar <- -1  # Intercept
+beta_qs <- 0.7 # detection probability effect
+
+
+# detection probability qq
+det_key <- expand.grid(
+  # yr = seq(1, 5, by = 1),
+  pop = c("a", "b", "c", "d", "e")
+) %>% 
+  mutate(
+    pop_n = as.numeric(as.factor(pop)),
+    qq = case_when(
+      pop_n < 3 ~ 0,
+      TRUE ~ 1
+    ), 
+    qq_alpha = ifelse(qq == "0", 0, beta_qs)
+  ) 
+
+dat <- data.frame(
+  pop = sample(c("a", "b", "c", "d", "e"), size = 1000, replace = T)
+) %>% 
+  left_join(., det_key, by = "pop") %>% 
+  left_join(., pop_int, by = "pop") %>% 
+  mutate(
+    #alternative random detection probability
+    qq = as.factor(qq),
+    qq2 = sample(c(0, 1), size = 1000, replace = T) %>% 
+      as.factor(),
+    qq2_alpha = ifelse(qq2 == "0", 0, beta_qs)
+  )
+
+nsim <- 100
+sim_list <- vector(mode = "list", length = 100)
+
+
+for (i in 1:30) {
+  eta <- surv_bar + dat$qq_alpha + dat$alpha
+  p <- boot::inv.logit(eta) # Probability of survival
+  dat$surv <- rbinom(nrow(dat), 1, p) 
+  
+  # as above but for random det prob effect
+  eta2 <-  surv_bar + dat$qq2_alpha + dat$alpha
+  p2 <- boot::inv.logit(eta2) # Probability of survival
+  dat$surv2 <- rbinom(nrow(dat), 1, p2) 
+  
+  
+  fit1 <- glmmTMB(
+    surv ~ qq + (1 | pop),
+    data = dat,
+    family = binomial()
+  )
+  fes <- fixef(fit1)$cond 
+  ris <- ranef(fit1)$cond %>% as.data.frame()
+  d1 <- data.frame(
+    par = c("int", "qq", paste("ri_", seq(1, 5, by = 1), sep = "")),
+    est = c(fes, ris[ , 1])
+  ) %>% 
+    mutate(
+      model = "1"
+    )
+  fit1b <- glmmTMB(
+    surv ~ qq, #+ (1 | pop),
+    data = dat,
+    family = binomial()
+  )
+  fes1b <- fixef(fit1b)$cond 
+  d1b <- data.frame(
+    par = c("int", "qq"),
+    est = c(fes1b)
+  ) %>% 
+    mutate(
+      model = "1b"
+    )
+  
+  
+  fit2 <- glmmTMB(
+    surv2 ~ qq2 + (1 | pop),
+    data = dat,
+    family = binomial()
+  )
+  fes2 <- fixef(fit2)$cond 
+  ris2 <- ranef(fit2)$cond %>% as.data.frame()
+  d2 <- data.frame(
+    par = c("int", "qq", paste("ri_", seq(1, 5, by = 1), sep = "")),
+    est = c(fes2, ris2[ , 1])
+  ) %>% 
+    mutate(
+      model = "2"
+    )
+  fit2b <- glmmTMB(
+    surv2 ~ qq2, #+ (1 | pop),
+    data = dat,
+    family = binomial()
+  )
+  fes2b <- fixef(fit2b)$cond 
+  d2b <- data.frame(
+    par = c("int", "qq"),
+    est = c(fes2b)
+  ) %>% 
+    mutate(
+      model = "2b"
+    )
+  
+  sim_list[[i]] <- list(d1, d1b, d2, d2b) %>% bind_rows()
+}
+
+sim_dat <- sim_list[1:20] %>% bind_rows()
+true_dat <- data.frame(
+  par = c("int", "qq", paste("ri_", seq(1, 5, by = 1), sep = "")),
+  est = c(-1, 0.7, pop_int$alpha)
+) 
+
+ggplot() +
+  geom_boxplot(
+    data = sim_dat, aes(x = par, y = est)
+  ) +
+  geom_point(
+    data = true_dat, aes(x = par, y = est), color = "red",
+  ) +
+  facet_wrap(
+    ~ model
+  )
+# parameter estimates are identical between b and a, estimates are marginally
+# more accurate in 2 than 1, but effects are modest
+
+
+## Bayesian version of above to answer whether including submodel changes
+# parameter estimates or not
+dat_list <- list(
+  surv = dat$surv,
+  pop_n = dat$pop_n,
+  qq = as.numeric(dat$qq) - 1,
+  qq_n = as.numeric(dat$qq)
+)
+
+m8a <- ulam(
+  alist(
+    # detection probability
+    qq ~ dbinom(1, p_qq),
+    logit(p_qq) <- alpha_qq_pop[pop_n],
+    # survival
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- alpha_pop[pop_n] * sigma_pop + alpha_qq[qq_n],
+    # adaptive priors
+    # priors
+    alpha_pop[pop_n] ~ dnorm(0, 0.5),
+    alpha_qq_pop[pop_n] ~ dnorm(0, 0.5),
+    alpha_qq[qq_n] ~ normal(0, 1),
+    sigma_pop ~ exponential(1)
+  ),
+  data=dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+m8b <- ulam(
+  alist(
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- alpha_pop[pop_n] * sigma_pop + alpha_qq[qq_n],
+    # priors
+    alpha_pop[pop_n] ~ dnorm(0, 0.5),
+    alpha_qq[qq_n] ~ normal(0, 1),
+    sigma_pop ~ exponential(1)
+  ),
+  data=dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+precis(m8a, depth = 2)
+precis(m8b, depth = 2)
+# inclusion of submodel doesn't impact estimates
+
+
+
 # model where stock is also present as random intercept, detection probability
 # influences apparent survival,  and is confounded with stock/year; otherwise 
 # same as model 4
@@ -767,6 +949,13 @@ bind_rows(preds) %>%
 set.seed(73)
 
 pop <- sample(c("a", "b", "c", "d", "e"), size = 1000, replace = T)
+pop_int <- data.frame(
+  pop = unique(pop) %>% sort()
+) %>% 
+  mutate(
+    alpha = rnorm(length(unique(pop)), 0, 0.5)
+  )
+
 
 ## correlated annual intercepts for condition, date, survival
 Rho <- diag(3)
@@ -774,7 +963,7 @@ Rho[upper.tri(Rho)] <- c(0.2, 0.7, 0.8)
 Rho[lower.tri(Rho)] <- t(Rho)[lower.tri(Rho)]
 mu_yr <- c(0, 0, 0) #average effects both centered on zero
 yr_sigmas <- c(0.4, 0.2, 0.3)
-Sigma <- diag(yr_sigmas) %*% Rho %*% diag(yr_sigmas) 
+Sigma <- diag(yr_sigmas) %*% Rho %*% diag(yr_sigmas)
 yr_ints <- MASS::mvrnorm(n_years, mu_yr, Sigma)
 alpha_yd <- yr_ints[ , 1]
 alpha_yc <- yr_ints[ , 2]
@@ -782,7 +971,7 @@ alpha_ys <- yr_ints[ , 3]
 
 # detection probability qq
 det_key <- expand.grid(
-  yr = seq(1, 5, by = 1),
+  # yr = seq(1, 5, by = 1),
   pop = unique(pop)
 ) %>% 
   mutate(
@@ -792,18 +981,18 @@ det_key <- expand.grid(
       yr == "4" & pop_n == "3" ~ 0,
       TRUE ~ 1
     )
-  )
+  ) 
 
 dat <- data.frame(
   yr = yr,
   pop = pop
-) %>% 
+) %>%
   mutate(
     samp_date = NA,
     cond = NA,
     size = NA,
     lipid = NA
-  ) %>% 
+  ) %>%
   left_join(
     ., det_key, by = c("yr", "pop")
   )
