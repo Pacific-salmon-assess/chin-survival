@@ -83,13 +83,13 @@ stock_supp_table <- chin2 %>%
     Stock = agg_name, Population = stock, CTC_Indicator = ctc_name
   ) %>% 
   tally() 
-write.csv(
-  stock_supp_table,
-  here::here(
-    "data", "stock_supp_table.csv"
-  ),
-  row.names = FALSE
-)
+# write.csv(
+#   stock_supp_table,
+#   here::here(
+#     "data", "stock_supp_table.csv"
+#   ),
+#   row.names = FALSE
+# )
 
 
 ## Logistic Regression Dataset

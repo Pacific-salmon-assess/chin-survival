@@ -168,6 +168,11 @@ rec <- rec_all  %>%
     # chinTagging/prep_detection_histories
     region = case_when(
       grepl("BO", station_name) ~ "bonn",
+      # divide upstream and downstream fraser
+      (region == "fraser" | (region == "river" & latitude > 49)) & 
+        longitude > -122.5 ~ "fraser_2",
+      (region == "fraser" | (region == "river" & latitude > 49)) & 
+        (longitude < -122.5 & longitude > -123) ~ "fraser_1",
       (region %in% c("river", "columbia", "swwa_or") | marine == "no") & 
         (longitude > -124.15 & longitude < -121.94 & 
            latitude < 46.3 & latitude > 45) ~ "lower_col",
@@ -201,20 +206,23 @@ array_tbl <- array_key %>%
 cali <- rec %>% 
   filter(!region == "bonn",
          !(region == "in_river" & latitude > 44),
-         !(region == "lower_col" & longitude > -123.7))
+         !(region == "lower_col" & longitude > -123.7),
+         !grepl("fraser", region))
 fraser <- rec %>% 
   filter(!region == "bonn",
-         !(region == "in_river" & !(project_name %in% c("Instream", "Kintama"))),
+         !(region == "in_river" & !(project_name %in% c("Haro", "Instream", "Kintama"))),
          !(region == "lower_col" & longitude > -123.7))
 col <- rec %>% 
   filter(!(region == "in_river" & 
-             (latitude < 45 | latitude > 47)))
+             (latitude < 45 | latitude > 47)),
+         !grepl("fraser", region))
 puget <- rec %>% 
   filter(!region == "bonn",
          !(region == "in_river" & 
              (latitude < 47 | latitude > 48.25)),
          !(region == "in_river" & longitude > -12.45),
-         !(region == "lower_col" & longitude > -123.7))
+         !(region == "lower_col" & longitude > -123.7),
+         !grepl("fraser", region))
 # wa_or <- rec %>% 
 #   filter(!region == "bonn",
 #          !(region == "in_river"))
@@ -222,7 +230,8 @@ wcvi <- rec %>%
   filter(!region == "bonn",
          !(region == "in_river" & 
              (latitude < 49.1 | longitude > -124)),
-         !(region == "lower_col" & longitude > -123.7))
+         !(region == "lower_col" & longitude > -123.7),
+         !grepl("fraser", region))
 rec_dummy_list <- list(cali, fraser, col, puget, col,# wa_or,
                        wcvi)
 
