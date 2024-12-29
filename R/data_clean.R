@@ -34,7 +34,6 @@ kept_tags <- dat_tbl %>%
 
 ## CLEAN AND EXPORT FOR MODEL FITTING ------------------------------------------
 
-
 fr_sum_yr <- indicator_key %>% 
   filter(agg_name == "Fraser Summer Year.") %>% 
   pull(stock)
@@ -45,7 +44,7 @@ fr_spr_yr <- indicator_key %>%
 chin2 <- left_join(
   chin, 
   indicator_key %>% 
-    select(stock, ctc_indicator) %>% 
+    select(stock, ctc_indicator, ctc_name) %>% 
     distinct(),
   by = "stock") %>% 
   mutate(
@@ -57,6 +56,7 @@ chin2 <- left_join(
       acoustic_year %in% c("7719_2019", "7701_2019", "7692_2019", "7691_2019",
                            "7692_2019", "7690_2019") ~ "Fraser Sum. 4.1",
       acoustic_year %in% c("7696_2019", "5353_2022") ~ "Fraser Fall",
+      grepl("CAPILANO", stock) ~ "ECVI",
       TRUE ~ agg_name
     ),
     # define injury scores as per SJ's analyses
@@ -74,6 +74,22 @@ chin2 <- left_join(
 agg_names <- chin2 %>%
   filter(grepl("Fraser", agg_name)) %>%
   select(vemco_code = acoustic_year, agg = agg_name)
+
+
+# export supplementary table summarizing stock breakdown
+stock_supp_table <- chin2 %>% 
+  filter(stock_prob > 80) %>% 
+  group_by(
+    Stock = agg_name, Population = stock, CTC_Indicator = ctc_name
+  ) %>% 
+  tally() 
+write.csv(
+  stock_supp_table,
+  here::here(
+    "data", "stock_supp_table.csv"
+  ),
+  row.names = FALSE
+)
 
 
 ## Logistic Regression Dataset
