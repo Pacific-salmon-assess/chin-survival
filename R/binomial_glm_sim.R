@@ -447,6 +447,8 @@ m4 <- ulam(
 )
 precis(m4, depth = 2)
 
+
+
 # as above but ignores covariance between lipid and size
 m4b <- ulam(
   alist(
@@ -472,7 +474,7 @@ m4b <- ulam(
     c(beta_df, beta_dl) ~ normal(0, 1),
     c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
     c(surv_bar) ~ normal(0, 1.5),
-    cholesky_factor_corr[4]:L_Rho_yr ~ lkj_corr_cholesky(2),
+    cholesky_factor_corr[4]:L_Rho_yr ~ lkj_corr_cholesky(1.5),
     vector[4]:sigma_yr ~ exponential(1),
     c(sigma_date, sigma_size, sigma_lipid) ~ exponential(1),
     # compute ordinary correlation matrixes from Cholesky factors
@@ -941,142 +943,252 @@ precis(m8b, depth = 2)
 # inclusion of submodel doesn't impact estimates
 
 
+## FULL VERSION ----------------------------------------------------------------
 
-# model where stock is also present as random intercept, detection probability
-# influences apparent survival,  and is confounded with stock/year; otherwise 
-# same as model 4
+# see data generation daggity for details
 
-set.seed(73)
+set.seed(123)
 
-pop <- sample(c("a", "b", "c", "d", "e"), size = 1000, replace = T)
-pop_int <- data.frame(
-  pop = unique(pop) %>% sort()
-) %>% 
-  mutate(
-    alpha = rnorm(length(unique(pop)), 0, 0.5)
-  )
+## stock and year covary with detection probability and CYER
+n_pops <- 5
+yrs <- seq(1, 5, by = 1)
+pops <- c("a", "b", "c", "d", "e")
 
+# CYER from MVN to represent covariance among stocks with different means
+cyer_yr_rho <- 0.5 
+cyer_mu_yr <- runif(n_pops, 0.05, 0.6) #range of mean stock ERs
+cyer_yr_sigmas <- rep(0.3, n_pops)
+cyer_Rho <- diag(1, 5) + matrix(cyer_yr_rho, 5, 5) - diag(cyer_yr_rho, 5)
+cyer_Sigma <- diag(cyer_yr_sigmas) %*% Rho %*% diag(cyer_yr_sigmas) 
+cyer_mat <- MASS::mvrnorm(n_years, log(cyer_mu_yr), cyer_Sigma) %>% exp()
+colnames(cyer_mat) <- pops
+cyer_dat <- as.data.frame(cyer_mat) %>%
+  mutate(yr = yrs) %>% 
+  pivot_longer(cols = a:e, names_to = "pop", values_to = "cyer") 
+  
 
-## correlated annual intercepts for condition, date, survival
-Rho <- diag(3)
-Rho[upper.tri(Rho)] <- c(0.2, 0.7, 0.8)
-Rho[lower.tri(Rho)] <- t(Rho)[lower.tri(Rho)]
-mu_yr <- c(0, 0, 0) #average effects both centered on zero
-yr_sigmas <- c(0.4, 0.2, 0.3)
-Sigma <- diag(yr_sigmas) %*% Rho %*% diag(yr_sigmas)
-yr_ints <- MASS::mvrnorm(n_years, mu_yr, Sigma)
-alpha_yd <- yr_ints[ , 1]
-alpha_yc <- yr_ints[ , 2]
-alpha_ys <- yr_ints[ , 3]
-
-# detection probability qq
-det_key <- expand.grid(
-  # yr = seq(1, 5, by = 1),
-  pop = unique(pop)
+# detection probability varies among years and pops
+yr_pop_key <- expand.grid(
+  yr = seq(1, 5, by = 1),
+  pop = c("a", "b", "c", "d", "e")
 ) %>% 
   mutate(
     pop_n = as.numeric(as.factor(pop)),
-    qq = case_when(
-      yr < 3 & pop_n < 3 ~ 0,
-      yr == "4" & pop_n == "3" ~ 0,
+    det = case_when(
+      pop_n < 3 ~ 0,
+      pop_n < 3 & yr %in% c(1, 5) ~ 1,
       TRUE ~ 1
     )
-  ) 
+  ) %>% 
+  left_join(., cyer_dat, by = c("pop", "yr"))
 
+
+
+# yr intercepts (condition, survival)
+yr_rho <- 0.6 
+yr_mu <- c(0, 0) #average effects both centered on zero
+yr_sigmas <- c(0.4, 0.2)
+yr_Rho <- matrix(c(1, yr_rho, yr_rho, 1), nrow = 2)
+yr_Sigma <- diag(yr_sigmas) %*% yr_Rho %*% diag(yr_sigmas) 
+yr_ints <- MASS::mvrnorm(n_years, yr_mu, yr_Sigma)
+alpha_yr_cond <- yr_ints[ , 1]
+alpha_yr_surv <- yr_ints[ , 2]
+
+# pop intercepts (condition, date, survival)
+pop_rho <- 0.3 
+pop_mu <- c(0, 0, 0) #average effects both centered on zero
+pop_sigmas <- c(0.4, 0.5, 0.5)
+pop_Rho <- diag(1, 3) + matrix(pop_rho, 3, 3) - diag(pop_rho, 3)
+pop_Sigma <- diag(pop_sigmas) %*% pop_Rho %*% diag(pop_sigmas) 
+pop_ints <- MASS::mvrnorm(n_pops, pop_mu, pop_Sigma)
+
+alpha_pop_cond <- pop_ints[ , 1]
+alpha_pop_date <- pop_ints[ , 2]
+alpha_pop_surv <- pop_ints[ , 3]
+
+
+## empty dataframe
 dat <- data.frame(
-  yr = yr,
-  pop = pop
-) %>%
+  yr = sample(yr, n, replace = TRUE), 
+  pop = sample(pops, n, replace =  TRUE)
+) %>% 
+  left_join(
+    ., yr_pop_key, by = c("yr", "pop")
+  ) %>% 
   mutate(
+    #scale ER data
+    cyer = scale(cyer) %>% as.numeric(),
     samp_date = NA,
     cond = NA,
     size = NA,
     lipid = NA
-  ) %>%
-  left_join(
-    ., det_key, by = c("yr", "pop")
-  )
+  ) 
 
-# simulate covariate data
+# simulate continuous covariates
 beta_dc <- 0.7
-beta_cl <- beta_cf <- 0.6
-for (i in seq_along(dat$yr)) { 
-  dat$samp_date[i] <- rnorm(1, alpha_yd[yr[i]], 1)
-  dat$cond[i] <- rnorm(1, alpha_yc[yr[i]] + beta_dc * dat$samp_date[i], 1)
-  dat$size[i] <- rnorm(1, beta_cf * dat$cond[i], 1)
-  dat$lipid[i] <- rnorm(1, beta_cl * dat$cond[i], 1)
-  dat$alpha_ys[i] <- alpha_ys[yr[i]]
+beta_cl <- 0.9 #results in a mean correlation of ~0.6
+beta_cf <- 0.3
+
+for (i in 1:nrow(dat)) { 
+  dat$samp_date[i] <- rnorm(1, alpha_pop_date[dat$pop_n[i]], 1)
+  dat$cond[i] <- rnorm(
+    1, 
+    alpha_pop_cond[dat$pop_n[i]] + alpha_yr_cond[dat$yr[i]] + 
+      beta_dc * dat$samp_date[i], 
+    1
+  )
+  # generate observations from latent state 
+  dat$size[i] <- rnorm(1, beta_cf * dat$cond[i], 0.5)
+  dat$lipid[i] <- rnorm(1, beta_cl * dat$cond[i], 0.5)
+  dat$alpha_yr[i] <- alpha_yr_surv[dat$yr[i]]
+  dat$alpha_pop[i] <- alpha_pop_surv[dat$pop_n[i]]
 }
 
-# random intercepts for pop survival 
-alpha_ps <- rnorm(length(unique(pop)), 0, 1)
-for (i in seq_along(dat$pop)) {
-  dat$alpha_ps[i] <- alpha_ps[dat$pop_n[i]]
-}
 
 
-surv_bar <- -1  # Intercept
-beta_ds <- 0.5   # date effect
-beta_fs <- 0.25 # fork length
-beta_ls <- 1 # lipid
-beta_qs <- 0.5 # detection probability effect
-eta <- surv_bar + dat$alpha_ys + dat$alpha_ps +
+# Simulate binary outcome based on int (beta), x and yr (beta_yr)
+# define cyer to have negative imapct on survival and negative interaction
+# with date (i.e. effect of CYER weaker late in year)
+surv_bar <- -1  # intercept
+beta_cs <- 0.5 # condition effect
+beta_ds <- 0.4 # date effect
+beta_cyer <- -1 # er effect
+beta_d_cyer <- 0.5 # date ER interaction
+beta_ps <- 1.5 # detection probability effect
+
+eta <- surv_bar + 
+  dat$alpha_yr + dat$alpha_pop +
+  beta_cs * dat$cond +
   beta_ds * dat$samp_date +
-  beta_fs * dat$size +
-  beta_ls * dat$lipid + 
-  beta_qs * dat$qq
-p <- boot::inv.logit(eta) # Probability of survival
-dat$surv <- rbinom(n, 1, p)  # Binary outcome
+  beta_cyer * dat$cyer +
+  (beta_d_cyer * dat$samp_date * dat$cyer) +
+  beta_ps * dat$det
+
+p <- 1 / (1 + exp(-(eta)))  # Probability of survival
+y <- rbinom(n, 1, p)  # Binary outcome
+dat$surv <- y
 
 dat_list <- list(
-  samp_date = dat$samp_date,
-  yr = dat$yr, 
-  size = dat$size,
-  lipid = dat$lipid,
   surv = dat$surv,
   pop_n = dat$pop_n,
-  qq = dat$qq
+  yr = dat$yr,
+  cyer = dat$cyer,
+  samp_date = dat$samp_date,
+  lipid = dat$lipid,
+  size = dat$size,
+  det = dat$det
 )
 
-m8 <- ulam(
+
+# full model
+m9 <- ulam(
   alist(
     # date
     samp_date ~ dnorm(mu_date, sigma_date),
-    mu_date <- alpha_yr[yr, 1],
+    mu_date <- alpha_pop[pop_n, 1],
+    
     # covariance among size and lipid
     c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho_sl, Sigma_sl),
-    mu_size <- alpha_yr[yr, 2] + beta_df * samp_date,
-    mu_lipid <- alpha_yr[yr, 3] + beta_dl * samp_date,
-    # survival
+    mu_size <- alpha_yr[yr, 1] + alpha_pop[pop_n, 2] + beta_df * samp_date,
+    mu_lipid <- alpha_yr[yr, 2] + alpha_pop[pop_n, 3] + beta_dl * samp_date,
+   
+     # survival
     surv ~ dbinom(1 , p) ,
-    logit(p) <- surv_bar + alpha_yr[yr, 4] + alpha_pop[pop_n] * sigma_pop +
+    logit(p) <- surv_bar + alpha_pop[pop_n, 4] + alpha_yr[yr, 3] +
       beta_ds * samp_date +
       beta_fs * size +
       beta_ls * lipid +
-      beta_qs * qq,
+      beta_cyer * cyer + (beta_d_cyer * samp_date * cyer) +
+      beta_ps * det,
+    
     # adaptive priors
-    transpars> matrix[yr, 4]:alpha_yr <-
+    transpars> matrix[yr, 3]:alpha_yr <-
       compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
-    matrix[4, yr]:z_yr ~ normal(0 , 1),
+    matrix[3, yr]:z_yr ~ normal(0 , 1),
+    transpars> matrix[pop_n, 4]:alpha_pop <-
+      compose_noncentered(sigma_pop , L_Rho_pop , z_pop),
+    matrix[4, pop_n]:z_pop ~ normal(0 , 1),
+    
     # priors
-    alpha_pop[pop_n] ~ dnorm(0, 1),
     c(beta_df, beta_dl) ~ normal(0, 1),
-    c(beta_ds, beta_fs, beta_ls, beta_qs) ~ normal(0, 0.5),
-    c(surv_bar) ~ normal(0, 1.5),
+    beta_cyer ~ normal(-0.5, 0.5),
+    c(beta_ds, beta_fs, beta_ls, beta_d_cyer) ~ normal(0, 0.5),
+    c(surv_bar, beta_ps) ~ normal(0, 1),
     Rho_sl ~ lkj_corr( 2 ),
-    cholesky_factor_corr[4]:L_Rho_yr ~ lkj_corr_cholesky(2),
-    vector[4]:sigma_yr ~ exponential(1),
-    c(Sigma_sl, sigma_date, sigma_pop) ~ exponential(1),
+    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
+    vector[3]:sigma_yr ~ exponential(1),
+    cholesky_factor_corr[4]:L_Rho_pop ~ lkj_corr_cholesky(2),
+    vector[4]:sigma_pop ~ exponential(1),
+    c(Sigma_sl, sigma_date) ~ exponential(1),
     # compute ordinary correlation matrixes from Cholesky factors
-    gq> matrix[4, 4]:Rho_yr <<- Chol_to_Corr(L_Rho_yr)
+    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
+    gq> matrix[4, 4]:Rho_pop <<- Chol_to_Corr(L_Rho_pop)
   ),
-  data=dat_list, chains=4 , cores = 4,
+  data = dat_list, chains=4 , cores = 4,
   control = list(adapt_delta = 0.95)
 )
-precis(m8, depth = 2)
+
+precis(m9, depth = 2)
+# fixed effects mostly look good (except for beta-ps)
+
+post <- extract.samples(m9)
+
+# visualize beta_ps
+hist(post$beta_ps, breaks = 50, col = "skyblue", border = "white",
+     main = "Detection Probability", probability = TRUE)
+abline(v = beta_ps, col = "red", lwd = 2, lty = 2)
 
 
-mu <- alpha_bar + alpha_yr[yr]*sigma_yr2
-alpha_yr[yr] ~ dnorm(0, 1)
-sigma_yr2 ~ exponential(1)
+# visualize random ints
+pop_par_key <- data.frame(
+  parameter = paste("V", seq(1, 20, by = 1), sep = ""),
+  variable = rep(
+    c("date", "size", "lipid", "surv"), 
+    each = 5
+  ),
+  pop_n = rep(
+    seq(1, 5, by = 1),
+    times = 4
+  ) %>% 
+    as.factor()
+)
+
+alpha_pop <- post$alpha_pop %>% 
+  as_tibble() %>%
+  pivot_longer(
+    cols = everything(), names_to = "parameter", values_to = "value"
+  ) %>%
+  left_join(., pop_par_key, by = "parameter")
+
+ggplot(alpha_pop) +
+  geom_boxplot(aes(x = pop_n, y = value)) +
+  facet_wrap(~variable, scales = "free_y")
+
+
+# Known true values (for comparison)
+true_values <- tibble(
+  parameter = c(paste0("a[", 1:groups, "]"), "b", "a_bar"),
+  true_value = c(true_group_intercepts, true_slope, true_intercept)
+)
+
+# Merge true values with posterior data
+post_long <- post_long %>%
+  left_join(true_values, by = "parameter")
+
+# Plot posterior distributions using ggplot2
+ggplot(post_long, aes(x = value)) +
+  geom_density(fill = "skyblue", alpha = 0.6) +
+  geom_vline(aes(xintercept = true_value), color = "red", linetype = "dashed", size = 0.7) +
+  facet_wrap(~parameter, scales = "free", ncol = 5) +
+  theme_minimal() +
+  labs(
+    title = "Posterior Distributions with True Values",
+    x = "Parameter Value",
+    y = "Density"
+  )
+
+# visualize fixed effects
+
+
+# visualize random intercepts 
 
