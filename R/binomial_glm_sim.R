@@ -928,10 +928,11 @@ m8a <- ulam(
 m8b <- ulam(
   alist(
     surv ~ dbinom(1 , p) ,
-    logit(p) <- alpha_pop[pop_n] * sigma_pop + alpha_qq[qq_n],
+    logit(p) <- alpha_pop[pop_n] * sigma_pop + surv_bar + beta_qs * qq,
     # priors
     alpha_pop[pop_n] ~ dnorm(0, 0.5),
-    alpha_qq[qq_n] ~ normal(0, 1),
+    surv_bar ~ normal(-0.5, 1),
+    beta_qs ~ normal(0.5, 1),
     sigma_pop ~ exponential(1)
   ),
   data=dat_list, chains=4 , cores = 4,
@@ -1113,7 +1114,8 @@ m9 <- ulam(
     c(beta_df, beta_dl) ~ normal(0, 1),
     beta_cyer ~ normal(-0.5, 0.5),
     c(beta_ds, beta_fs, beta_ls, beta_d_cyer) ~ normal(0, 0.5),
-    c(surv_bar, beta_ps) ~ normal(0, 1),
+    surv_bar ~ normal(-0.5, 1),
+    beta_ps ~ normal(0.5, 1),
     Rho_sl ~ lkj_corr( 2 ),
     cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
     vector[3]:sigma_yr ~ exponential(1),
@@ -1134,12 +1136,14 @@ precis(m9, depth = 2)
 post <- extract.samples(m9)
 
 # visualize beta_ps
+png(here::here("figs", "sens", "detection_alpha.png"), 
+    height = 3.5, width = 4.5, units = "in", res = 150)
 hist(post$beta_ps, breaks = 50, col = "skyblue", border = "white",
      main = "Detection Probability", probability = TRUE)
 abline(v = beta_ps, col = "red", lwd = 2, lty = 2)
+dev.off()
 
-
-# visualize random ints
+# population random intercepts
 pop_par_key <- data.frame(
   parameter = paste("V", seq(1, 20, by = 1), sep = ""),
   variable = rep(
@@ -1151,44 +1155,182 @@ pop_par_key <- data.frame(
     times = 4
   ) %>% 
     as.factor()
-)
+) %>% 
+  mutate(
+    var2 = ifelse(variable %in% c("size", "lipid"), "cond", variable)
+  )
+
+# true values (shortened based on condition)
+colnames(pop_ints) <- c("date", "cond", "surv")
+pop_int_dat <- pop_ints %>% 
+  as_tibble() %>% 
+  pivot_longer(
+    cols = everything(), names_to = "var2", values_to = "true_value"
+  ) %>% 
+  mutate(
+    pop_n = rep(seq(1, 5, by = 1), each = 3) %>% 
+      as.factor()
+  )
 
 alpha_pop <- post$alpha_pop %>% 
   as_tibble() %>%
   pivot_longer(
     cols = everything(), names_to = "parameter", values_to = "value"
   ) %>%
-  left_join(., pop_par_key, by = "parameter")
+  left_join(., pop_par_key, by = "parameter") %>% 
+  left_join(., pop_int_dat, by = c("var2", "pop_n"))
 
+png(here::here("figs", "sens", "pop_int_sim.png"), height = 3.5, width = 5,
+    units = "in", res = 150)
 ggplot(alpha_pop) +
   geom_boxplot(aes(x = pop_n, y = value)) +
-  facet_wrap(~variable, scales = "free_y")
+  geom_point(aes(x = pop_n, y = true_value), colour = "red") +
+  facet_wrap(~variable, scales = "free_y") +
+  ggsidekick::theme_sleek()
+dev.off()
 
 
-# Known true values (for comparison)
-true_values <- tibble(
-  parameter = c(paste0("a[", 1:groups, "]"), "b", "a_bar"),
-  true_value = c(true_group_intercepts, true_slope, true_intercept)
-)
-
-# Merge true values with posterior data
-post_long <- post_long %>%
-  left_join(true_values, by = "parameter")
-
-# Plot posterior distributions using ggplot2
-ggplot(post_long, aes(x = value)) +
-  geom_density(fill = "skyblue", alpha = 0.6) +
-  geom_vline(aes(xintercept = true_value), color = "red", linetype = "dashed", size = 0.7) +
-  facet_wrap(~parameter, scales = "free", ncol = 5) +
-  theme_minimal() +
-  labs(
-    title = "Posterior Distributions with True Values",
-    x = "Parameter Value",
-    y = "Density"
+# year random intercepts
+yr_par_key <- data.frame(
+  parameter = paste("V", seq(1, 15, by = 1), sep = ""),
+  variable = rep(
+    c("size", "lipid", "surv"), 
+    each = 5
+  ),
+  yr = rep(
+    seq(1, 5, by = 1),
+    times = 3
+  ) %>% 
+    as.factor()
+) %>% 
+  mutate(
+    var2 = ifelse(variable %in% c("size", "lipid"), "cond", variable)
   )
 
-# visualize fixed effects
+colnames(yr_ints) <- c("cond", "surv")
+yr_int_dat <- yr_ints %>% 
+  as_tibble() %>% 
+  pivot_longer(
+    cols = everything(), names_to = "var2", values_to = "true_value"
+  ) %>% 
+  mutate(
+    yr = rep(seq(1, 5, by = 1), each = 2) %>% 
+      as.factor()
+  )
+
+alpha_yr <- post$alpha_yr %>% 
+  as_tibble() %>%
+  pivot_longer(
+    cols = everything(), names_to = "parameter", values_to = "value"
+  ) %>%
+  left_join(., yr_par_key, by = "parameter") %>% 
+  left_join(., yr_int_dat, by = c("var2", "yr"))
+
+png(here::here("figs", "sens", "yr_int_sim.png"), height = 3.5, width = 6.5,
+    units = "in", res = 150)
+ggplot(alpha_yr) +
+  geom_boxplot(aes(x = yr, y = value)) +
+  geom_point(aes(x = yr, y = true_value), colour = "red") +
+  facet_wrap(~variable, scales = "free_y") +
+  ggsidekick::theme_sleek()
+dev.off()
 
 
-# visualize random intercepts 
+## CONCLUSIONS
+# Fixed effects can be reliably recovered, but not detection probability 
+# (underestimated); somewhat surprisingly random intercepts could be recovered 
+# though less precise for lipid and size (since latent effect); removing detection
+# probability from eta leads to modest increases in the accuracy of RIs
 
+
+
+## as above but with more restricted model 
+
+# full model
+m9b <- ulam(
+  alist(
+    # date
+    samp_date ~ dnorm(mu_date, sigma_date),
+    mu_date <- alpha_pop[pop_n, 1],
+    
+    # covariance among size and lipid
+    c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho_sl, Sigma_sl),
+    mu_size <- alpha_yr[yr, 1] + alpha_pop[pop_n, 2] + beta_df * samp_date,
+    mu_lipid <- alpha_yr[yr, 2] + alpha_pop[pop_n, 3] + beta_dl * samp_date,
+    
+    # survival
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- surv_bar + alpha_pop[pop_n, 4] + alpha_yr[yr, 3] +
+      beta_ds * samp_date +
+      beta_fs * size +
+      beta_ls * lipid +
+      beta_cyer * cyer + (beta_d_cyer * samp_date * cyer),
+    
+    # adaptive priors
+    transpars> matrix[yr, 3]:alpha_yr <-
+      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
+    matrix[3, yr]:z_yr ~ normal(0 , 1),
+    transpars> matrix[pop_n, 4]:alpha_pop <-
+      compose_noncentered(sigma_pop , L_Rho_pop , z_pop),
+    matrix[4, pop_n]:z_pop ~ normal(0 , 1),
+    
+    # priors
+    c(beta_df, beta_dl) ~ normal(0, 1),
+    beta_cyer ~ normal(-0.5, 0.5),
+    c(beta_ds, beta_fs, beta_ls, beta_d_cyer) ~ normal(0, 0.5),
+    c(surv_bar) ~ normal(0, 1),
+    Rho_sl ~ lkj_corr( 2 ),
+    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
+    vector[3]:sigma_yr ~ exponential(1),
+    cholesky_factor_corr[4]:L_Rho_pop ~ lkj_corr_cholesky(2),
+    vector[4]:sigma_pop ~ exponential(1),
+    c(Sigma_sl, sigma_date) ~ exponential(1),
+    # compute ordinary correlation matrixes from Cholesky factors
+    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
+    gq> matrix[4, 4]:Rho_pop <<- Chol_to_Corr(L_Rho_pop)
+  ),
+  data = dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+precis(m9b, depth = 2)
+# fixed effects mostly look good (except for beta-ps)
+
+post_b <- extract.samples(m9b)
+
+
+alpha_pop_b <- post_b$alpha_pop %>% 
+  as_tibble() %>%
+  pivot_longer(
+    cols = everything(), names_to = "parameter", values_to = "value"
+  ) %>%
+  left_join(., pop_par_key, by = "parameter") %>% 
+  left_join(., pop_int_dat, by = c("var2", "pop_n"))
+
+png(here::here("figs", "sens", "pop_int_sim_b.png"), height = 3.5, width = 5,
+    units = "in", res = 150)
+ggplot(alpha_pop_b) +
+  geom_boxplot(aes(x = pop_n, y = value)) +
+  geom_point(aes(x = pop_n, y = true_value), colour = "red") +
+  facet_wrap(~variable, scales = "free_y") +
+  ggsidekick::theme_sleek()
+dev.off()
+
+
+# year random intercepts
+alpha_yr_b <- post_b$alpha_yr %>% 
+  as_tibble() %>%
+  pivot_longer(
+    cols = everything(), names_to = "parameter", values_to = "value"
+  ) %>%
+  left_join(., yr_par_key, by = "parameter") %>% 
+  left_join(., yr_int_dat, by = c("var2", "yr"))
+
+png(here::here("figs", "sens", "yr_int_sim_b.png"), height = 3.5, width = 6.5,
+    units = "in", res = 150)
+ggplot(alpha_yr_b) +
+  geom_boxplot(aes(x = yr, y = value)) +
+  geom_point(aes(x = yr, y = true_value), colour = "red") +
+  facet_wrap(~variable, scales = "free_y") +
+  ggsidekick::theme_sleek()
+dev.off()

@@ -108,14 +108,7 @@ exploitation -> "apparent survival"
 injury -> "apparent survival"
 lipid -> "apparent survival"
 stock -> "apparent survival"
-stock -> "detection probability"
-stock -> "tagging date"
-stock -> condition
-stock -> exploitation
 year -> "apparent survival"
-year -> "detection probability"
-year -> condition
-year -> exploitation
 }
 '
 )
