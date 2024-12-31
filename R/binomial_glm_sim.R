@@ -90,7 +90,7 @@ m1 <- ulam(
     sigma_yr ~ exponential(1),
     sigma_x ~ exponential(1)
     ),
-  data=dat_list, chains=4 , log_lik=TRUE,
+  data=dat_list, chains=4, cores = 4, log_lik=TRUE,
   control = list(adapt_delta = 0.95)
   )
 precis(m1 , depth=2)
@@ -118,7 +118,7 @@ m1b <- ulam(
     # compute ordinary correlation matrixes from Cholesky factors
     gq> matrix[2,2]:Rho_yr <<- Chol_to_Corr(L_Rho_yr)
   ),
-  data=dat_list, chains=4 , log_lik=TRUE,
+  data=dat_list, chains=4 , cores = 4, log_lik=TRUE,
   control = list(adapt_delta = 0.95)
 )
 precis(m1b, depth=3)
@@ -960,7 +960,7 @@ cyer_yr_rho <- 0.5
 cyer_mu_yr <- runif(n_pops, 0.05, 0.6) #range of mean stock ERs
 cyer_yr_sigmas <- rep(0.3, n_pops)
 cyer_Rho <- diag(1, 5) + matrix(cyer_yr_rho, 5, 5) - diag(cyer_yr_rho, 5)
-cyer_Sigma <- diag(cyer_yr_sigmas) %*% Rho %*% diag(cyer_yr_sigmas) 
+cyer_Sigma <- diag(cyer_yr_sigmas) %*% cyer_Rho %*% diag(cyer_yr_sigmas) 
 cyer_mat <- MASS::mvrnorm(n_years, log(cyer_mu_yr), cyer_Sigma) %>% exp()
 colnames(cyer_mat) <- pops
 cyer_dat <- as.data.frame(cyer_mat) %>%
@@ -986,23 +986,22 @@ yr_pop_key <- expand.grid(
 
 
 # yr intercepts (condition, survival)
-yr_rho <- 0.6 
+yr_rho <- 0.6
 yr_mu <- c(0, 0) #average effects both centered on zero
 yr_sigmas <- c(0.4, 0.2)
 yr_Rho <- matrix(c(1, yr_rho, yr_rho, 1), nrow = 2)
-yr_Sigma <- diag(yr_sigmas) %*% yr_Rho %*% diag(yr_sigmas) 
+yr_Sigma <- diag(yr_sigmas) %*% yr_Rho %*% diag(yr_sigmas)
 yr_ints <- MASS::mvrnorm(n_years, yr_mu, yr_Sigma)
 alpha_yr_cond <- yr_ints[ , 1]
 alpha_yr_surv <- yr_ints[ , 2]
 
 # pop intercepts (condition, date, survival)
-pop_rho <- 0.3 
+pop_rho <- 0.3
 pop_mu <- c(0, 0, 0) #average effects both centered on zero
 pop_sigmas <- c(0.4, 0.5, 0.5)
 pop_Rho <- diag(1, 3) + matrix(pop_rho, 3, 3) - diag(pop_rho, 3)
-pop_Sigma <- diag(pop_sigmas) %*% pop_Rho %*% diag(pop_sigmas) 
+pop_Sigma <- diag(pop_sigmas) %*% pop_Rho %*% diag(pop_sigmas)
 pop_ints <- MASS::mvrnorm(n_pops, pop_mu, pop_Sigma)
-
 alpha_pop_cond <- pop_ints[ , 1]
 alpha_pop_date <- pop_ints[ , 2]
 alpha_pop_surv <- pop_ints[ , 3]
@@ -1012,7 +1011,7 @@ alpha_pop_surv <- pop_ints[ , 3]
 dat <- data.frame(
   yr = sample(yr, n, replace = TRUE), 
   pop = sample(pops, n, replace =  TRUE)
-) %>% 
+  ) %>% 
   left_join(
     ., yr_pop_key, by = c("yr", "pop")
   ) %>% 
@@ -1063,7 +1062,7 @@ eta <- surv_bar +
   beta_ds * dat$samp_date +
   beta_cyer * dat$cyer +
   (beta_d_cyer * dat$samp_date * dat$cyer) +
-  beta_ps * dat$det
+  beta_ps * dat$det2
 
 p <- 1 / (1 + exp(-(eta)))  # Probability of survival
 y <- rbinom(n, 1, p)  # Binary outcome
@@ -1077,7 +1076,7 @@ dat_list <- list(
   samp_date = dat$samp_date,
   lipid = dat$lipid,
   size = dat$size,
-  det = dat$det
+  det = dat$det2
 )
 
 
@@ -1114,8 +1113,8 @@ m9 <- ulam(
     c(beta_df, beta_dl) ~ normal(0, 1),
     beta_cyer ~ normal(-0.5, 0.5),
     c(beta_ds, beta_fs, beta_ls, beta_d_cyer) ~ normal(0, 0.5),
-    surv_bar ~ normal(-0.5, 1),
-    beta_ps ~ normal(0.5, 1),
+    surv_bar ~ normal(-0.5, 0.5),
+    beta_ps ~ normal(0.5, 0.5),
     Rho_sl ~ lkj_corr( 2 ),
     cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
     vector[3]:sigma_yr ~ exponential(1),
@@ -1132,6 +1131,42 @@ m9 <- ulam(
 
 precis(m9, depth = 2)
 # fixed effects mostly look good (except for beta-ps)
+
+
+library(glmmTMB)
+dat$yr_f <- as.factor(dat$yr)
+dat$det_f <- as.factor(dat$det2)
+fit1 <- glmmTMB(
+  surv ~ samp_date * cyer + size + lipid + (1 | pop) + (1 | yr_f),  
+  data = dat,
+  family = binomial()
+)
+
+
+m_dum <- ulam(
+  alist(
+    # survival
+    surv ~ dbinom(1 , p) ,
+    logit(p) <- surv_bar + beta_ds * samp_date +
+      beta_fs * size +
+      beta_ls * lipid +
+      beta_cyer * cyer + (beta_d_cyer * samp_date * cyer) +
+      beta_ps * det,
+    
+    # priors
+    beta_cyer ~ normal(-0.5, 0.5),
+    c(beta_ds, beta_fs, beta_ls, beta_d_cyer) ~ normal(0, 0.5),
+    surv_bar ~ normal(-0.5, 1),
+    beta_ps ~ normal(0.5, 1)
+  ),
+  data = dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+precis(m_dum, depth = 2)
+
+
+
+
 
 post <- extract.samples(m9)
 
