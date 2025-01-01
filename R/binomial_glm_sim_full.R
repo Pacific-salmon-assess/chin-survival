@@ -152,8 +152,8 @@ beta_d_cyer <- 0.5 # date ER interaction
 beta_ps <- 1.5 # detection probability effect
 
 true_pars <- data.frame(
-  par = c( "(Intercept)", "samp_date", "cyer", "cond", "size", "lipid", "det",
-           "samp_date:cyer"),
+  par = c("(Intercept)", "samp_date", "cyer", "cond", "size", "lipid", "det",
+          "samp_date:cyer"),
   true = c(surv_bar, beta_ds, beta_cyer, beta_cs, 0.3 * beta_cs, 0.9 * beta_cs,
            beta_ps, beta_d_cyer)
 )
@@ -363,21 +363,19 @@ dat_list1 <- list(
   samp_date = d1$samp_date %>% scale() %>% as.numeric(),
   lipid = d1$lipid %>% scale() %>% as.numeric(),
   size = d1$size %>% scale() %>% as.numeric(),
-  det = d1$det %>% scale() %>% as.numeric(),
+  det = d1$det + 1,
   cond = d1$cond %>% scale() %>% as.numeric()
 )
 m1 <- ulam(
   alist(
     surv ~ dbinom(1 , p) ,
-    logit(p) <- surv_bar + beta_ds * samp_date +
+    logit(p) <- alpha[det] + beta_ds * samp_date +
       beta_cyer * cyer + (beta_d_cyer * samp_date * cyer) +
-      beta_cs * cond +
-      beta_ps * det,
+      beta_cs * cond,
     
     beta_cyer ~ normal(-0.5, 0.5),
     c(beta_ds, beta_cs, beta_d_cyer) ~ normal(0, 0.5),
-    surv_bar ~ normal(-0.5, 0.5),
-    beta_ps ~ normal(0.5, 0.5)
+    alpha[det] ~ dnorm(0, 1)
   ),
   data = dat_list1, chains=4 , cores = 4,
   control = list(adapt_delta = 0.95)
@@ -388,19 +386,32 @@ precis(m1)
 post <- extract.samples(m1)
 
 post_list <- purrr::map2(
-  post, 
-  c("cyer", "samp_date:cyer", "cond", "samp_date", "(Intercept)", "det"),
+  post[1:4], 
+  c("cyer", "samp_date:cyer", "cond", "samp_date"),
   function (x, y) {
     data.frame(
       par = y,
       est = mean(x),
       se = sd(x)
-    ) %>% 
-      left_join(., true_pars, by = "par")
+    ) 
   }
-  )
+  ) %>% 
+  bind_rows()
+post_int <- data.frame(
+  par = "(Intercept)",
+  est = mean(post$alpha[ , 1]),
+  se = sd(post$alpha[ , 1])
+) 
+post_det <- data.frame(
+  par = "det",
+  est = mean(post$alpha[ , 2] - post$alpha[ , 1]),
+  se = sd(post$alpha[ , 2] - post$alpha[ , 1])
+) 
 
-ggplot(bind_rows(post_list), aes(x = par)) +
+list(post_list, post_int, post_det) %>% 
+  bind_rows() %>% 
+  left_join(., true_pars, by = "par") %>% 
+  ggplot(., aes(x = par)) +
   geom_point(aes(y = est), size = 3) +
   geom_errorbar(aes(ymin = est - se, ymax = est + se), width = 0.2) +
   geom_point(aes(y = true), color = "red", size = 3, alpha = 0.5) +
@@ -418,33 +429,25 @@ dat_list7 <- list(
   samp_date = d7$samp_date %>% scale() %>% as.numeric(),
   lipid = d7$lipid %>% scale() %>% as.numeric(),
   size = d7$size %>% scale() %>% as.numeric(),
-  det = d7$det %>% scale() %>% as.numeric(),
+  det = d7$det + 1,
+  det_n = d7$det,
   cond = d7$cond %>% scale() %>% as.numeric()
 )
 m7 <- ulam(
   alist(
     surv ~ dbinom(1, p),
-    logit(p) <- surv_bar + beta_ds * samp_date +
+    logit(p) <- alpha[det] + beta_ds * samp_date +
       beta_cyer * cyer + (beta_d_cyer * samp_date * cyer) +
       beta_ls * lipid +
       beta_fs * size +
-      beta_ps * det +
       alpha_pop[pop_n] * sigma_pop +
       alpha_yr[yr] * sigma_yr,
     
-    # beta_cyer ~ normal(-0.5, 0.5),
-    # c(beta_ds, beta_ls, beta_fs, beta_d_cyer) ~ normal(0, 0.5),
-    # surv_bar ~ normal(-0.5, 0.5),
-    # beta_ps ~ normal(0.5, 0.5),
-    # alpha_yr[yr] ~ dnorm(0, 0.5),
-    # alpha_pop[pop_n] ~ dnorm(0, 0.5),
-    # c(sigma_yr, sigma_pop) ~ half_cauchy(0, 2.5)
-    beta_cyer ~ normal(0, 1),
-    c(beta_ds, beta_ls, beta_fs, beta_d_cyer) ~ normal(0, 1),
-    surv_bar ~ normal(0, 1),
-    beta_ps ~ normal(0, 1),
-    alpha_yr[yr] ~ dnorm(0, 1),
-    alpha_pop[pop_n] ~ dnorm(0, 1),
+    beta_cyer ~ normal(-0.5, 0.5),
+    c(beta_ds, beta_ls, beta_fs, beta_d_cyer) ~ normal(0, 0.5),
+    alpha[det] ~ dnorm(0, 1),
+    alpha_yr[yr] ~ dnorm(0, 0.5),
+    alpha_pop[pop_n] ~ dnorm(0, 0.5),
     c(sigma_yr, sigma_pop) ~ exponential(1)
   ),
   data = dat_list7, chains = 4 , cores = 4,
@@ -465,20 +468,32 @@ post7 <- extract.samples(m7)
 #   prior7$beta_ps * d7$det
 
 post_list7 <- purrr::map2(
-  post7[1:7], 
-  c("cyer", "samp_date:cyer", "size", "lipid", "samp_date", "(Intercept)", 
-    "det"),
+  post7[1:5], 
+  c("cyer", "samp_date:cyer", "size", "lipid", "samp_date"),
   function (x, y) {
     data.frame(
       par = y,
       est = mean(x),
       se = sd(x)
-    ) %>% 
-      left_join(., true_pars, by = "par")
+    ) 
   }
-)
+) %>% 
+  bind_rows()
+post_int7 <- data.frame(
+  par = "(Intercept)",
+  est = mean(post7$alpha[ , 1]),
+  se = sd(post7$alpha[ , 1])
+) 
+post_det7 <- data.frame(
+  par = "det",
+  est = mean(post7$alpha[ , 2] - post7$alpha[ , 1]),
+  se = sd(post7$alpha[ , 2] - post7$alpha[ , 1])
+) 
 
-bayes_7 <- ggplot(bind_rows(post_list7), aes(x = par)) +
+list(post_list7, post_int7, post_det7) %>% 
+  bind_rows() %>% 
+  left_join(., true_pars, by = "par") %>% 
+  ggplot(., aes(x = par)) +
   geom_point(aes(y = est), size = 3) +
   geom_errorbar(aes(ymin = est - se, ymax = est + se), width = 0.2) +
   geom_point(aes(y = true), color = "red", size = 3, alpha = 0.5) +
@@ -486,39 +501,6 @@ bayes_7 <- ggplot(bind_rows(post_list7), aes(x = par)) +
 plot_list[[7]]
 # similar directionally, but fixed effects biased weak; unclear what the issue 
 # is since an m3 version matches plot_list[[3]] well
-
-
-
-library(brms)
-
-brms7 <- brm(
-  surv ~ samp_date * cyer + size + lipid + det + (1 | yr_f) + (1 | pop_f),
-  data = d7,
-  family = bernoulli(link = "logit"),
-  chains = 4,
-  cores = 4,
-  iter = 2000,
-  control = list(adapt_delta = 0.95)
-)
-
-post7_brms <- as_draws_df(brms7) %>% 
-  select(
-    starts_with("b_"), `b_samp_date:cyer`
-  ) 
-colnames(post7_brms) <- c(
-  "(Intercept)", "samp_date", "cyer", "size", "lipid", "det", "samp_date:cyer"
-)
-
-post7_brms %>% 
-  pivot_longer(everything(), names_to = "par", values_to = "iter_est") %>% 
-  group_by(par) %>% 
-  summarize(est = mean(iter_est), se = sd(iter_est)) %>% 
-  left_join(., true_pars, by = "par") %>% 
-  ggplot(., aes(x = par)) +
-  geom_point(aes(y = est), size = 3) +
-  geom_errorbar(aes(ymin = est - se, ymax = est + se), width = 0.2) +
-  geom_point(aes(y = true), color = "red", size = 3, alpha = 0.5) +
-  theme_minimal() 
 
 
 ## BAYESIAN 2 ------------------------------------------------------------------
@@ -530,7 +512,7 @@ post7_brms %>%
 m8 <- ulam(
   alist(
     # detection probability
-    det ~ dbinom(1, p_det),
+    det_n ~ dbinom(1, p_det),
     logit(p_det) <- alpha_det_pop[pop_n] * sigma_det_pop + 
       alpha_det_yr[yr] * sigma_det_yr,
     
@@ -550,12 +532,11 @@ m8 <- ulam(
     
     # survival
     surv ~ dbinom(1 , p) ,
-    logit(p) <- surv_bar + alpha_pop[pop_n, 4] + alpha_yr[yr, 3] +
+    logit(p) <- alpha[det] + alpha_pop[pop_n, 4] + alpha_yr[yr, 3] +
       beta_ds * samp_date +
       beta_fs * size +
       beta_ls * lipid +
-      beta_cyer * cyer + (beta_d_cyer * samp_date * cyer) +
-      beta_ps * det,
+      beta_cyer * cyer + (beta_d_cyer * samp_date * cyer) ,
     
     # adaptive priors
     transpars> matrix[yr, 3]:alpha_yr <-
@@ -569,8 +550,7 @@ m8 <- ulam(
     c(beta_df, beta_dl) ~ normal(0, 1),
     beta_cyer ~ normal(-0.5, 0.5),
     c(beta_ds, beta_fs, beta_ls, beta_d_cyer) ~ normal(0, 0.5),
-    surv_bar ~ normal(-0.5, 0.5),
-    beta_ps ~ normal(0.5, 0.5),
+    alpha[det] ~ dnorm(0, 1),
     Rho_sl ~ lkj_corr( 2 ),
     cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
     vector[3]:sigma_yr ~ exponential(1),
@@ -605,12 +585,11 @@ m8b <- ulam(
     
     # survival
     surv ~ dbinom(1 , p) ,
-    logit(p) <- surv_bar + alpha_pop[pop_n, 4] + alpha_yr[yr, 3] +
+    logit(p) <- alpha[det] + alpha_pop[pop_n, 4] + alpha_yr[yr, 3] +
       beta_ds * samp_date +
       beta_fs * size +
       beta_ls * lipid +
-      beta_cyer * cyer + (beta_d_cyer * samp_date * cyer) +
-      beta_ps * det,
+      beta_cyer * cyer + (beta_d_cyer * samp_date * cyer),
     
     # adaptive priors
     transpars> matrix[yr, 3]:alpha_yr <-
@@ -624,8 +603,7 @@ m8b <- ulam(
     c(beta_df, beta_dl) ~ normal(0, 1),
     beta_cyer ~ normal(-0.5, 0.5),
     c(beta_ds, beta_fs, beta_ls, beta_d_cyer) ~ normal(0, 0.5),
-    surv_bar ~ normal(-0.5, 0.5),
-    beta_ps ~ normal(0.5, 0.5),
+    alpha[det] ~ dnorm(0, 1),
     Rho_sl ~ lkj_corr( 2 ),
     cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
     vector[3]:sigma_yr ~ exponential(1),
@@ -636,36 +614,46 @@ m8b <- ulam(
     gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
     gq> matrix[4, 4]:Rho_pop <<- Chol_to_Corr(L_Rho_pop)
   ),
-  data = dat_list, chains=4 , cores = 4,
+  data = dat_list7, chains=4 , cores = 4,
   control = list(adapt_delta = 0.95)
 )
 
 
 
-post8 <- extract.samples(m8)
-post8_sub <- list(
-  post8$beta_cyer, post8$beta_d_cyer, post8$beta_fs, post8$beta_ls, 
-  post8$beta_ds, post8$surv_bar,  post8$beta_ps
-)
+post8 <- extract.samples(m8b)
 
 post_list8 <- purrr::map2(
-  post8_sub, 
-  c("cyer", "samp_date:cyer", "size", "lipid", "samp_date", "(Intercept)", 
-    "det"),
+  list(
+    post8$beta_cyer, post8$beta_d_cyer, post8$beta_fs, post8$beta_ls, 
+    post8$beta_ds
+  ), 
+  c("cyer", "samp_date:cyer", "size", "lipid", "samp_date"),
   function (x, y) {
     data.frame(
       par = y,
       est = mean(x),
       se = sd(x)
-    ) %>% 
-      left_join(., true_pars, by = "par")
+    ) 
   }
-)
+) %>% 
+  bind_rows()
+post_int8 <- data.frame(
+  par = "(Intercept)",
+  est = mean(post8$alpha[ , 1]),
+  se = sd(post8$alpha[ , 1])
+) 
+post_det8 <- data.frame(
+  par = "det",
+  est = mean(post8$alpha[ , 2] - post8$alpha[ , 1]),
+  se = sd(post8$alpha[ , 2] - post8$alpha[ , 1])
+) 
 
-ggplot(bind_rows(post_list8), aes(x = par)) +
+list(post_list8, post_int8, post_det8) %>% 
+  bind_rows() %>% 
+  left_join(., true_pars, by = "par") %>% 
+  ggplot(., aes(x = par)) +
   geom_point(aes(y = est), size = 3) +
   geom_errorbar(aes(ymin = est - se, ymax = est + se), width = 0.2) +
   geom_point(aes(y = true), color = "red", size = 3, alpha = 0.5) +
   theme_minimal() 
-bayes_7
 plot_list[[7]]
