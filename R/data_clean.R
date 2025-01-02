@@ -9,7 +9,9 @@ dat_tbl <- readRDS(here::here("data", "det_history_tbl.RDS"))
 chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS")) %>% 
   filter(
     !charter == "msf",
-    !is.na(acoustic)
+    !is.na(acoustic),
+    !is.na(agg_name),
+    !fish == "CK113" # magnet not removed
   )
 
 indicator_key <- read.csv(
@@ -24,12 +26,20 @@ cyer_dat <- readRDS(here::here("data", "harvest", "cleaned_cyer_dat.rds")) %>%
   rename(ctc_indicator = stock)
 
 
+stage_dat <- readRDS(
+  here::here("data", "agg_lifestage_df.RDS")) %>% 
+  select(
+    fish, known_stage = stage, stage_1 = stage_predicted, 
+    stage_2 = stage_predicted_sens
+  )
+
+
 # ID tag codes to retain
-kept_tags <- dat_tbl %>%
-  # unnest and filter out stage 3
-  unnest(cols = bio_dat) %>%
-  filter(redeploy == "no") %>%
-  pull(vemco_code)
+# kept_tags <- dat_tbl %>%
+#   # unnest and filter out stage 3
+#   unnest(cols = bio_dat) %>%
+#   filter(redeploy == "no") %>%
+#   pull(vemco_code)
 
 
 ## CLEAN AND EXPORT FOR MODEL FITTING ------------------------------------------
@@ -67,7 +77,8 @@ chin2 <- left_join(
       TRUE ~ 0
     )
   ) %>% 
-  left_join(., cyer_dat, by = c("year", "ctc_indicator")) 
+  left_join(., cyer_dat, by = c("year", "ctc_indicator")) %>% 
+  left_join(., stage_dat, by = "fish")
 
 
 # define aggregate names for Fraser and add to tbl
@@ -92,6 +103,12 @@ stock_supp_table <- chin2 %>%
 # )
 
 
+## Sample sizes by maturity stage
+chin2 %>% 
+  group_by(stage_2) %>% 
+  tally()
+
+
 ## Logistic Regression Dataset
 det_dat1 <- dat_tbl %>% 
   dplyr::select(stock_group, agg_det) %>% 
@@ -105,12 +122,12 @@ det_dat1 <- dat_tbl %>%
             chin2 %>% 
               mutate(month = lubridate::month(date)) %>% 
               select(vemco_code = acoustic_year, month, year, acoustic_type, 
-                     lat, lon, year_day, 
+                     stage_1, stage_2, lat, lon, year_day, 
                      fl, wt, lipid, adj_inj, ctc_indicator, isbm_cyer,
                      comment),
             by = "vemco_code") %>%
   mutate(
-    redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes"),
+    # redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes"),
     terminal_p = case_when(
       stock_group %in% c("South Puget", "Up Col.", "Low Col.") ~ 1,
       grepl("Fraser", stock_group) ~ 1,
@@ -148,21 +165,20 @@ dat_tbl_trim <- dat_tbl %>%
   mutate(
     bio_dat = purrr::map(bio_dat, function (x) {
       x %>%
-        filter(vemco_code %in% kept_tags) %>% 
+        # filter(vemco_code %in% kept_tags) %>% 
         select(-c(agg, lipid)) %>% 
         left_join(
           ., 
-          det_dat1 %>% select(vemco_code, agg = stock_group, lipid)
+          det_dat1 %>%
+            select(vemco_code, agg = stock_group, lipid, stage_1, stage_2)
         )
     }),
     wide_array_dat = purrr::map(wide_array_dat, function (x) {
       # remove aggregate vector if only one level
-      dd <- x %>%
-        filter(vemco_code %in% kept_tags)
-      # if (length(unique(dd$agg)) == "1") {
-      dd <- dd %>% select(-agg)
+      x %>%
+        # filter(vemco_code %in% kept_tags)
+        select(-agg)
       # }
-      return(dd)
     })
   ) %>%
   select(stock_group, bio_dat, wide_array_dat)
