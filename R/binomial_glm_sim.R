@@ -223,10 +223,32 @@ m2 <- ulam(
     # compute ordinary correlation matrixes from Cholesky factors
     gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr)
   ),
-  data=dat_list, chains=4 , log_lik=TRUE,
+  data=dat_list, chains=4 , log_lik=TRUE, cores = 4,
   control = list(adapt_delta = 0.95)
 )
 precis(m2 , depth=2)
+
+post_m2 <- extract.samples(m2)
+
+post_mat <- post_m2$z_yr[ , 3, ]
+colnames(post_mat) <- paste("alpha", seq(1, 5, by = 1), sep = "_")
+post_mat %>% 
+  as.data.frame() %>% 
+  pivot_longer(
+    cols = everything(),
+    names_to = "par",
+    values_to = "est"
+  ) %>% 
+  left_join(
+    .,
+    data.frame(
+      par = paste("alpha", seq(1, 5, by = 1), sep = "_"),
+      true = beta_yr
+    )
+  ) %>% 
+  ggplot(.) +
+  geom_boxplot(aes(x = par, y = est)) +
+  geom_point(aes(x = par, y = true), colour = "red")
 
 
 ## EXAMPLE 3 -------------------------------------------------------------------

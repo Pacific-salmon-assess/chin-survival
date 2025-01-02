@@ -88,16 +88,16 @@ year -> exploitation
 ## recovery model
 online_dag2 <- dagitty('
 dag {
-"apparent survival" [outcome,pos="0.665,1.409"]
+"apparent survival" [outcome,pos="0.619,1.400"]
 "detection probability" [pos="-0.770,0.090"]
 "fork length" [exposure,pos="0.106,0.772"]
 "tagging date" [exposure,pos="-0.713,1.122"]
-condition [latent,pos="-0.103,0.591"]
+condition [latent,pos="-0.066,0.528"]
 exploitation [exposure,pos="0.307,0.102"]
 injury [exposure,pos="-0.012,1.599"]
 lipid [exposure,pos="0.378,0.688"]
-stock [adjusted,pos="-0.869,0.298"]
-year [adjusted,pos="-0.397,-0.024"]
+stock [adjusted,pos="-0.860,0.500"]
+year [adjusted,pos="-0.244,-0.053"]
 "detection probability" -> "apparent survival"
 "fork length" -> "apparent survival"
 "tagging date" -> "apparent survival"
@@ -108,7 +108,16 @@ exploitation -> "apparent survival"
 injury -> "apparent survival"
 lipid -> "apparent survival"
 stock -> "apparent survival"
-year -> "apparent survival"
+stock -> "tagging date"
+stock -> condition
+year -> condition
 }
 '
 )
+
+
+# recover parameters of direct interest; include effects of stock/year to test
+# for covariance among intercepts (i.e. stocks with positive condition tend to 
+# be captured later in the year and have higher survival); ignore stock/year 
+# effects on probability/CYER because including them doesn't impact estimates
+# and not of interest causally

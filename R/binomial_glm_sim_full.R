@@ -53,7 +53,7 @@ yr_pop_key <- expand.grid(
 
 ## yr intercepts (condition, survival)
 # correlated versions
-yr_rho <- 0.6
+yr_rho <- 0.9
 yr_mu <- c(0, 0) #average effects both centered on zero
 yr_sigmas <- c(0.4, 0.2)
 yr_Rho <- matrix(c(1, yr_rho, yr_rho, 1), nrow = 2)
@@ -68,7 +68,7 @@ alpha_yr_surv2 <- rnorm(5, 0, 0.2)
 
 # pop intercepts (condition, date, survival)
 # correlated versions
-pop_rho <- 0.3
+pop_rho <- 0.9
 pop_mu <- c(0, 0, 0) #average effects both centered on zero
 pop_sigmas <- c(0.4, 0.5, 0.5)
 pop_Rho <- diag(1, 3) + matrix(pop_rho, 3, 3) - diag(pop_rho, 3)
@@ -322,7 +322,17 @@ fit7 <- glmmTMB(
 )
 
 
-fit_list <- list(fit1, fit2, fit3, fit4, fit5, fit6, fit7)
+## DATASET 8
+# as above but ignoring variability in P
+fit8 <- glmmTMB(
+  surv ~ samp_date * cyer + size + lipid + (1 | yr_f) + (1 | pop_f),  
+  data = d7,
+  family = binomial()
+)
+
+
+
+fit_list <- list(fit1, fit2, fit3, fit4, fit5, fit6, fit7, fit8)
 
 plot_list <- purrr::map(
   fit_list, 
@@ -348,6 +358,7 @@ plot_list[[4]]
 plot_list[[5]]
 plot_list[[6]]
 plot_list[[7]]
+plot_list[[8]]
 
 
 ## BAYESIAN 1 ------------------------------------------------------------------
@@ -508,7 +519,6 @@ plot_list[[7]]
 # fit full version accounting for covariance parameters and see if performance
 # improves relative to frequentist
 
-
 m8 <- ulam(
   alist(
     # detection probability
@@ -620,7 +630,8 @@ m8b <- ulam(
 
 
 
-post8 <- extract.samples(m8b)
+post8 <- extract.samples(m8)
+post8b <- extract.samples(m8b)
 
 post_list8 <- purrr::map2(
   list(
@@ -657,3 +668,58 @@ list(post_list8, post_int8, post_det8) %>%
   geom_point(aes(y = true), color = "red", size = 3, alpha = 0.5) +
   theme_minimal() 
 plot_list[[7]]
+
+
+
+# examine RIs specifically
+fit_list_bayes <- list(post7, post8b, post8)
+
+ri_pop_dat <- purrr::map2(
+  fit_list_bayes, 
+  c("simp", "nest1", "nest2"),
+  function (x, x2) {
+    data.frame(
+      par = paste("alpha_pop", seq(1, 5, by = 1), sep = "_"),
+      est = apply(post8$alpha_pop[ , , 4], 2, mean),
+      se = apply(post8$alpha_pop[ , , 4], 2, sd),
+      true = alpha_pop_surv,
+      model = x2
+    ) 
+  }
+) %>% 
+  bind_rows()
+
+ggplot(ri_pop_dat, aes(x = model)) +
+  geom_point(aes(y = est), size = 3) +
+  geom_errorbar(aes(ymin = est - se, ymax = est + se), width = 0.2) +
+  geom_point(aes(y = true), color = "red", size = 3, alpha = 0.5) +
+  theme_minimal() +
+  facet_wrap(~par)
+
+
+ri_yr_dat <- purrr::map2(
+  fit_list_bayes, 
+  c("simp", "nest1", "nest2"),
+  function (x, x2) {
+    data.frame(
+      par = paste("alpha_yr", seq(1, 5, by = 1), sep = "_"),
+      est = apply(post8$alpha_yr[ , , 3], 2, mean),
+      se = apply(post8$alpha_yr[ , , 3], 2, sd),
+      true = alpha_yr_surv,
+      model = x2
+    ) 
+  }
+) %>% 
+  bind_rows()
+
+ggplot(ri_yr_dat, aes(x = model)) +
+  geom_point(aes(y = est), size = 3) +
+  geom_errorbar(aes(ymin = est - se, ymax = est + se), width = 0.2) +
+  geom_point(aes(y = true), color = "red", size = 3, alpha = 0.5) +
+  theme_minimal() +
+  facet_wrap(~par)
+# minimal differences in means for RIs; though positive correlation among RIs 
+# is estimated, it's biased low (perhaps due to small number of levels)
+
+# focus on estimating parameters of interest only, including detection 
+# probability
