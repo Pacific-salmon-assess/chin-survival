@@ -34,7 +34,7 @@ seg_key <- read.csv(here::here("data",
          array_num_key = paste(segment, segment + 1, sep = "_")) %>% 
   dplyr::select(stock_group, segment, segment_name, array_num, array_num_key,
                 max_array_num) %>% 
-  distinct()
+  distinct() 
 
 
 # Import duration and distance estimates for scaling survival
@@ -136,13 +136,10 @@ prep_cjs_dat <- function(dat, fixp = NULL, grouping_vars = NULL) {
 
 
 # fix terminal value for p for Fraser/Col where detection probability v. high
-dat_tbl_trim$fixp <- ifelse(
-  grepl("Fraser", dat_tbl_trim$stock_group) #| 
-    # grepl("Up Col", dat_tbl_trim$stock_group) | 
-    # grepl("South Puget", dat_tbl_trim$stock_group) 
-  , 
-  0.99, 
-  NA)
+dat_tbl_trim$fixp <- NA #ifelse(
+  # grepl("Fraser", dat_tbl_trim$stock_group),
+  # 0.99,
+  # NA)
 dat_tbl_trim$years <- purrr::map(dat_tbl_trim$wide_array_dat, function (x) {
   x$year %>% as.factor() %>% levels()
 })
@@ -166,19 +163,15 @@ dat_tbl_trim$dat_in <- pmap(
 hier_mod_sims <- stan_model(
   here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_v3.stan")
 )
-# not needed unless we fix p for stock's other than fraser
-hier_mod_sims_fixp <- stan_model(
-  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_fixp_v3.stan")
-)
-hier_mod_sims_fixp_stk <- stan_model(
-  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_fixp_v3_stock.stan")
+hier_mod_sims_stk <- stan_model(
+  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_v3_stock.stan")
 )
 
 
 ## TEST FIT --------------------------------------------------------------------
 
 #MCMC settings
-# n_chains = 4
+# n_chains = 1
 # n_iter = 2000
 # n_warmup = n_iter / 2
 # params <- c(
@@ -195,20 +188,20 @@ hier_mod_sims_fixp_stk <- stan_model(
 # )
 # params3 <- c(
 #   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
-#   "L_Rho_yr", "alpha_p", "alpha_yr_p", 
+#   "L_Rho_yr", "alpha_p", "alpha_yr_p",
 #   # transformed pars or estimated quantities
-#   "Rho_yr", "phi_yr", "p_yr", "y_hat",
+#   "Rho_yr", "phi_yr", "p_yr", "beta_yr", "y_hat",
 #   # stock specific pars and quants
 #   "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
 #   "alpha_yr_phi", "alpha_stk_phi_z"
 # )
-# 
-# # ## FOR DEBUGGING
+
+## FOR DEBUGGING
 # dd <-  dat_tbl_trim$dat_in[[2]]
 # dd$nstock <- dat_tbl_trim$bio_dat[[2]]$agg %>% unique() %>% length()
-# dd$stock <- dat_tbl_trim$bio_dat[[2]]$agg %>% 
-#   as.factor() %>% 
-#   droplevels() %>% 
+# dd$stock <- dat_tbl_trim$bio_dat[[2]]$agg %>%
+#   as.factor() %>%
+#   droplevels() %>%
 #   as.numeric()
 # # saveRDS(dd, here::here("data", "model_outputs", "sample_cjs_dat.rds"))
 # 
@@ -255,7 +248,8 @@ hier_mod_sims_fixp_stk <- stan_model(
 #     alpha_phi = rnorm(1, 0, 0.5),
 #     # note z transformed so inverted compared to beta_phi or beta_p
 #     alpha_yr_phi_z = matrix(
-#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
+#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), 
+#       nrow = (dd$n_occasions - 1)
 #     ),
 #     alpha_stk_phi = rnorm(dd$nstock, 0, 0.5),
 #     alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
@@ -263,16 +257,17 @@ hier_mod_sims_fixp_stk <- stan_model(
 #     sigma_alpha_stk_phi = rexp(1, 2),
 #     # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
 #     L_Rho_yr = matrix(
-#       runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
+#       runif((dd$n_occasions - 1)^2, -0.5, 0.5), 
+#       nrow = (dd$n_occasions - 1)
 #     ),
 #     alpha_p = rnorm(1, 0, 0.5),
 #     alpha_yr_p = matrix(
-#       rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = dd$nyear
+#       rnorm(dd$nyear * (dd$n_occasions), 0, 0.5), nrow = dd$nyear
 #     )
 #   )
 # })
-# 
-# 
+
+
 # fit <- sampling(
 #   hier_mod_sims, data = dd, pars = params,
 #   init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
@@ -286,7 +281,7 @@ hier_mod_sims_fixp_stk <- stan_model(
 #   control = list(adapt_delta = 0.95)
 # )
 # fit3 <- sampling(
-#   hier_mod_sims_fixp_stk, data = dd, pars = params3,
+#   hier_mod_sims_stk, data = dd, pars = params3,
 #   init = inits3, chains = n_chains, iter = n_iter, warmup = n_warmup,
 #   open_progress = FALSE,
 #   control = list(adapt_delta = 0.95)
@@ -319,33 +314,59 @@ hier_mod_sims_fixp_stk <- stan_model(
 n_chains = 4
 n_iter = 2000
 n_warmup = n_iter / 2
-params_fixp <- c(
+pars_in <- c(
   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
   "L_Rho_yr", "alpha_p", "alpha_yr_p",
   # transformed pars or estimated quantities
-  "Rho_yr", "alpha_yr_phi", "phi_yr", "p_yr", "y_hat"
+  "Rho_yr", "alpha_yr_phi", "phi_yr", "p_yr", "beta_yr", "y_hat"
 )
 
-## TODO: remove fixp since not used and replace Fraser w/ hier stock model
 cjs_hier_sims <- pmap(
-  list(x = dat_tbl_trim$dat_in, fixp = dat_tbl_trim$fixp, 
-       stock_group = dat_tbl_trim$stock_group), 
-  .f = function(x, fixp, stock_group) {
-    # used fixed p model if fixed p value is provided in tbl and adjust inits
-    # for alpha_yr p accordingly
-    if (!is.na(fixp)) {
-      mod <- hier_mod_sims_fixp
-      alpha_yr_p_dim <- x$nyear * (x$n_occasions - 1)
-      pars_in <- params_fixp
-    } else {
-      mod <- hier_mod_sims
-      alpha_yr_p_dim <- x$nyear * (x$n_occasions)
-      pars_in <- c(params_fixp, "beta_yr")
-    }
+  list(x = dat_tbl_trim$dat_in, stock_group = dat_tbl_trim$stock_group,
+       bio_dat = dat_tbl_trim$bio_dat), 
+  .f = function(x, stock_group, bio_dat) {
     
     if (stock_group == "Fraser") {
-      NULL
+      mod <- hier_mod_sims_stk
+      x$nstock <- bio_dat$agg %>% unique() %>% length()
+      x$stock <- bio_dat$agg %>% 
+        as.factor() %>% 
+        droplevels() %>% 
+        as.numeric()
+      
+      pars <- c(pars_in,
+                # stock specific pars and quants
+                "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
+                "alpha_yr_phi", "alpha_stk_phi_z")
+      
+      inits <- lapply(1:n_chains, function (i) {
+        list(
+          alpha_phi = rnorm(1, 0, 0.5),
+          # note z transformed so inverted compared to beta_phi or beta_p
+          alpha_yr_phi_z = matrix(
+            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5), 
+            nrow = (x$n_occasions - 1)
+          ),
+          alpha_stk_phi = rnorm(x$nstock, 0, 0.5),
+          alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
+          sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
+          sigma_alpha_stk_phi = rexp(1, 2),
+          # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+          L_Rho_yr = matrix(
+            runif((x$n_occasions - 1)^2, -0.5, 0.5), nrow = (x$n_occasions - 1)
+          ),
+          alpha_p = rnorm(1, 0, 0.5),
+          alpha_yr_p = matrix(
+            rnorm(x$nyear * (x$n_occasions), 0, 0.5), nrow = x$nyear
+          )
+        )
+      })
+      
     } else{
+      mod <- hier_mod_sims
+      
+      pars <- pars_in
+      
       # matrix of inits with same dims as estimated parameter matrices
       inits <- lapply(1:n_chains, function (i) {
         list(
@@ -363,58 +384,47 @@ cjs_hier_sims <- pmap(
             nrow = (x$n_occasions - 1)
           ),
           alpha_p = rnorm(1, 0, 0.5),
-          alpha_yr_p = matrix(rnorm(alpha_yr_p_dim, 0, 0.5), nrow = x$nyear)
+          alpha_yr_p = matrix(rnorm(x$nyear * (x$n_occasions), 0, 0.5), 
+                              nrow = x$nyear)
         )
       })
       
-      sampling(mod, data = x, pars = pars_in,
-               init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
-               open_progress = FALSE,
-               control = list(adapt_delta = 0.95))
+      sampling(
+        mod, data = x, pars = pars,
+        init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
+        open_progress = FALSE,
+        control = list(adapt_delta = 0.96)
+      )
     }
 })
 
+# 
+# EXPLORE DIVERGENT TRANSITIONS
+# sampler_params <- get_sampler_params(dd)
+# divergent_indices <- which(sampler_params[[1]][, "divergent__"] == 1)
+# posterior_samples <- as.array(dd)
+# # Extract samples corresponding to divergent transitions
+# divergent_samples <- posterior_samples[divergent_indices, , ]
+# 
+# parameter_samples <- posterior_samples[, , 38]
+# divergence_region <- (452 - 5):(452 + 5)
+# 
+# df <- data.frame(
+#   Iteration = seq_along(parameter_samples),
+#   Parameter = parameter_samples
+# ) %>% 
+#   pivot_longer(
+#     starts_with("Parameter"),
+#     names_to = "Chain",
+#     values_to = "Est"
+#   )
+# 
+# ggplot(df[df$Iteration %in% divergence_region, ],
+#        aes(x = Iteration, y = Est, Colour = Chain)) +
+#   geom_line() +
+#   geom_point(data = df %>% filter(Iteration == "452"), color = "red") 
+# 
 
-# separately fit hierarchical stocks model for Fraser only
-params_stk <- c(params_fixp, "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk")
-
-
-dd <-  dat_tbl_trim$dat_in[[2]]
-dd$nstock <- dat_tbl_trim$bio_dat[[2]]$agg %>% unique() %>% length()
-dd$stock <- dat_tbl_trim$bio_dat[[2]]$agg %>% 
-  as.factor() %>% 
-  droplevels() %>% 
-  as.numeric()
-inits_stk <- lapply(1:n_chains, function (i) {
-  list(
-    alpha_phi = rnorm(1, 0, 0.5),
-    # note z transformed so inverted compared to beta_phi or beta_p
-    alpha_yr_phi_z = matrix(
-      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = (dd$n_occasions - 1)
-    ),
-    alpha_stk_phi = rnorm(dd$nstock, 0, 0.5),
-    alpha_t_phi = rnorm(dd$n_occasions - 1, 0, 0.5),
-    sigma_alpha_yr_phi = rexp((dd$n_occasions - 1), 2),
-    sigma_alpha_stk_phi = rexp(1, 2),
-    # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-    L_Rho_yr = matrix(
-      runif((dd$n_occasions - 1)^2, -0.5, 0.5), nrow = (dd$n_occasions - 1)
-    ),
-    alpha_p = rnorm(1, 0, 0.5),
-    alpha_yr_p = matrix(
-      rnorm(dd$nyear * (dd$n_occasions - 1), 0, 0.5), nrow = dd$nyear
-    )
-  )
-})
-fit_stk <- sampling(
-  hier_mod_sims_fixp_stk, data = dd, pars = params_stk,
-  init = inits_stk, chains = n_chains, iter = n_iter, warmup = n_warmup,
-  open_progress = FALSE,
-  control = list(adapt_delta = 0.95)
-)
-
-
-cjs_hier_sims[[2]] <- fit_stk
 
 # add to tibble
 dat_tbl_trim$cjs_hier <- cjs_hier_sims
@@ -532,25 +542,20 @@ dev.off()
 # extract phi matrix and swap last col with beta estimates (i.e. combined p and 
 # phi) except for fix p models 
 # stocks
-phi_mat <- pmap(
-  list(dat_tbl_trim$cjs_hier, dat_tbl_trim$fixp), 
-  function(x, fixp) {
-  if (!is.na(fixp)) {
-    extract(x)[["phi_yr"]]
-  } else {
-    phi_adj <- extract(x)[["phi_yr"]]
-    # replace array corresponding to last stage-specific survival est, w/ beta
-    phi_adj[ , , dim(phi_adj)[3]] <- extract(x)[["beta_yr"]]
-    return(phi_adj)
-  }
+phi_mat <- map(
+  dat_tbl_trim$cjs_hier, 
+  function(x) {
+  phi_adj <- extract(x)[["phi_yr"]]
+  # replace array corresponding to last stage-specific survival est, w/ beta
+  phi_adj[ , , dim(phi_adj)[3]] <- extract(x)[["beta_yr"]]
+  return(phi_adj)
 })
 
 
 # calculate cumulative survival across segments
 cum_surv_list <- pmap(
-  list(phi_mat, dat_tbl_trim$stock_group, dat_tbl_trim$years, 
-       dat_tbl_trim$fixp), 
-  function (x, yy, group_names, fixp) {
+  list(phi_mat, dat_tbl_trim$stock_group, dat_tbl_trim$years), 
+  function (x, yy, group_names) {
     if(dim(x)[2] != length(group_names)) 
       stop("Array dimensions do not match group levels.")
     
@@ -590,9 +595,8 @@ cum_surv_list <- pmap(
       mutate(median = median(est),
              low = quantile(est, 0.05),
              up = quantile(est, 0.95),
-             fixp = fixp,
              par = ifelse(
-               (is.na(fixp) & hab == "river"),
+               hab == "river",
                "beta",
                "phi"
              )) %>% 
@@ -604,32 +608,28 @@ dat_tbl_trim$cum_survival <- cum_surv_list
 
 
 ## calculate average among years
-phi_mat_mean <- map2(
-  dat_tbl_trim$cjs_hier, dat_tbl_trim$fixp,
-  function(x, y) {
+phi_mat_mean <- map(
+  dat_tbl_trim$cjs_hier,
+  function(x) {
     alpha <- extract(x)[["alpha_phi"]]
     alpha_t <- extract(x)[["alpha_t_phi"]]
     mean_phi <- apply(
       alpha_t, 2, function (alpha_t) boot::inv.logit(alpha + alpha_t)
       )
-    if (!is.na(y)) {
-      return(mean_phi)
-    } else {
-      # calculate average beta per iteration among years, then replace mean
-      # phi for last stage when p isn't fixed
-      mean_beta <- apply(
-        extract(x)[["beta_yr"]], 1, mean
-      )
-      # adjust final stage-specific estimate by detection probability
-      mean_phi[, ncol(mean_phi)] <- mean_beta
-      return(mean_phi)
-    }
+    # calculate average beta per iteration among years, then replace mean
+    # phi for last stage when p isn't fixed
+    mean_beta <- apply(
+      extract(x)[["beta_yr"]], 1, mean
+    )
+    # adjust final stage-specific estimate by detection probability
+    mean_phi[, ncol(mean_phi)] <- mean_beta
+    return(mean_phi)
   }
 )
 
 cum_surv_list_mean <- pmap(
-  list(phi_mat_mean, dat_tbl_trim$stock_group, dat_tbl_trim$fixp), 
-  function (x, yy, fixp) {
+  list(phi_mat_mean, dat_tbl_trim$stock_group), 
+  function (x, yy) {
     dims <- list(iter = seq(1, dim(x)[1], by = 1),
                  segment = seq(1, dim(x)[2], by = 1))
     
@@ -660,9 +660,8 @@ cum_surv_list_mean <- pmap(
       mutate(median = median(est),
              low = quantile(est, 0.05),
              up = quantile(est, 0.95),
-             fixp = fixp,
              par = ifelse(
-               (is.na(fixp) & hab == "river"),
+               hab == "river",
                "beta",
                "phi"
              )) %>% 
@@ -765,10 +764,20 @@ dev.off()
 
 
 # posterior estimates of det probability for Upper Col
-p_mat <- extract(dat_tbl_trim$cjs_hier[[5]])[["p_yr"]]
-hist(p_mat[ , 1:5, 5], main = "Lower River p") 
-hist(p_mat[ , 1:5, 6], main = "Bonneville p") 
-hist(p_mat[ , 1:5, 7], main = "Upriver p") 
+p_mat_uc <- extract(dat_tbl_trim$cjs_hier[[5]])[["p_yr"]]
+hist(p_mat_uc[ , 1:5, 5], main = "Lower River p") 
+hist(p_mat_uc[ , 1:5, 6], main = "Bonneville p") 
+hist(p_mat_uc[ , 1:5, 7], main = "Upriver p") 
+
+# posterior estimates of det probability for Low Col
+p_mat_lc <- extract(dat_tbl_trim$cjs_hier[[3]])[["p_yr"]]
+hist(p_mat_lc[ , 1:5, 5], main = "Lower River p") 
+hist(p_mat_lc[ , 1:5, 6], main = "Bonneville p")
+
+# posterior estimates of det probability for Fraser
+p_mat_f <- extract(dat_tbl_trim$cjs_hier[[2]])[["p_yr"]]
+hist(p_mat_f[ , 1:5, 5], main = "Below Mission p") 
+hist(p_mat_f[ , 1:5, 6], main = "Above Mission p")
 
 
 # estimates of stage specific mean survival rates
@@ -795,7 +804,7 @@ med_seg_surv <- purrr::map2(
   bind_rows() %>% 
   mutate(
     par = ifelse(
-      stock_group != "Fraser" & array_num == max_array_num,
+      array_num == max_array_num,
       "beta",
       "phi"
     )
@@ -818,9 +827,9 @@ png(here::here("figs", "cjs", "phi_ests.png"),
 stage_spec_surv
 dev.off()
 
-saveRDS(
-  stage_spec_surv, here::here("figs", "cjs", "stage_spec_surv.rds")
-)
+# saveRDS(
+#   stage_spec_surv, here::here("figs", "cjs", "stage_spec_surv.rds")
+# )
 
 
 # year- and stage-specific detection parameter estimates
@@ -889,42 +898,32 @@ surv_plot_clean  <- purrr::map(dat_tbl_trim$cum_survival, function (x) {
     facet_wrap(~group)
 })
 
-surv_plot_mean <- dat_tbl_trim$cum_survival_mean %>% 
+mean_surv_dat <- dat_tbl_trim$cum_survival_mean %>% 
   bind_rows() %>% 
   mutate(agg_name_f = NA,
+         # segment_name_f = as.factor(segment_name)
          segment_name = factor(
-           segment_name, 
+           segment_name,
            levels = c(
              "Release", "WCVI/\nSalish\nSea", "Marine", "NW\nWA", "SW\nWA",
              "Central\nCA",
-             "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia", 
-             "Puget\nSound", "Lower\nCol.", "Bonneville", "In\nRiver"   
+             "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia",
+             "Puget\nSound", "Lower\nCol.", "Bonneville", "In\nRiver",
+             "Downstream\nMission", "Upstream\nMission"
            ))
-         ) %>% 
-  plot_surv(., show_mcmc = F) + 
+  )
+
+surv_plot_mean <- plot_surv(mean_surv_dat, show_mcmc = F) + 
   facet_wrap(~stock_group, scales = "free_x", nrow = 2)
 
 # as above but remove beta estimates and subset to high res stocks
-surv_plot_mean_trim <- dat_tbl_trim$cum_survival_mean %>% 
-  bind_rows() %>% 
+surv_plot_mean_trim <- mean_surv_dat %>% 
   filter(
     par == "phi",
     !stock_group %in% c("Cali", "WA_OR", "WCVI")
   ) %>% 
-  mutate(agg_name_f = NA,
-         segment_name = factor(
-           segment_name, 
-           levels = c(
-             "Release", "WCVI/\nSalish\nSea", "Marine", "NW\nWA", "SW\nWA",
-             "Central\nCA",
-             "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia", 
-             "Puget\nSound", "Lower\nCol.", "Bonneville", "In\nRiver"   
-           )),
-         stock_group = factor(
-           stock_group, levels = c("Up Col.", "Low Col.", "Fraser", "South Puget"))
-  ) %>% 
   plot_surv(., show_mcmc = F) + 
-  ylim(c(0.5, 1)) +
+  ylim(c(0.45, 1)) +
   facet_wrap(~stock_group, scales = "free_x", nrow = 2)
 
 
@@ -949,21 +948,15 @@ surv_plot_mean_trim
 dev.off()
 
 
-saveRDS(
-  surv_plot_mean, here::here("figs", "cjs", "mean_cum_surv.rds")
-)
-
-
 # plot terminal survival rate (absolute and scaled by migration distance) of 
 # high detection probability stocks 
 term_surv_dat <- dat_tbl_trim$cum_survival_mean %>% 
   bind_rows() %>% 
   filter(
-    stock_group == "Fraser" & segment_name == "In\nRiver" |
+    stock_group == "Fraser" & segment_name == "Downstream\nMission" |
     stock_group == "Up Col." & segment_name == "Bonneville" |
     stock_group == "Low Col." & segment_name == "Lower\nCol." |
     stock_group == "South Puget" & segment_name == "Puget\nSound"
-    # stock_group %in% c("Fraser", "South Puget", "Up Col.", "Low Col.")
     )
 
 p_total <- term_surv_dat %>% 
@@ -1007,79 +1000,79 @@ dev.off()
 
 # plot stage-specific mean survival but scaled by either migration distance
 # or duration (calculated in chinTagging repo segment_distance_duration.R)
-scaled_dat_list <- purrr::map2(
-  dat_tbl_trim$phi_mat_mean, dat_tbl_trim$stock_group,
-  ~ .x %>% 
-    as.table() %>% 
-    as.data.frame() %>% 
-    mutate(segment = as.integer(Var2),
-           iter = rep(1:nrow(.x), 
-                      times = length(unique(Var2))),
-           key_stock_group = .y
-    ) %>% 
-    group_by(
-      segment, key_stock_group
-    ) %>%
-    select(key_stock_group, iter, segment, est = Freq) %>% 
-    left_join(., seg_key %>% rename(key_stock_group = stock_group), 
-              by = c("key_stock_group", "segment")) %>% 
-    full_join(., array_dat, 
-              by = c("key_stock_group", "iter", "array_num_key")) %>% 
-    filter(iter %in% array_dat$iter,
-           !segment_name == "Release") %>% 
-    mutate(
-      scaled_surv_dist = est^(1 / (dist_km / 100)),
-      scaled_surv_dur = est^(1 / (time_dat)),
-      par = ifelse(
-        key_stock_group %in% c("Cali", "Low Col.", "WA_OR", "WCVI") & 
-          segment_name == "In\nRiver",
-        "beta",
-        "phi"
-      )
-      ) 
-) %>% 
-  bind_rows() %>% 
-  select(-dist_km, -time_dat) %>% 
-  pivot_longer(
-    cols = c("scaled_surv_dist", "scaled_surv_dur"),
-    names_to = "metric",
-    values_to = "surv",
-    names_prefix = "scaled_surv_"
-  ) %>% 
-  group_by(
-    key_stock_group, segment, segment_name, par, metric
-  ) %>% 
-  summarize(
-    med = median(surv),
-    lo = rethinking::HPDI(surv, prob = 0.9)[1],
-    up = rethinking::HPDI(surv, prob = 0.9)[2]
-  ) 
-
-
-png(here::here("figs", "cjs", "stage_surv_duration.png"), 
-    width = 7.5, height = 5, units = "in", res = 200)
-scaled_dat_list %>% filter(!par == "beta", metric == "dur") %>% 
-  ggplot() +
-  geom_pointrange(aes(x = fct_reorder(as.factor(segment_name), segment),
-                      y = med, ymin = lo, ymax = up)) +
-  labs(y = "Posterior Cumulative Survival Rate per Day") +
-  ggsidekick::theme_sleek() +
-  theme(axis.title.x = element_blank()) +
-  facet_wrap(~key_stock_group, scales = "free")
-dev.off()
-  
-
-png(here::here("figs", "cjs", "stage_surv_distance.png"), 
-    width = 7.5, height = 5, units = "in", res = 200)
-scaled_dat_list %>% filter(!par == "beta", metric == "dist") %>% 
-  ggplot() +
-  geom_pointrange(aes(x = fct_reorder(as.factor(segment_name), segment),
-                      y = med, ymin = lo, ymax = up)) +
-  labs(y = "Posterior Cumulative Survival Rate per 100 km") +
-  ggsidekick::theme_sleek() +
-  theme(axis.title.x = element_blank()) +
-  facet_wrap(~key_stock_group, scales = "free")
-dev.off()
+# scaled_dat_list <- purrr::map2(
+#   dat_tbl_trim$phi_mat_mean, dat_tbl_trim$stock_group,
+#   ~ .x %>% 
+#     as.table() %>% 
+#     as.data.frame() %>% 
+#     mutate(segment = as.integer(Var2),
+#            iter = rep(1:nrow(.x), 
+#                       times = length(unique(Var2))),
+#            key_stock_group = .y
+#     ) %>% 
+#     group_by(
+#       segment, key_stock_group
+#     ) %>%
+#     select(key_stock_group, iter, segment, est = Freq) %>% 
+#     left_join(., seg_key %>% rename(key_stock_group = stock_group), 
+#               by = c("key_stock_group", "segment")) %>% 
+#     full_join(., array_dat, 
+#               by = c("key_stock_group", "iter", "array_num_key")) %>% 
+#     filter(iter %in% array_dat$iter,
+#            !segment_name == "Release") %>% 
+#     mutate(
+#       scaled_surv_dist = est^(1 / (dist_km / 100)),
+#       scaled_surv_dur = est^(1 / (time_dat)),
+#       par = ifelse(
+#         key_stock_group %in% c("Cali", "Low Col.", "WA_OR", "WCVI") & 
+#           segment_name == "In\nRiver",
+#         "beta",
+#         "phi"
+#       )
+#       ) 
+# ) %>% 
+#   bind_rows() %>% 
+#   select(-dist_km, -time_dat) %>% 
+#   pivot_longer(
+#     cols = c("scaled_surv_dist", "scaled_surv_dur"),
+#     names_to = "metric",
+#     values_to = "surv",
+#     names_prefix = "scaled_surv_"
+#   ) %>% 
+#   group_by(
+#     key_stock_group, segment, segment_name, par, metric
+#   ) %>% 
+#   summarize(
+#     med = median(surv),
+#     lo = rethinking::HPDI(surv, prob = 0.9)[1],
+#     up = rethinking::HPDI(surv, prob = 0.9)[2]
+#   ) 
+# 
+# 
+# png(here::here("figs", "cjs", "stage_surv_duration.png"), 
+#     width = 7.5, height = 5, units = "in", res = 200)
+# scaled_dat_list %>% filter(!par == "beta", metric == "dur") %>% 
+#   ggplot() +
+#   geom_pointrange(aes(x = fct_reorder(as.factor(segment_name), segment),
+#                       y = med, ymin = lo, ymax = up)) +
+#   labs(y = "Posterior Cumulative Survival Rate per Day") +
+#   ggsidekick::theme_sleek() +
+#   theme(axis.title.x = element_blank()) +
+#   facet_wrap(~key_stock_group, scales = "free")
+# dev.off()
+#   
+# 
+# png(here::here("figs", "cjs", "stage_surv_distance.png"), 
+#     width = 7.5, height = 5, units = "in", res = 200)
+# scaled_dat_list %>% filter(!par == "beta", metric == "dist") %>% 
+#   ggplot() +
+#   geom_pointrange(aes(x = fct_reorder(as.factor(segment_name), segment),
+#                       y = med, ymin = lo, ymax = up)) +
+#   labs(y = "Posterior Cumulative Survival Rate per 100 km") +
+#   ggsidekick::theme_sleek() +
+#   theme(axis.title.x = element_blank()) +
+#   facet_wrap(~key_stock_group, scales = "free")
+# dev.off()
 
 
 ## Calculate cumulative survival for Fraser by stock ---------------------------
@@ -1091,7 +1084,8 @@ stk_key <- data.frame(stock = dat_tbl_trim$bio_dat[[2]]$agg) %>%
       droplevels() %>% 
       as.numeric()
   ) %>% 
-  distinct()
+  distinct() %>% 
+  arrange(agg_n)
 
 phi_stk <- extract(dat_tbl_trim$cjs_hier[[2]])[["phi_stk"]]
 
@@ -1158,3 +1152,23 @@ saveRDS(
   stk_cumprod_plot, here::here("figs", "cjs", "frsr_stk_cum_surv.rds")
 )
 
+
+stk_effect <- extract(dat_tbl_trim$cjs_hier[[2]])[["alpha_stk_phi"]]
+colnames(stk_effect) <- stk_key$stock
+
+library(ggridges)
+
+png(here::here("figs", "cjs", "fraser_stk_effect.png"), 
+    height = 4.5, width = 5.5, units = "in", res = 200)
+stk_effect %>% 
+  as.data.frame() %>% 
+  pivot_longer(
+    cols = everything(),
+    names_to = "stk",
+    values_to = "est"
+  ) %>% 
+  ggplot(., aes(x = est, y = stk, fill = stk)) +
+  geom_density_ridges(alpha = 0.5) + 
+  geom_vline(aes(xintercept = 0), lty = 2) +
+  ggsidekick::theme_sleek()
+dev.off()

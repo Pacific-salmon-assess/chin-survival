@@ -144,7 +144,7 @@ saveRDS(det_dat1, here::here("data", "surv_log_reg_data.rds"))
 
 # add updated Fraser groupings and imputed lipid content
 dat_tbl_trim <- dat_tbl %>% 
-  filter(!stock_group %in% c("ECVI", "North Puget")) %>% 
+  filter(!stock_group %in% c("ECVI", "North Puget", "WA_OR")) %>% 
   mutate(
     bio_dat = purrr::map(bio_dat, function (x) {
       x %>%
