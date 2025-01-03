@@ -19,11 +19,24 @@ set.seed(123)
 
 ## Import occurence matrix (generated in chinTagging/prep_detection_histories.R 
 # and cleaned in data_clean.R)
-dat_tbl_trim <- readRDS(here::here("data", "surv_cjs_data.rds")) %>% 
-  # drop WA/OR coastal
-  filter(
-    !stock_group == "WA_OR"
-  )
+dat_tbl_trim <- readRDS(here::here("data", "surv_cjs_data.rds")) 
+
+mature_tags <- dat_tbl_trim %>% 
+  unnest(bio_dat) %>%
+  filter(stage_1 == "mature") %>% 
+  pull(vemco_code)
+
+dat_tbl_trim$bio_dat <- purrr::map(
+  dat_tbl_trim$bio_dat,
+  ~ .x %>% 
+    filter(vemco_code %in% mature_tags)
+)
+
+dat_tbl_trim$wide_array_dat <- purrr::map(
+  dat_tbl_trim$wide_array_dat,
+  ~ .x %>% 
+    filter(vemco_code %in% mature_tags)
+)
 
 
 ## Import survival segment key for labelling plots 
@@ -107,7 +120,7 @@ saveRDS(mean_det_pt, here::here("figs", "average_detections.rds" ))
 # preds
 
 # Function to convert wide DF to list input for Stan models
-prep_cjs_dat <- function(dat, fixp = NULL, grouping_vars = NULL) {
+prep_cjs_dat <- function(dat, grouping_vars = NULL) {
   y <- dat %>% 
     dplyr::select(matches("[1-9]"))
   n_occasions <- ncol(y)
@@ -127,19 +140,11 @@ prep_cjs_dat <- function(dat, fixp = NULL, grouping_vars = NULL) {
         length(unique(dat[[grouping_vars[i]]]))
     }
   }
-  if (!is.null(fixp) & !is.na(fixp)) {
-    out_list[["final_fix_p"]] <- fixp 
-  }
   
   return(out_list)
 }
 
 
-# fix terminal value for p for Fraser/Col where detection probability v. high
-dat_tbl_trim$fixp <- NA #ifelse(
-  # grepl("Fraser", dat_tbl_trim$stock_group),
-  # 0.99,
-  # NA)
 dat_tbl_trim$years <- purrr::map(dat_tbl_trim$wide_array_dat, function (x) {
   x$year %>% as.factor() %>% levels()
 })
@@ -152,7 +157,6 @@ dat_tbl_trim$grouping_vars <- purrr::map(
 })
 dat_tbl_trim$dat_in <- pmap(
   list(dat = dat_tbl_trim$wide_array_dat,  
-       fixp = dat_tbl_trim$fixp,
        grouping_vars = dat_tbl_trim$grouping_vars),
   .f = prep_cjs_dat
 ) 
@@ -398,7 +402,7 @@ cjs_hier_sims <- pmap(
     }
 })
 
-# 
+
 # EXPLORE DIVERGENT TRANSITIONS
 # sampler_params <- get_sampler_params(dd)
 # divergent_indices <- which(sampler_params[[1]][, "divergent__"] == 1)
@@ -817,10 +821,8 @@ stage_spec_surv <- ggplot(med_seg_surv %>% filter(!par == "beta")) +
   geom_pointrange(aes(x = fct_reorder(as.factor(segment_name), segment),
                       y = med, ymin = lo, ymax = up)) +
   facet_wrap(~stock_group, scales = "free_x") +
-  ggsidekick::theme_sleek() +
-  theme(
-    axis.title = element_blank()
-  ) 
+  labs(x = "Migration Segment", y = "Stage-Specific Survival Rate") +
+  ggsidekick::theme_sleek() 
 
 png(here::here("figs", "cjs", "phi_ests.png"), 
     height = 5, width = 7.5, units = "in", res = 200)
@@ -954,8 +956,9 @@ term_surv_dat <- dat_tbl_trim$cum_survival_mean %>%
   bind_rows() %>% 
   filter(
     stock_group == "Fraser" & segment_name == "Downstream\nMission" |
-    stock_group == "Up Col." & segment_name == "Bonneville" |
-    stock_group == "Low Col." & segment_name == "Lower\nCol." |
+    # stock_group == "Up Col." & segment_name == "Bonneville" |
+      stock_group == "Up Col." & segment_name == "Lower\nCol." |
+      stock_group == "Low Col." & segment_name == "Lower\nCol." |
     stock_group == "South Puget" & segment_name == "Puget\nSound"
     )
 
@@ -968,12 +971,14 @@ p_total <- term_surv_dat %>%
   ggsidekick::theme_sleek() +
   theme(axis.title.x = element_blank())
 
-# import terminal migration distance
-term_dist <- read.csv(here::here("data", "terminal_locations.csv"))
+# import terminal migration distance (to avoid in river harvest focus on 
+# Lower Columbia for both UC and LW)
+term_dist <- read.csv(here::here("data", "terminal_locations.csv")) %>% 
+  filter(!location == "bonneville")
 
 p_dist <- term_surv_dat %>% 
   select(iter, est, stock_group) %>%
-  left_join(., term_dist, by = "stock_group") %>% 
+  left_join(., term_dist, by = "stock_group") %>%
   mutate(
     scaled_surv = est^(1 / (distance_km / 100))
   ) %>% 
@@ -1147,10 +1152,6 @@ png(here::here("figs", "cjs", "fraser_stock_surv.png"),
     height = 4.5, width = 5.5, units = "in", res = 200)
 stk_cumprod_plot
 dev.off()
-
-saveRDS(
-  stk_cumprod_plot, here::here("figs", "cjs", "frsr_stk_cum_surv.rds")
-)
 
 
 stk_effect <- extract(dat_tbl_trim$cjs_hier[[2]])[["alpha_stk_phi"]]
