@@ -37,16 +37,23 @@ dat_tbl_trim$wide_array_dat <- purrr::map(
   ~ .x %>% 
     filter(vemco_code %in% mature_tags)
 )
-
+dat_tbl_trim$stock_group <- fct_relevel(
+  as.factor(dat_tbl_trim$stock_group),
+  "Cali", "Low Col.", "Up Col.", "Fraser", "South Puget"
+)
 
 ## Import survival segment key for labelling plots 
 seg_key <- read.csv(here::here("data", 
                                "surv_segment_key_2023.csv")) %>%
   mutate(segment = array_num - 1,
-         segment_name = str_replace(segment_name, " ", "\n"),
+         segment_name = ifelse(
+           stock_group == "Up Col." & segment == 6,
+           "Above\nBonneville",
+           str_replace(segment_name, " ", "\n")
+         ),
          array_num_key = paste(segment, segment + 1, sep = "_")) %>% 
   dplyr::select(stock_group, segment, segment_name, array_num, array_num_key,
-                max_array_num) %>% 
+                max_array_num, terminal) %>% 
   distinct() 
 
 
@@ -327,28 +334,28 @@ pars_in <- c(
 
 cjs_hier_sims <- pmap(
   list(x = dat_tbl_trim$dat_in, stock_group = dat_tbl_trim$stock_group,
-       bio_dat = dat_tbl_trim$bio_dat), 
+       bio_dat = dat_tbl_trim$bio_dat),
   .f = function(x, stock_group, bio_dat) {
-    
+
     if (stock_group == "Fraser") {
       mod <- hier_mod_sims_stk
       x$nstock <- bio_dat$agg %>% unique() %>% length()
-      x$stock <- bio_dat$agg %>% 
-        as.factor() %>% 
-        droplevels() %>% 
+      x$stock <- bio_dat$agg %>%
+        as.factor() %>%
+        droplevels() %>%
         as.numeric()
-      
+
       pars <- c(pars_in,
                 # stock specific pars and quants
                 "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
                 "alpha_yr_phi", "alpha_stk_phi_z")
-      
+
       inits <- lapply(1:n_chains, function (i) {
         list(
           alpha_phi = rnorm(1, 0, 0.5),
           # note z transformed so inverted compared to beta_phi or beta_p
           alpha_yr_phi_z = matrix(
-            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5), 
+            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
             nrow = (x$n_occasions - 1)
           ),
           alpha_stk_phi = rnorm(x$nstock, 0, 0.5),
@@ -365,41 +372,41 @@ cjs_hier_sims <- pmap(
           )
         )
       })
-      
+
     } else{
       mod <- hier_mod_sims
-      
+
       pars <- pars_in
-      
+
       # matrix of inits with same dims as estimated parameter matrices
       inits <- lapply(1:n_chains, function (i) {
         list(
           alpha_phi = rnorm(1, 0, 0.5),
           # note z transformed so inverted compared to beta_phi or beta_p
           alpha_yr_phi_z = matrix(
-            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5), 
+            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
             nrow = (x$n_occasions - 1)
           ),
           alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
           sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
           # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
           L_Rho_yr = matrix(
-            runif((x$n_occasions - 1)^2, -0.5, 0.5), 
+            runif((x$n_occasions - 1)^2, -0.5, 0.5),
             nrow = (x$n_occasions - 1)
           ),
           alpha_p = rnorm(1, 0, 0.5),
-          alpha_yr_p = matrix(rnorm(x$nyear * (x$n_occasions), 0, 0.5), 
+          alpha_yr_p = matrix(rnorm(x$nyear * (x$n_occasions), 0, 0.5),
                               nrow = x$nyear)
         )
       })
-      
-      sampling(
-        mod, data = x, pars = pars,
-        init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
-        open_progress = FALSE,
-        control = list(adapt_delta = 0.96)
-      )
     }
+    
+    sampling(
+      mod, data = x, pars = pars,
+      init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
+      open_progress = FALSE,
+      control = list(adapt_delta = 0.96)
+    )
 })
 
 
@@ -409,32 +416,35 @@ cjs_hier_sims <- pmap(
 # posterior_samples <- as.array(dd)
 # # Extract samples corresponding to divergent transitions
 # divergent_samples <- posterior_samples[divergent_indices, , ]
-# 
+#
 # parameter_samples <- posterior_samples[, , 38]
 # divergence_region <- (452 - 5):(452 + 5)
-# 
+#
 # df <- data.frame(
 #   Iteration = seq_along(parameter_samples),
 #   Parameter = parameter_samples
-# ) %>% 
+# ) %>%
 #   pivot_longer(
 #     starts_with("Parameter"),
 #     names_to = "Chain",
 #     values_to = "Est"
 #   )
-# 
+#
 # ggplot(df[df$Iteration %in% divergence_region, ],
 #        aes(x = Iteration, y = Est, Colour = Chain)) +
 #   geom_line() +
-#   geom_point(data = df %>% filter(Iteration == "452"), color = "red") 
-# 
+#   geom_point(data = df %>% filter(Iteration == "452"), color = "red")
+#
 
+saveRDS(cjs_hier_sims,
+        here::here("data", "model_outputs", "hier_cjs_fit_tbl.RDS"))
+
+cjs_hier_sims <- readRDS(
+  here::here("data", "model_outputs", "hier_cjs_fit_tbl.RDS")
+  ) 
 
 # add to tibble
 dat_tbl_trim$cjs_hier <- cjs_hier_sims
-
-saveRDS(dat_tbl_trim, 
-        here::here("data", "model_outputs", "hier_cjs_fit_tbl.RDS")) 
 
 
 
@@ -591,19 +601,14 @@ cum_surv_list <- pmap(
       rename(est = Freq) %>% 
       #add segment key
       left_join(., seg_key, by = c("stock_group", "segment")) %>% 
-      mutate(hab = case_when(
-               segment == max(segment) ~ "river",
-               TRUE ~ "marine"
+      mutate(par = case_when(
+               segment == max(segment) ~ "beta",
+               TRUE ~ "phi"
              )) %>% 
       group_by(segment, group) %>% 
       mutate(median = median(est),
              low = quantile(est, 0.05),
-             up = quantile(est, 0.95),
-             par = ifelse(
-               hab == "river",
-               "beta",
-               "phi"
-             )) %>% 
+             up = quantile(est, 0.95)) %>% 
       ungroup() %>% 
       arrange(segment, group, iter) 
   }
@@ -656,19 +661,14 @@ cum_surv_list_mean <- pmap(
       #add segment key
       left_join(., seg_key, by = c("stock_group", "segment")) %>% 
       mutate(segment_name = fct_reorder(as.factor(segment_name), segment),
-             hab = case_when(
-               segment == max(segment) ~ "river",
-               TRUE ~ "marine"
+             par = case_when(
+               segment == max(segment) ~ "beta",
+               TRUE ~ "phi"
              )) %>% 
       group_by(segment) %>% 
       mutate(median = median(est),
              low = quantile(est, 0.05),
-             up = quantile(est, 0.95),
-             par = ifelse(
-               hab == "river",
-               "beta",
-               "phi"
-             )) %>% 
+             up = quantile(est, 0.95)) %>% 
       ungroup() %>% 
       arrange(segment, iter) 
   }
@@ -811,11 +811,10 @@ med_seg_surv <- purrr::map2(
       array_num == max_array_num,
       "beta",
       "phi"
-    )
+    ),
+    stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group))
   ) 
-
-fill_pal <- c("white", "red")
-names(fill_pal) <- c("phi", "beta")
+  
 
 stage_spec_surv <- ggplot(med_seg_surv %>% filter(!par == "beta")) +
   geom_pointrange(aes(x = fct_reorder(as.factor(segment_name), segment),
@@ -829,50 +828,128 @@ png(here::here("figs", "cjs", "phi_ests.png"),
 stage_spec_surv
 dev.off()
 
-# saveRDS(
-#   stage_spec_surv, here::here("figs", "cjs", "stage_spec_surv.rds")
-# )
+
+# year-specific phi estimates
+yr_phi_dat <- purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group,
+  function(x, y) {
+    yr_phi_mat <- extract(x)[["phi_yr"]] 
+    p_sum <- yr_phi_mat %>% 
+      as.data.frame.table() %>% 
+      rename(year = Var2, segment = Var3) %>% 
+      mutate(est = Freq,
+             year = as.numeric(as.factor(year)) + 2018,
+             array_num = as.numeric(as.factor(segment))) %>% 
+      group_by(
+        array_num, year
+      ) %>% 
+      reframe(
+        med = median(est),
+        lo = rethinking::HPDI(est, prob = 0.9)[1],
+        up = rethinking::HPDI(est, prob = 0.9)[2],
+        stock_group = y
+      ) %>% 
+      left_join(., seg_key, by = c("stock_group", "array_num")) %>% 
+      mutate(
+        segment_name = fct_reorder(as.factor(segment_name), segment)
+      ) 
+  }
+) %>% 
+  bind_rows() %>%
+  filter(!segment_name == "Release") %>% 
+  mutate(
+    year = as.factor(year),
+    segment_name = factor(
+      segment_name,
+      levels = c(
+        "Release", "WCVI/\nSalish\nSea", "Marine", "NW\nWA", "SW\nWA",
+        "Central\nCA",
+        "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia",
+        "Puget\nSound", "Lower\nCol.", "Bonneville", "Above\nBonneville",
+        "In\nRiver", "Downstream\nMission", "Upstream\nMission"
+      )),
+    stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group))
+  )
+
+png(here::here("figs", "cjs", "estimated_yearly_phi.png"), 
+    height = 5.5, width = 7.5, units = "in", res = 250)
+ggplot(yr_phi_dat) +
+  geom_pointrange(
+    aes(x = segment_name, y = med, ymin = lo, ymax = up, fill = year),
+    shape = 21,
+    position = position_dodge(width = 0.3)
+  ) +
+  facet_wrap(~stock_group, scales = "free_x", ncol = 2) +
+  scale_fill_brewer(palette = "PuOr", name = "") +
+  ggsidekick::theme_sleek() +
+  labs(x = "Segment Name", y = "Detection Probability") 
+dev.off()
+
+# calculate mean CV among years, then mean among CV
+yr_phi_dat %>% 
+  group_by(stock_group, segment) %>% 
+  summarize(
+    cv = sd(med) / mean(med) 
+  ) %>% 
+  pull(cv) %>% 
+  mean()
 
 
 # year- and stage-specific detection parameter estimates
-yr_p_mat_plots <- purrr::map2(
+yr_p_dat <- purrr::map2(
   dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group,
   function(x, y) {
-  yr_p_mat <- extract(x)[["p_yr"]] 
-  p_sum <- yr_p_mat %>% 
-    as.data.frame.table() %>% 
-    rename(year = Var2, segment = Var3) %>% 
-    mutate(est = Freq,
-           year = as.numeric(as.factor(year)) + 2018,
-           array_num = as.numeric(as.factor(segment))) %>% 
-    group_by(
-      array_num, year
-    ) %>% 
-    reframe(
-      med = median(est),
-      lo = rethinking::HPDI(est, prob = 0.9)[1],
-      up = rethinking::HPDI(est, prob = 0.9)[2],
-      stock_group = y
+    yr_p_mat <- extract(x)[["p_yr"]] 
+    p_sum <- yr_p_mat %>% 
+      as.data.frame.table() %>% 
+      rename(year = Var2, segment = Var3) %>% 
+      mutate(est = Freq,
+             year = as.numeric(as.factor(year)) + 2018,
+             array_num = as.numeric(as.factor(segment))) %>% 
+      group_by(
+        array_num, year
       ) %>% 
-    left_join(., seg_key, by = c("stock_group", "array_num")) %>% 
-    mutate(
-      segment_name = fct_reorder(as.factor(segment_name), segment)
-    )
-  
-  ggplot(p_sum) +
-    geom_pointrange(aes(x = segment_name, y = med, ymin = lo, ymax = up)) +
-    facet_wrap(~year) +
-    ggsidekick::theme_sleek() +
-    labs(title = y) +
-    theme(
-      axis.title = element_blank()
-    ) 
+      reframe(
+        med = median(est),
+        lo = rethinking::HPDI(est, prob = 0.9)[1],
+        up = rethinking::HPDI(est, prob = 0.9)[2],
+        stock_group = y
+      ) %>% 
+      left_join(., seg_key, by = c("stock_group", "array_num")) %>% 
+      mutate(
+        segment_name = fct_reorder(as.factor(segment_name), segment)
+      )
   }
+) %>% 
+  bind_rows() %>%
+  filter(!segment_name == "Release") %>% 
+  mutate(
+    year = as.factor(year),
+    segment_name = factor(
+      segment_name,
+      levels = c(
+        "Release", "WCVI/\nSalish\nSea", "Marine", "NW\nWA", "SW\nWA",
+        "Central\nCA",
+        "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia",
+        "Puget\nSound", "Lower\nCol.", "Bonneville", "Above\nBonneville",
+        "In\nRiver", "Downstream\nMission", "Upstream\nMission"
+      )),
+    stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group))
   )
 
-pdf(here::here("figs", "cjs", "estimated_yearly_p.pdf"), 
-    height = 5.5, width = 7.5)
-yr_p_mat_plots
+
+png(here::here("figs", "cjs", "estimated_yearly_p.png"), 
+    height = 5.5, width = 7.5, units = "in", res = 250)
+ggplot(yr_p_dat) +
+  geom_pointrange(
+    aes(x = segment_name, y = med, ymin = lo, ymax = up, fill = year),
+    shape = 21,
+    position = position_dodge(width = 0.3)
+  ) +
+  facet_wrap(~stock_group, scales = "free_x", ncol = 2) +
+  scale_fill_brewer(palette = "PuOr", name = "") +
+  ggsidekick::theme_sleek() +
+  labs(x = "Segment Name", y = "Detection Probability") 
 dev.off()
 
 
@@ -910,13 +987,33 @@ mean_surv_dat <- dat_tbl_trim$cum_survival_mean %>%
              "Release", "WCVI/\nSalish\nSea", "Marine", "NW\nWA", "SW\nWA",
              "Central\nCA",
              "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia",
-             "Puget\nSound", "Lower\nCol.", "Bonneville", "In\nRiver",
-             "Downstream\nMission", "Upstream\nMission"
+             "Puget\nSound", "Lower\nCol.", "Bonneville", "Above\nBonneville",
+             "In\nRiver", "Downstream\nMission", "Upstream\nMission"
            ))
-  )
+  ) %>% 
+  select(-c(iter, est)) %>% 
+  distinct() 
 
-surv_plot_mean <- plot_surv(mean_surv_dat, show_mcmc = F) + 
-  facet_wrap(~stock_group, scales = "free_x", nrow = 2)
+fill_pal <- c("white", "black")
+names(fill_pal) <- c("no", "yes")
+shape_pal <- c(21, 24)
+names(shape_pal) <- c("phi", "beta")
+
+surv_plot_mean <- ggplot(data = mean_surv_dat) +
+  geom_pointrange(
+    aes(x = fct_reorder(segment_name, segment), 
+        y = median, ymin = low, ymax = up, fill = terminal, shape = par)
+  ) +
+  ggsidekick::theme_sleek() +
+  scale_shape_manual(values = shape_pal, name = "Parameter") +
+  scale_fill_manual(values = fill_pal, label = c("Marine", "Terminal"),
+                    name = "Terminal") +
+  theme(legend.text=element_text(size = 9),
+        axis.text.x = element_text(size = rel(.8))) +
+  guides(fill = guide_legend(override.aes = list(shape = 21))) +
+  facet_wrap(~stock_group, scales = "free_x", ncol = 2) +
+  labs(x = "Segment Name", y = "Cumulative Survival")
+
 
 # as above but remove beta estimates and subset to high res stocks
 surv_plot_mean_trim <- mean_surv_dat %>% 
@@ -940,7 +1037,7 @@ surv_plot_clean
 dev.off()
 
 png(here::here("figs", "cjs", "cum_surv_mean_hier_clean.png"), 
-    height = 5, width = 9.5, units = "in", res = 200)
+    height = 5, width =7.5, units = "in", res = 200)
 surv_plot_mean
 dev.off()
 
@@ -956,18 +1053,22 @@ term_surv_dat <- dat_tbl_trim$cum_survival_mean %>%
   bind_rows() %>% 
   filter(
     stock_group == "Fraser" & segment_name == "Downstream\nMission" |
-    # stock_group == "Up Col." & segment_name == "Bonneville" |
+      # stock_group == "Up Col." & segment_name == "Bonneville" |
       stock_group == "Up Col." & segment_name == "Lower\nCol." |
       stock_group == "Low Col." & segment_name == "Lower\nCol." |
-    stock_group == "South Puget" & segment_name == "Puget\nSound"
-    )
+      stock_group == "South Puget" & segment_name == "Puget\nSound" |
+      stock_group == "Cali" & segment_name == "Central\nCA"
+    ) %>% 
+  mutate(
+    stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group))
+  )
 
 p_total <- term_surv_dat %>% 
   select(stock_group, median, low, up) %>% 
   distinct() %>% 
   ggplot(.) +
   geom_pointrange(aes(x = stock_group, y = median, ymin = low, ymax = up)) +
-  labs(y = "Posterior Cumulative Terminal Survival Rate") +
+  labs(y = "Cumulative Terminal\nSurvival Rate") +
   ggsidekick::theme_sleek() +
   theme(axis.title.x = element_blank())
 
@@ -980,7 +1081,8 @@ p_dist <- term_surv_dat %>%
   select(iter, est, stock_group) %>%
   left_join(., term_dist, by = "stock_group") %>%
   mutate(
-    scaled_surv = est^(1 / (distance_km / 100))
+    scaled_surv = est^(1 / (distance_km / 100)),
+    stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group))
   ) %>% 
   group_by(
     stock_group
@@ -992,7 +1094,7 @@ p_dist <- term_surv_dat %>%
   ) %>% 
   ggplot(.) +
   geom_pointrange(aes(x = stock_group, y = med, ymin = lo, ymax = up)) +
-  labs(y = "Posterior Cumulative Survival Rate per 100 km") +
+  labs(y = "Cumulative Terminal\nSurvival Rate per 100 km") +
   ggsidekick::theme_sleek() +
   theme(axis.title.x = element_blank())
 
@@ -1168,8 +1270,32 @@ stk_effect %>%
     names_to = "stk",
     values_to = "est"
   ) %>% 
-  ggplot(., aes(x = est, y = stk, fill = stk)) +
-  geom_density_ridges(alpha = 0.5) + 
-  geom_vline(aes(xintercept = 0), lty = 2) +
-  ggsidekick::theme_sleek()
+  group_by(
+    stk
+  ) %>% 
+  summarize(
+    med = median(est),
+    lo = rethinking::HPDI(est, prob = 0.9)[1],
+    up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) %>% 
+  mutate(
+    stk = factor(
+      stk, 
+      levels = c("Fraser Spr. Yr.", "Fraser Sum. Yr.", "Fraser Sum. 4.1", 
+                 "Fraser Fall")),
+    stk = fct_recode(stk, 
+                     "Spring 1.x" = "Fraser Spr. Yr.",
+                     "Summer 1.3" = "Fraser Sum. Yr.", 
+                     "Summer 0.3" = "Fraser Sum. 4.1", 
+                     "Fall 0.3" = "Fraser Fall")
+  ) %>% 
+  ggplot(.) +
+  geom_pointrange(aes(x = stk, y = med, ymin = lo, ymax = up, fill = stk),
+                  shape = 21) +
+  scale_fill_brewer(palette = "YlGnBu") +
+  labs(x = "Fraser River Stock Group", y = "Stock-Specific Survival Effect") +
+  geom_hline(yintercept = 0, lty = 2) +
+  ggsidekick::theme_sleek() +
+  theme(legend.title = element_blank(),
+        legend.position = "none")
 dev.off()

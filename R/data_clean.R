@@ -89,6 +89,13 @@ agg_names <- chin2 %>%
 
 # export supplementary table summarizing stock breakdown
 stock_supp_table <- chin2 %>% 
+  mutate(
+    agg_name = fct_recode(agg_name,
+                          "Spring 1.x" = "Fraser Spr. Yr.",
+                          "Summer 1.3" = "Fraser Sum. Yr.", 
+                          "Summer 0.3" = "Fraser Sum. 4.1", 
+                          "Fall 0.3" = "Fraser Fall")
+  )
   filter(stock_prob > 80) %>% 
   group_by(
     Stock = agg_name, Population = stock, CTC_Indicator = ctc_name
@@ -161,7 +168,7 @@ saveRDS(det_dat1, here::here("data", "surv_log_reg_data.rds"))
 
 # add updated Fraser groupings and imputed lipid content
 dat_tbl_trim <- dat_tbl %>% 
-  filter(!stock_group %in% c("ECVI", "North Puget", "WA_OR")) %>% 
+  filter(!stock_group %in% c("ECVI", "North Puget", "WA_OR", "WCVI")) %>% 
   mutate(
     bio_dat = purrr::map(bio_dat, function (x) {
       x %>%
