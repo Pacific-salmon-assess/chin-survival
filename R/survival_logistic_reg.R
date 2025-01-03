@@ -14,7 +14,6 @@ rstan::rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
 
-
 det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds"))
 
 

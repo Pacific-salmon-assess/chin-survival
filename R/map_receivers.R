@@ -191,9 +191,9 @@ rec <- rec_all  %>%
 array_key <- read.csv(here::here("data", 
                                  "surv_segment_key_2023.csv")) %>% 
   # exclude stocks missing from CJS analysis
-  filter(
-    !stock_group %in% c("ECVI", "North Puget", "WA_OR")
-  ) %>%
+  # filter(
+  #   !stock_group %in% c("ECVI", "North Puget", "WA_OR")
+  # ) %>%
   mutate(segment = array_num - 1,
          segment_name = str_replace(segment_name, " ", "\n")) %>% 
   distinct() 
@@ -223,16 +223,21 @@ puget <- rec %>%
          !(region == "in_river" & longitude > -12.45),
          !(region == "lower_col" & longitude > -123.7),
          !grepl("fraser", region))
-# wa_or <- rec %>% 
-#   filter(!region == "bonn",
-#          !(region == "in_river"))
+wa_or <- rec %>%
+  filter(!region == "bonn",
+         !(region == "in_river"),
+         !grepl("fraser", region))
 wcvi <- rec %>% 
   filter(!region == "bonn",
          !(region == "in_river" & 
              (latitude < 49.1 | longitude > -124)),
          !(region == "lower_col" & longitude > -123.7),
          !grepl("fraser", region))
-rec_dummy_list <- list(cali, fraser, col, puget, col,# wa_or,
+ecvi <- rec %>%
+  filter(!region == "bonn",
+         !(region == "in_river"),
+         !grepl("fraser", region))
+rec_dummy_list <- list(cali, ecvi, fraser, col, puget, puget, col, wa_or,
                        wcvi)
 
 # make plots
@@ -274,15 +279,18 @@ seg_list <- purrr::map(
 )
 
 array_map2 <- cowplot::plot_grid(
-  seg_list[[2]], seg_list[[4]], 
-  seg_list[[5]], seg_list[[1]], seg_list[[3]],   ncol = 3
+  seg_list[[3]], seg_list[[6]], #seg_list[[7]], seg_list[[8]],
+  #seg_list[[1]], 
+  seg_list[[2]], #seg_list[[4]], 
+  seg_list[[5]], 
+  ncol = 2
   )
 array_map <- cowplot::plot_grid(
-  cali_segs, array_map2, rel_widths = c(0.16, 0.5)
+  cali_segs, array_map2, rel_widths = c(0.2, 0.3)
   )
 
 
 png(here::here("figs", "maps", "array-map.png"),
-    height = 5, width = 6.5, units = "in", res = 200)
+    height = 5, width = 5, units = "in", res = 200)
 array_map
 dev.off()

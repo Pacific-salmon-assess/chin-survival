@@ -7,19 +7,19 @@
 "ECVI","COWICHAN_RIVER","Cowichan",3
 "ECVI","QUALICUM_RIVER","Big Qualicum River",1
 "ECVI","QUATSE_RIVER","Quinsam",1
-"Fraser Fall","CHILLIWACK_RIVER_fall","Chilliwack",25
-"Fraser Fall","CHILLIWACK_VEDDER_RIVER","Chilliwack",2
-"Fraser Fall","HARRISON_RIVER","Harrison",22
-"Fraser Spr. Yr.","DEADMAN_RIVER","Nicola",1
-"Fraser Spr. Yr.","NICOLA_RIVER","Nicola",1
-"Fraser Sum. 4.1","ADAMS_RIVER","Shuswap",6
-"Fraser Sum. 4.1","LITTLE_RIVER","Shuswap",5
-"Fraser Sum. 4.1","SHUSWAP_RIVER-LOWER","Shuswap",3
-"Fraser Sum. 4.1","THOMPSON_RIVER_BELOW_KAMLOOPS_LAKE","Shuswap",9
-"Fraser Sum. Yr.","CARIBOO_RIVER",NA,1
-"Fraser Sum. Yr.","CHILKO_RIVER",NA,2
-"Fraser Sum. Yr.","NORTH_THOMPSON_RIVER",NA,1
-"Fraser Sum. Yr.","RAFT_RIVER",NA,1
+"Fall 0.3","CHILLIWACK_RIVER_fall","Chilliwack",25
+"Fall 0.3","CHILLIWACK_VEDDER_RIVER","Chilliwack",2
+"Fall 0.3","HARRISON_RIVER","Harrison",22
+"Spring 1.x","DEADMAN_RIVER","Nicola",1
+"Spring 1.x","NICOLA_RIVER","Nicola",1
+"Summer 0.3","ADAMS_RIVER","Shuswap",6
+"Summer 0.3","LITTLE_RIVER","Shuswap",5
+"Summer 0.3","SHUSWAP_RIVER-LOWER","Shuswap",3
+"Summer 0.3","THOMPSON_RIVER_BELOW_KAMLOOPS_LAKE","Shuswap",9
+"Summer 1.3","CARIBOO_RIVER",NA,1
+"Summer 1.3","CHILKO_RIVER",NA,2
+"Summer 1.3","NORTH_THOMPSON_RIVER",NA,1
+"Summer 1.3","RAFT_RIVER",NA,1
 "Low Col.","ABERNATHY_RIVER","Lewis River Hatchery",182
 "Low Col.","CLACKAMAS_RIVER","Willamette Spring Hatchery",1
 "Low Col.","COWEEMAN","Coweeman Fall",3

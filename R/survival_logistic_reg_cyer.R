@@ -19,7 +19,8 @@ options(mc.cores = parallel::detectCores())
 
 det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds")) %>% 
   filter(
-    !is.na(isbm_cyer)
+    !is.na(isbm_cyer),
+    stage_1 == "mature"
   )
 
 
@@ -36,9 +37,12 @@ det_dat <- det_dat1 %>%
     year = as.factor(year),
     stock_group = factor(
       stock_group, 
-      levels = c("Low Col.", "Up Col.", "WA_OR", "WCVI", "ECVI", 
-                 "Fraser Sum. 4.1", "Fraser Fall", "Fraser Spr. Yr.", 
-                 "Fraser Sum. Yr.", "North Puget", "South Puget")),
+      levels = c(
+        "Low Col.", "Up Col.", "WA_OR", "WCVI", "ECVI", 
+        "Fraser Spr. Yr.", "Fraser Sum. Yr.", "Fraser Sum. 4.1", "Fraser Fall", 
+        "North Puget", "South Puget"
+      )) %>% 
+      droplevels(),
     inj = as.integer(as.factor(adj_inj)),
     term_p = as.integer(terminal_p),
     yr = as.integer(year),
@@ -48,6 +52,8 @@ det_dat <- det_dat1 %>%
 
 # FIT LOGISTIC REG MODELS ------------------------------------------------------
 
+det_dat <- det_dat %>% filter()
+
 dat_list <- list(
   surv = as.integer(det_dat$term_det),
   fl_z = det_dat$fl_z,
@@ -55,11 +61,12 @@ dat_list <- list(
   day_z = det_dat$day_z,
   cyer_z = det_dat$cyer_z,
   inj = det_dat$inj,
-  term_p = det_dat$terminal_p,
+  term_p = det_dat$term_p,
   yr = det_dat$yr,
   stk = det_dat$stk,
   alpha = rep(2, length(unique(det_dat$inj)) - 1)
 )
+
 
 m4 <- ulam(
   alist(
@@ -68,13 +75,12 @@ m4 <- ulam(
     mu_day <- beta_stk[stk, 4],
     # unobserved latent condition
     c(fl_z, lipid_z) ~ multi_normal(c(mu_fl, mu_lipid), Rho, Sigma),
-    mu_fl <- alpha_fl + beta_df * day_z + beta_yr[yr, 1] + beta_stk[stk, 1],
+    mu_fl <- alpha_fl + beta_df * day_z + beta_stk[stk, 1] + beta_yr[yr, 1] ,
     mu_lipid <- alpha_lipid + beta_dl * day_z + beta_yr[yr, 2] +
       beta_stk[stk, 2],
     # survival
     surv ~ dbinom(1 , p) ,
-    logit(p) <- surv_bar +
-      beta_term[term_p] +
+    logit(p) <- alpha_s[term_p] +
       beta_yr[yr, 3] +
       beta_stk[stk, 3] +
       beta_ds * day_z +
@@ -103,13 +109,11 @@ m4 <- ulam(
     cholesky_factor_corr[4]:L_Rho_stk ~ lkj_corr_cholesky(2),
     vector[4]:sigma_stk ~ exponential(1),
 
-    surv_bar ~ normal(0, 1.25),
-    beta_term[term_p] ~ normal(0, 0.5),
-    c(beta_ds, beta_fs, beta_ls) ~ normal(0, 0.5),
-    # strong rationale for negative effect of exploitation and pos effect of 
+    # strong rationale for eg negative effect of exploitation and pos effect of 
     # interaction; assign weakly informative priors
+    alpha_s[term_p] ~ dnorm(0, 1),
+    c(beta_ds, beta_fs, beta_ls, beta_ds_cs) ~ normal(0.2, 0.5),
     c(beta_is, beta_cs) ~ normal(-0.2, 0.5),
-    beta_ds_cs ~ normal(0.2, 0.5),
     
     # constraints on ordinal effects of injury
     vector[4]: delta_inj <<- append_row(0, delta),
@@ -119,7 +123,7 @@ m4 <- ulam(
     gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
     gq> matrix[4, 4]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
   ),
-  data=dat_list, chains = 4 , cores = 4, iter = 2000,
+  data=dat_list, chains = 4, cores = 4, iter = 2000,
   control = list(adapt_delta = 0.96)
 )
 
@@ -129,16 +133,14 @@ m4 <- readRDS(here::here("data", "model_outputs", "hier_binomial_cyer.rds"))
 
 # PRIOR PREDICTIONS ------------------------------------------------------------
 
-prior <- extract.prior(m4)
-
 day_seq <- c(-2, 0, 2)
 cyer_seq <- seq(-1.5, 4.5, length = 40)
 preds <- vector(mode = "list", length = length(day_seq))
-prior_sbar <- rnorm(1000, 0, 1.25)
-prior_term <- rnorm(1000, 0, 0.5)
-prior_ds <- rnorm(1000, 0, 0.5)
-prior_cs <- rnorm(1000, -0.25, 0.5)
-prior_ds_cs <- rnorm(1000, 0.25, 0.5)
+prior_sbar <- rnorm(1000, 0, 0.5)
+# prior_term <- rnorm(1000, 0, 0.5)
+# prior_ds <- rnorm(1000, 0, 0.5)
+prior_cs <- rnorm(1000, -0.5, 0.2)
+prior_ds_cs <- rnorm(1000, 0.2, 0.2)
 
 
 for(i in seq_along(day_seq)) {
@@ -147,7 +149,7 @@ for(i in seq_along(day_seq)) {
     function (x) {
       inv_logit(
         prior_sbar +
-          prior_term + prior_ds * day_seq[i] +
+          # prior_term + prior_ds * day_seq[i] +
           prior_cs * x + 
           (prior_ds_cs * day_seq[i] * x)
       )
@@ -187,8 +189,7 @@ post_pred_foo <- function(dat_in) {
 
   logodds <- with(
     post,
-    surv_bar + 
-      beta_term[ , dat_in$term_p] +
+    alpha_s[ , dat_in$term_p] +
       beta_yr[ , dat_in$yr, 3] +
       beta_stk[ , dat_in$stk, 3] +
       beta_ds * dat_in$day_z +
@@ -243,9 +244,7 @@ abline(0, 1)
 dev.off()
 
 
-
 # POSTERIOR INFERENCE  ---------------------------------------------------------
-
 
 ## Calendar year exploitation rate (all other plots are shared w/ 
 # survival_logistic_reg.R)
@@ -261,8 +260,7 @@ for(i in seq_along(day_seq)) {
     cyer_seq, 
     function (x) {
       inv_logit(
-        post$surv_bar +
-          post$beta_term[ , 2] + post$beta_ds * day_seq[i] +
+        post$alpha_s[ , 2] + post$beta_ds * day_seq[i] +
           post$beta_cs * x + 
           (post$beta_ds_cs * day_seq[i] * x)
       )
@@ -458,17 +456,15 @@ for (j in seq_along(samp_date_seq)) {
   # excludes hierarchical intercept; assumes high terminal det prob and low
   # injury and mean harvest
   sim_eta <- as.numeric(
-    post$surv_bar + 
+    post$alpha_s[ , 2] + 
       post$beta_ds * samp_date_seq[j] +
       post$beta_fs * sim_fl[ , j] +
-      post$beta_ls * sim_lipid[ , j] +
-      post$beta_term[ , 2]
+      post$beta_ls * sim_lipid[ , j]
   )
   # as above but sets fl and lipid to zero (i.e. removes them)
   sim_eta_direct <- as.numeric(
-    post$surv_bar + 
-      post$beta_ds * samp_date_seq[j] +
-      post$beta_term[ , 2]
+    post$alpha_s[ , 2] + 
+      post$beta_ds * samp_date_seq[j]
   )
   sim_surv[ , j] <- boot::inv.logit(sim_eta) # Probability of survival
   sim_surv_d[ , j] <- boot::inv.logit(sim_eta_direct) # Probability of survival
@@ -535,7 +531,7 @@ lipid_seq <- seq(-3, 4, length = 40)
 pred_l <- sapply(
   lipid_seq, 
   function (x) {
-    inv_logit(post$surv_bar + post$beta_term[ , 2] + post$beta_ls * x)
+    inv_logit(post$alpha_s[ , 2] + post$beta_ls * x)
   }
 )
 pred_lipid_ribbon <- pred_l %>% 
@@ -577,7 +573,7 @@ fl_seq <- seq(-2.2, 3.3, length = 40)
 pred_fl <- sapply(
   fl_seq, 
   function (x) {
-    inv_logit(post$surv_bar + post$beta_term[ , 2] + post$beta_fs * x)
+    inv_logit(post$alpha_s[ , 2] + post$beta_fs * x)
   }
 )
 pred_fl_ribbon <- pred_fl %>% 
@@ -634,7 +630,7 @@ for (i in 1:(ncol(post$delta) + 1)) {
       delta_inj <- apply(as.matrix(post$delta[ , 1:(i - 1)]), 1, sum) 
     }
     pred_inj[ , i] <- inv_logit(
-      post$surv_bar + post$beta_is * delta_inj + post$beta_term[ , 2]
+      post$alpha_s[ , 2] + post$beta_is * delta_inj
       )
   }
 
@@ -711,18 +707,15 @@ for (j in seq_along(stk_seq)) {
   # excludes hierarchical intercept; assumes high terminal det prob and low
   # injury
   sim_eta <- as.numeric(
-    post$surv_bar + 
+    post$alpha_s[ , 2] + 
       post$beta_ds * pred_mu_date[ , j] +
       post$beta_fs * sim_fl[ , j] +
       post$beta_ls * sim_lipid[ , j] +
-      post$beta_term[ , 2] +
       post$beta_stk[ , j, 3]
   )
   # as above but sets fl and lipid to zero (i.e. removes them)
   sim_eta_direct <- as.numeric(
-    post$surv_bar + 
-      post$beta_stk[ , j, 3] +
-      post$beta_term[ , 2]
+    post$alpha_s[ , 2] + post$beta_stk[ , j, 3]
   )
   sim_surv[ , j] <- boot::inv.logit(sim_eta) # Probability of survival
   sim_surv_d[ , j] <- boot::inv.logit(sim_eta_direct) # Probability of survival

@@ -118,6 +118,7 @@ dev.off()
 saveRDS(mean_det_pt, here::here("figs", "average_detections.rds" ))
 
 
+
 # Fit model --------------------------------------------------------------------
 
 ## Fixed temporal effects model (survival and probability vary among stages) 

@@ -11,7 +11,8 @@ chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS")) %>%
     !charter == "msf",
     !is.na(acoustic),
     !is.na(agg_name),
-    !fish == "CK113" # magnet not removed
+    !fish == "CK113", # magnet not removed
+    (agg_prob > 80 | genetic_source != "GSI")
   )
 
 indicator_key <- read.csv(
@@ -95,7 +96,7 @@ stock_supp_table <- chin2 %>%
                           "Summer 1.3" = "Fraser Sum. Yr.", 
                           "Summer 0.3" = "Fraser Sum. 4.1", 
                           "Fall 0.3" = "Fraser Fall")
-  )
+  ) %>% 
   filter(stock_prob > 80) %>% 
   group_by(
     Stock = agg_name, Population = stock, CTC_Indicator = ctc_name
@@ -125,6 +126,8 @@ det_dat1 <- dat_tbl %>%
     stock_group = ifelse(stock_group == "Fraser", agg, stock_group) %>% 
       as.factor()
   ) %>% 
+  # remove fish with low stock assignment
+  filter(vemco_code %in% chin2$acoustic_year) %>%
   left_join(., 
             chin2 %>% 
               mutate(month = lubridate::month(date)) %>% 
@@ -172,7 +175,7 @@ dat_tbl_trim <- dat_tbl %>%
   mutate(
     bio_dat = purrr::map(bio_dat, function (x) {
       x %>%
-        # filter(vemco_code %in% kept_tags) %>% 
+        filter(vemco_code %in% chin2$acoustic_year) %>%
         select(-c(agg, lipid)) %>% 
         left_join(
           ., 
@@ -181,11 +184,9 @@ dat_tbl_trim <- dat_tbl %>%
         )
     }),
     wide_array_dat = purrr::map(wide_array_dat, function (x) {
-      # remove aggregate vector if only one level
       x %>%
-        # filter(vemco_code %in% kept_tags)
+        filter(vemco_code %in% chin2$acoustic_year) %>% 
         select(-agg)
-      # }
     })
   ) %>%
   select(stock_group, bio_dat, wide_array_dat)
