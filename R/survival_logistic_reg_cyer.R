@@ -299,7 +299,7 @@ pred_day_cyer <- bind_rows(preds) %>%
   geom_ribbon(
     aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
   ) +
-  labs(y = "Predicted Survival", x = "ISBM CYER") +
+  labs(y = "Survival Rate Index", x = "ISBM CYER") +
   ggsidekick::theme_sleek() +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(limits = c(0, 1.0), expand = c(0, 0)) +
@@ -355,7 +355,7 @@ sigma_stk_pt <- rbind(sigma_yr, sigma_stk) %>%
   geom_pointrange(aes(x = parameter, y = med, ymin = lo, ymax = up),
                   shape = 21, fill = "#d95f02") +
   facet_wrap(~sigma, ncol = 2) +
-  labs(x = "Parameter", y = "Posterior Variance Estimate") +
+  labs(x = "Parameter", y = "Variance Estimate") +
   ggsidekick::theme_sleek() 
 
 
@@ -567,7 +567,7 @@ pred_day_ribbon <- rbind(pred_day_surv_total, pred_day_surv_direct) %>%
     aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
   ) +
   scale_linetype_manual(values = day_effect_pal) +
-  labs(y = "Predicted Survival", x = "Tagging Date") +
+  labs(y = "Predicted Survival Rate Index", x = "Tagging Date") +
   ggsidekick::theme_sleek() +
   scale_x_continuous(breaks = c(135, 182, 226), 
                      labels = c("May 15", "Jul 1", "Aug 15"), 
@@ -612,7 +612,7 @@ pred_lipid_ribbon <- pred_l %>%
   geom_ribbon(
     aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
   ) +
-  labs(y = "Predicted Survival", x = "Lipid Content") +
+  labs(y = "Survival Rate Index", x = "Lipid Content") +
   ggsidekick::theme_sleek() +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(limits = c(ymin_val, 1.0), expand = c(0, 0)) +
@@ -654,7 +654,7 @@ pred_fl_ribbon <- pred_fl %>%
   geom_ribbon(
     aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
   ) +
-  labs(y = "Predicted Survival", x = "Fork Length") +
+  labs(y = "Survival Rate Index", x = "Fork Length") +
   ggsidekick::theme_sleek() +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(limits = c(ymin_val, 1.0), expand = c(0, 0)) +
@@ -706,7 +706,7 @@ injury_point <- pred_injury_dat %>%
   ggplot() +
   geom_pointrange(aes(x = score, y = med, ymin = lo, ymax = up),
                   shape = 21, fill = "#7570b3") +
-  labs(x = "Injury Score", y = "Survival Probability") +
+  labs(x = "Injury Score", y = "Survival Rate Index") +
   ggsidekick::theme_sleek() 
 
 
@@ -718,7 +718,7 @@ diff_hist <- data.frame(
                  bins = 50, fill = "#7570b3") +
   geom_vline(aes(xintercept = 0), lty = 2 , colour = "black", linewidth = 1) +
   ggsidekick::theme_sleek() +
-  labs(x = "Difference in Survival Prob.\nBetween Max/Min Scores") +
+  labs(x = "Difference in Survival Rate Index\nBetween Max/Min Scores") +
   theme(
     axis.title.y = element_blank()
   ) 
@@ -815,7 +815,7 @@ pred_stk_comb <- rbind(pred_stk_surv_total, pred_stk_surv_direct) %>%
                   position = position_dodge(width = 0.4),
                   shape = 21, fill = "#7570b3") +
   scale_alpha_manual(values = alpha_pal) +
-  labs(y = "Predicted Survival Probability") +
+  labs(y = "Survival Rate Index") +
   ggsidekick::theme_sleek() +
   theme(
     axis.title.x = element_blank(),
@@ -860,7 +860,7 @@ gridExtra::grid.arrange(
   gridExtra::arrangeGrob(
     pp, 
     left = textGrob(
-      "Survival Probability", rot = 90, 
+      "Survival Rate Index", rot = 90, 
       gp = gpar(fontsize = 11))
   )
 )
