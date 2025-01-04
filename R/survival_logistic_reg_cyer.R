@@ -359,14 +359,63 @@ sigma_stk_pt <- rbind(sigma_yr, sigma_stk) %>%
   ggsidekick::theme_sleek() 
 
 
+# stock and year rho (correlations among random intercepts)
+mean_rho_stock <- colMeans(post$Rho_stk)
+mean_rho_yr <- colMeans(post$Rho_yr)
+colnames(mean_rho_stock) <- rownames(mean_rho_stock) <- c("fl", "lipid", "surv", "date")
+colnames(mean_rho_yr) <- rownames(mean_rho_yr) <- c("fl", "lipid", "surv")
+
+cor_plot_list <- purrr::map2(
+  list(mean_rho_stock, mean_rho_yr),
+  c("Stock Intercepts", "Year Intercepts"),
+  function (x, y) {
+    cor_data <- as.data.frame(as.table(x)) %>% 
+      mutate(
+        Var1 = fct_relevel(as.factor(Var1), "surv", after = Inf),
+        Var2 = fct_relevel(as.factor(Var2), "surv", after = Inf)
+      )
+    
+    # Filter for upper and lower triangles
+    cor_data_upper <- cor_data %>% 
+      filter(as.numeric(Var1) <= as.numeric(Var2))
+    cor_data_lower <- cor_data %>% 
+      filter(as.numeric(Var1) >= as.numeric(Var2))
+    
+    # Plot
+    ggplot() +
+      geom_tile(
+        data = cor_data_upper,
+        aes(x = Var1, y = Var2, fill = Freq),
+        color = "white"
+      ) +
+      scale_fill_gradient2(
+        low = "blue", mid = "white", high = "red",
+        midpoint = 0, limit = c(-0.99, .99), space = "Lab",
+        name = "Correlation"
+      ) +
+      geom_text(
+        data = cor_data_lower %>% filter(!Var1 == Var2),
+        aes(x = Var1, y = Var2, label = round(Freq, 2)),
+        color = "black", size = 4
+      ) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        axis.title = element_blank()
+      ) +
+      coord_fixed() +
+      labs(title = y)
+  }
+)
+
+
 
 ## Submodel effects 
 
 ## rho representing correlation between lipid and fork length
 # symmetrical matrix so extract single values
-rho <- post$Rho[ , 2, 1]
 rho_hist <- ggplot() +
-  geom_histogram(aes(x = rho), bins = 50, fill = "#1b9e77") +
+  geom_histogram(aes(x = post$Rho[ , 2, 1]), bins = 50, fill = "#1b9e77") +
   geom_vline(aes(xintercept = 0), lty = 2 , colour = "black", linewidth = 1.25) +
   ggsidekick::theme_sleek() +
   theme(
@@ -416,7 +465,6 @@ pred_mu <- rbind(
     up = rethinking::HPDI(est, prob = 0.9)[2]
   ) 
 
-# TODO: consider back converting pred_mu into real space
 pred_mu_ribbon <- ggplot(pred_mu, aes(x = year_day, y = med)) +
   geom_line(
     colour = "#1b9e77"
@@ -425,7 +473,10 @@ pred_mu_ribbon <- ggplot(pred_mu, aes(x = year_day, y = med)) +
     aes(ymin = lo, ymax = up), fill = "#1b9e77", alpha = 0.3
   ) +
   facet_wrap(~var) +
-  labs(y = "Submodel Prediction", x = "Year Day") +
+  scale_x_continuous(breaks = c(135, 182, 226), 
+                     labels = c("May 15", "Jul 1", "Aug 15"), 
+                     expand = c(0, 0)) +
+  labs(y = "Submodel Prediction", x = "Tagging Date") +
   ggsidekick::theme_sleek()
 
 
@@ -516,9 +567,11 @@ pred_day_ribbon <- rbind(pred_day_surv_total, pred_day_surv_direct) %>%
     aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
   ) +
   scale_linetype_manual(values = day_effect_pal) +
-  labs(y = "Predicted Survival", x = "Year Day") +
+  labs(y = "Predicted Survival", x = "Tagging Date") +
   ggsidekick::theme_sleek() +
-  scale_x_continuous(expand = c(0, 0)) +
+  scale_x_continuous(breaks = c(135, 182, 226), 
+                     labels = c("May 15", "Jul 1", "Aug 15"), 
+                     expand = c(0, 0)) +
   scale_y_continuous(limits = c(ymin_val, 1.0), expand = c(0, 0)) +
   theme(
     legend.position = "none",
@@ -784,6 +837,16 @@ dev.off()
 png(here::here("figs", "binomial-glm-cyer", "fl_lipid_corr.png"), units = "in", 
     res = 250, height = 3, width = 3.5)
 rho_hist
+dev.off()
+
+png(here::here("figs", "binomial-glm-cyer", "stock_ri_corr.png"), units = "in", 
+    res = 250, height = 5, width = 5.5)
+cor_plot_list[[1]]
+dev.off()
+
+png(here::here("figs", "binomial-glm-cyer", "yr_ri_corr.png"), units = "in", 
+    res = 250, height = 4.5, width = 5)
+cor_plot_list[[2]]
 dev.off()
 
 png(here::here("figs", "binomial-glm-cyer", "fl_lipid_pred.png"), units = "in", 
