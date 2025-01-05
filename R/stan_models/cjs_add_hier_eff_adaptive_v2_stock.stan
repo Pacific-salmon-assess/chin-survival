@@ -46,6 +46,8 @@ data {
   int<lower=0,upper=1> y[nind, n_occasions];    // Capture-history
   int<lower=1> nyear;               // Number of years
   int<lower=1,upper=nyear> year[nind];     // Year
+  int<lower=1> nstock;               // Number of stocks
+  int<lower=1,upper=nstock> stock[nind];     // Stock
 }
 
 transformed data {
@@ -62,6 +64,8 @@ transformed data {
 parameters {
   real alpha_phi;                            // Mean phi
   vector[n_occ_minus_1] alpha_t_phi;        // Time effect phi
+  vector[nstock] alpha_stk_phi_z;        // Stock effect phi
+  real<lower=0> sigma_alpha_stk_phi;    // SD among stocks
   vector[nyear] alpha_yr_phi_z;       // Year/time random int for phi
   real<lower=0> sigma_alpha_yr_phi;   // SD among years
   real alpha_p;                              // Mean det prob
@@ -72,7 +76,9 @@ transformed parameters {
   // Construct non-centered adaptive priors for hierarchical effects
   vector[nyear] alpha_yr_phi; 
   alpha_yr_phi = alpha_yr_phi_z * sigma_alpha_yr_phi;
-  
+  vector[nstock] alpha_stk_phi; 
+  alpha_stk_phi = alpha_stk_phi_z * sigma_alpha_stk_phi;
+
   matrix<lower=0,upper=1>[nind, n_occ_minus_1] phi;
   matrix<lower=0,upper=1>[nind, n_occasions] p;
   matrix<lower=0,upper=1>[nind, n_occasions] chi;
@@ -89,7 +95,7 @@ transformed parameters {
       p[i, t] = inv_logit(alpha_p + alpha_yr_p[year[i], t]);
     }
     for (t in first[i]:n_occ_minus_1) {
-      phi[i, t] = inv_logit(alpha_phi + alpha_yr_phi[year[i]] + alpha_t_phi[t]);
+      phi[i, t] = inv_logit(alpha_phi + alpha_stk_phi[stock[i]] + alpha_yr_phi[year[i]] + alpha_t_phi[t]);
     }
   }
 
@@ -100,9 +106,11 @@ model {
   // Priors
   to_vector(alpha_yr_p) ~ normal(0, 1.5);
   to_vector(alpha_yr_phi_z) ~ normal(0, 0.5);
+  to_vector(alpha_stk_phi_z) ~ normal(0, 0.5);
   alpha_phi ~ normal(0.3, 1);
   alpha_p ~ normal(0, 0.5); 
   alpha_t_phi ~ normal(0, 0.5);
+  sigma_alpha_stk_phi ~ exponential(1);
   sigma_alpha_yr_phi ~ exponential(1);
 
   // Likelihood
@@ -122,6 +130,7 @@ generated quantities {
   matrix<lower=0,upper=1>[nyear, n_occ_minus_1] phi_yr;
   matrix<lower=0,upper=1>[nyear, n_occasions] p_yr;
   vector[nyear] beta_yr; 
+  matrix<lower=0,upper=1>[nstock, n_occ_minus_1] phi_stk;
 
   // matrices to store obs
   int<lower=0,upper=1> y_hat[nind, n_occasions];
@@ -139,6 +148,13 @@ generated quantities {
       p_yr[yy, t] = inv_logit(alpha_p + alpha_yr_p[yy, t]);
     }
     beta_yr[yy] = phi_yr[yy, n_occ_minus_1] * p_yr[yy, n_occasions];
+  }
+
+  // posterior estimates of stock-specific phi
+  for (ss in 1:nstock) {
+    for (t in 1:n_occ_minus_1) {
+      phi_stk[ss, t] = inv_logit(alpha_phi + alpha_stk_phi[ss] + alpha_t_phi[t]);
+    }
   }
 
   // posterior predictions of observations (NOTE ignores among stock variability for now)

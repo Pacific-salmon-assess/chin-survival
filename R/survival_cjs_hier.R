@@ -1,4 +1,4 @@
-### Initial survival models
+### CJS survival models
 ## June 20, 2020
 ## Fit CJS models using individual occurrence data initially only focusing 
 # on spatially explicit models (i.e. ind. w/ known stock ID belonging to stocks 
@@ -349,7 +349,7 @@ cjs_hier_sims <- pmap(
       pars <- c(pars_in,
                 # stock specific pars and quants
                 "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
-                "alpha_yr_phi", "alpha_stk_phi_z")
+                "alpha_stk_phi_z")
 
       inits <- lapply(1:n_chains, function (i) {
         list(
@@ -359,7 +359,7 @@ cjs_hier_sims <- pmap(
             rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
             nrow = (x$n_occasions - 1)
           ),
-          alpha_stk_phi = rnorm(x$nstock, 0, 0.5),
+          alpha_stk_phi_z = rnorm(x$nstock, 0, 0.5),
           alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
           sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
           sigma_alpha_stk_phi = rexp(1, 2),

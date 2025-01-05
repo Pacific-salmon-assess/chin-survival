@@ -299,7 +299,7 @@ pred_day_cyer <- bind_rows(preds) %>%
   geom_ribbon(
     aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
   ) +
-  labs(y = "Survival Rate Index", x = "ISBM CYER") +
+  labs(y = "Survival Rate Index", x = "Exploitation Rate Index") +
   ggsidekick::theme_sleek() +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(limits = c(0, 1.0), expand = c(0, 0)) +
@@ -809,12 +809,16 @@ pred_stk_comb <- rbind(pred_stk_surv_total, pred_stk_surv_direct) %>%
     up = rethinking::HPDI(est, prob = 0.9)[2]
   ) %>%
   left_join(., stk_key, by = "stk") %>% 
+  mutate(
+    stock_group = fct_recode(stock_group, "Fraser Sum. 0.3" = "Fraser Sum. 4.1",
+                             "Fraser Spr. 1.2" = "Fraser Spr. Yr.")
+  ) %>% 
   ggplot() +
   geom_pointrange(aes(x = stock_group, y = med, ymin = lo, ymax = up, 
                       alpha = effect),
                   position = position_dodge(width = 0.4),
                   shape = 21, fill = "#7570b3") +
-  scale_alpha_manual(values = alpha_pal) +
+  scale_alpha_manual(values = alpha_pal, name = "Effect") +
   labs(y = "Survival Rate Index") +
   ggsidekick::theme_sleek() +
   theme(
