@@ -8,7 +8,6 @@
 # Linkages between condition, hook location and survival are currently in
 # survival logistic
 
-
 library(tidyverse)
 library(rstan)
 library(shinystan)
