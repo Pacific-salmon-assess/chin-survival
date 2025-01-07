@@ -36,6 +36,11 @@ dat_tbl_trim1 <- dat_tbl_trim_in %>%
 
 
 # Remove individuals not observed within five days of tagging
+mature_tags1 <- dat_tbl_trim_in %>% 
+  unnest(bio_dat) %>%
+  filter(stage_1 == "mature") %>% 
+  pull(vemco_code)
+
 five_d_tags <- readRDS(
   here::here("data", "detections_all.RDS")) %>% 
   group_by(vemco_code) %>% 
@@ -46,7 +51,7 @@ five_d_tags <- readRDS(
       )
   ) %>% 
   filter(
-    time_diff_days > 5
+    time_diff_days > 5 & vemco_code %in% mature_tags1
   ) %>% 
   pull(vemco_code) %>% 
   unique()
@@ -150,96 +155,96 @@ hier_mod_sims_stk <- stan_model(
 ## FIT -------------------------------------------------------------------------
 
 # MCMC settings
-# n_chains = 4
-# n_iter = 2000
-# n_warmup = n_iter / 2
-# pars_in <- c(
-#   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
-#   "L_Rho_yr", "alpha_p", "alpha_yr_p",
-#   # transformed pars or estimated quantities
-#   "Rho_yr", "alpha_yr_phi", "phi_yr", "p_yr", "beta_yr", "y_hat"
-# )
-# 
-# 
-# cjs_hier_sims <- pmap(
-#   list(x = dat_tbl_trim$dat_in, stock_group = dat_tbl_trim$stock_group,
-#        bio_dat = dat_tbl_trim$bio_dat),
-#   .f = function(x, stock_group, bio_dat) {
-#     
-#     if (stock_group == "Fraser") {
-#       mod <- hier_mod_sims_stk
-#       x$nstock <- bio_dat$agg %>% unique() %>% length()
-#       x$stock <- bio_dat$agg %>%
-#         as.factor() %>%
-#         droplevels() %>%
-#         as.numeric()
-#       
-#       pars <- c(pars_in,
-#                 # stock specific pars and quants
-#                 "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
-#                 "alpha_stk_phi_z")
-#       
-#       inits <- lapply(1:n_chains, function (i) {
-#         list(
-#           alpha_phi = rnorm(1, 0, 0.5),
-#           # note z transformed so inverted compared to beta_phi or beta_p
-#           alpha_yr_phi_z = matrix(
-#             rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
-#             nrow = (x$n_occasions - 1)
-#           ),
-#           alpha_stk_phi_z = rnorm(x$nstock, 0, 0.5),
-#           alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
-#           sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
-#           sigma_alpha_stk_phi = rexp(1, 2),
-#           # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-#           L_Rho_yr = matrix(
-#             runif((x$n_occasions - 1)^2, -0.5, 0.5), nrow = (x$n_occasions - 1)
-#           ),
-#           alpha_p = rnorm(1, 0, 0.5),
-#           alpha_yr_p = matrix(
-#             rnorm(x$nyear * (x$n_occasions), 0, 0.5), nrow = x$nyear
-#           )
-#         )
-#       })
-#       
-#     } else{
-#       mod <- hier_mod_sims
-#       
-#       pars <- pars_in
-#       
-#       # matrix of inits with same dims as estimated parameter matrices
-#       inits <- lapply(1:n_chains, function (i) {
-#         list(
-#           alpha_phi = rnorm(1, 0, 0.5),
-#           # note z transformed so inverted compared to beta_phi or beta_p
-#           alpha_yr_phi_z = matrix(
-#             rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
-#             nrow = (x$n_occasions - 1)
-#           ),
-#           alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
-#           sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
-#           # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-#           L_Rho_yr = matrix(
-#             runif((x$n_occasions - 1)^2, -0.5, 0.5),
-#             nrow = (x$n_occasions - 1)
-#           ),
-#           alpha_p = rnorm(1, 0, 0.5),
-#           alpha_yr_p = matrix(rnorm(x$nyear * (x$n_occasions), 0, 0.5),
-#                               nrow = x$nyear)
-#         )
-#       })
-#     }
-#     
-#     sampling(
-#       mod, data = x, pars = pars,
-#       init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
-#       open_progress = FALSE,
-#       control = list(adapt_delta = 0.96)
-#     )
-#   })
-# 
-# saveRDS(cjs_hier_sims,
-#         here::here("data", "model_outputs", "hier_cjs_fit_tbl_sens.RDS"))
+n_chains = 4
+n_iter = 2000
+n_warmup = n_iter / 2
+pars_in <- c(
+  "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
+  "L_Rho_yr", "alpha_p", "alpha_yr_p",
+  # transformed pars or estimated quantities
+  "Rho_yr", "alpha_yr_phi", "phi_yr", "p_yr", "beta_yr", "y_hat"
+)
+
+
+cjs_hier_sims <- pmap(
+  list(x = dat_tbl_trim$dat_in, stock_group = dat_tbl_trim$stock_group,
+       bio_dat = dat_tbl_trim$bio_dat),
+  .f = function(x, stock_group, bio_dat) {
+
+    if (stock_group == "Fraser") {
+      mod <- hier_mod_sims_stk
+      x$nstock <- bio_dat$agg %>% unique() %>% length()
+      x$stock <- bio_dat$agg %>%
+        as.factor() %>%
+        droplevels() %>%
+        as.numeric()
+
+      pars <- c(pars_in,
+                # stock specific pars and quants
+                "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
+                "alpha_stk_phi_z")
+
+      inits <- lapply(1:n_chains, function (i) {
+        list(
+          alpha_phi = rnorm(1, 0, 0.5),
+          # note z transformed so inverted compared to beta_phi or beta_p
+          alpha_yr_phi_z = matrix(
+            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
+            nrow = (x$n_occasions - 1)
+          ),
+          alpha_stk_phi_z = rnorm(x$nstock, 0, 0.5),
+          alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
+          sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
+          sigma_alpha_stk_phi = rexp(1, 2),
+          # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+          L_Rho_yr = matrix(
+            runif((x$n_occasions - 1)^2, -0.5, 0.5), nrow = (x$n_occasions - 1)
+          ),
+          alpha_p = rnorm(1, 0, 0.5),
+          alpha_yr_p = matrix(
+            rnorm(x$nyear * (x$n_occasions), 0, 0.5), nrow = x$nyear
+          )
+        )
+      })
+
+    } else{
+      mod <- hier_mod_sims
+
+      pars <- pars_in
+
+      # matrix of inits with same dims as estimated parameter matrices
+      inits <- lapply(1:n_chains, function (i) {
+        list(
+          alpha_phi = rnorm(1, 0, 0.5),
+          # note z transformed so inverted compared to beta_phi or beta_p
+          alpha_yr_phi_z = matrix(
+            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
+            nrow = (x$n_occasions - 1)
+          ),
+          alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
+          sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
+          # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+          L_Rho_yr = matrix(
+            runif((x$n_occasions - 1)^2, -0.5, 0.5),
+            nrow = (x$n_occasions - 1)
+          ),
+          alpha_p = rnorm(1, 0, 0.5),
+          alpha_yr_p = matrix(rnorm(x$nyear * (x$n_occasions), 0, 0.5),
+                              nrow = x$nyear)
+        )
+      })
+    }
+
+    sampling(
+      mod, data = x, pars = pars,
+      init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
+      open_progress = FALSE,
+      control = list(adapt_delta = 0.96)
+    )
+  })
+
+saveRDS(cjs_hier_sims,
+        here::here("data", "model_outputs", "hier_cjs_fit_tbl_sens.RDS"))
 
 cjs_hier_sims <- readRDS(
   here::here("data", "model_outputs", "hier_cjs_fit_tbl_sens.RDS")
@@ -278,7 +283,7 @@ phi_mat <- map(
   })
 
 
-# calculate cumulative survival across segments
+# calculate cumulative survival across segments for each year
 cum_surv_list <- pmap(
   list(phi_mat, dat_tbl_trim$stock_group, dat_tbl_trim$years), 
   function (x, yy, group_names) {
@@ -348,6 +353,7 @@ phi_mat_mean <- map(
   }
 )
 
+# integrate out year effects
 cum_surv_list_mean <- pmap(
   list(phi_mat_mean, dat_tbl_trim$stock_group), 
   function (x, yy) {
@@ -518,4 +524,53 @@ surv_plot_mean <- ggplot(data = mean_surv_dat) +
 png(here::here("figs", "sens", "cumulative_surv.png"), 
     height = 5, width = 7.5, units = "in", res = 200)
 surv_plot_mean
+dev.off()
+
+
+# difference in cumulative survival
+cs_list <- split(dat_tbl, dat_tbl$data) %>% 
+  purrr::map(
+    ., 
+    ~ .x %>% 
+      select(cum_survival_mean) %>% 
+      unnest(cols = c(cum_survival_mean)) %>% 
+      select(iter:array_num, par) %>% 
+      filter(!par == "beta") %>% 
+      group_by(stock_group) %>% 
+      mutate(
+        new_max = max(array_num)
+      ) %>% 
+      filter(
+        array_num == new_max
+      ) %>% 
+      ungroup()
+  )
+
+mat_stage_effect <- cs_list[[1]] %>% 
+  mutate(
+    sens_est = cs_list[[2]]$est,
+    diff = sens_est - est,
+    data = "Maturation Stage"
+  )
+
+tag_effect <- cs_list[[1]] %>% 
+  mutate(
+    sens_est = cs_list[[3]]$est,
+    diff = sens_est - est,
+    data = "Tag Effect"
+  )
+
+
+png(here::here("figs", "sens", "cumulative_surv_diff.png"), 
+    height = 5, width = 5, units = "in", res = 200)
+ggplot(rbind(mat_stage_effect, tag_effect)) +
+  geom_histogram(aes(x = diff), bins = 50, fill = "#3690c0") +
+  geom_vline(aes(xintercept = 0), lty = 2 , colour = "black", linewidth = 1.25) +
+  ggsidekick::theme_sleek() +
+  labs(x = "Difference in Cumulative Survival\nRelative to Standard Model") +
+  theme(
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank()
+  ) +
+  facet_wrap(~data, ncol = 1)
 dev.off()

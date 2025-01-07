@@ -1,8 +1,7 @@
 ## Logistic survival
 # Survival to detection and to terminal arrays using logistic regression (i.e.
 # not stage-specific, does not account for detection probability)
-# Excludes immature tags and fish with unknown stock ID, but does not exclude
-# redeployed tags or injured fish
+# Excludes immature tags and fish with unknown stock ID
 # Identical to survival_logistic_reg.R but excludes stocks without exploitation
 # rate estimates and models interaction between exploitation and capture date
 # Feb. 22, 2021
@@ -52,7 +51,6 @@ det_dat <- det_dat1 %>%
 
 # FIT LOGISTIC REG MODELS ------------------------------------------------------
 
-det_dat <- det_dat %>% filter()
 
 dat_list <- list(
   surv = as.integer(det_dat$term_det),
@@ -137,8 +135,6 @@ day_seq <- c(-2, 0, 2)
 cyer_seq <- seq(-1.5, 4.5, length = 40)
 preds <- vector(mode = "list", length = length(day_seq))
 prior_sbar <- rnorm(1000, 0, 0.5)
-# prior_term <- rnorm(1000, 0, 0.5)
-# prior_ds <- rnorm(1000, 0, 0.5)
 prior_cs <- rnorm(1000, -0.5, 0.2)
 prior_ds_cs <- rnorm(1000, 0.2, 0.2)
 
