@@ -176,7 +176,10 @@ bind_rows(preds) %>%
 
 # POSTERIOR PREDICTIONS --------------------------------------------------------
 
-post <- extract.samples(m4)
+# post <- extract.samples(m4)
+# saveRDS(post, here::here("data", "model_outputs", "hier_binomial_cyer_samps.rds"))
+post <- readRDS(here::here("data", "model_outputs", "hier_binomial_cyer_samps.rds"))
+
 
 post_pred_foo <- function(dat_in) {
   delta_inj_eff <- cbind(0, post$delta)
