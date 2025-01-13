@@ -361,7 +361,8 @@ sigma_stk_pt <- rbind(sigma_yr, sigma_stk) %>%
 # stock and year rho (correlations among random intercepts)
 mean_rho_stock <- colMeans(post$Rho_stk)
 mean_rho_yr <- colMeans(post$Rho_yr)
-colnames(mean_rho_stock) <- rownames(mean_rho_stock) <- c("fl", "lipid", "surv", "date")
+colnames(mean_rho_stock) <- rownames(mean_rho_stock) <- c("fl", "lipid", "surv",
+                                                          "date")
 colnames(mean_rho_yr) <- rownames(mean_rho_yr) <- c("fl", "lipid", "surv")
 
 cor_plot_list <- purrr::map2(
