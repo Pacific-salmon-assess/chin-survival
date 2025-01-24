@@ -207,6 +207,7 @@ sim_mat_binom <- apply(sim_mat, c(1, 2), function (p) rbinom(1, 1, p))
 
 
 # Define a function to calculate PIT residuals
+# TODO: CORRECT BY CALCULATING THE AVERAGE AMONG ALL
 calc_pit <- function(y, posterior_pred) {
   # Get the proportion of posterior samples that are less than or equal to the observed value
   n_obs <- length(y)
