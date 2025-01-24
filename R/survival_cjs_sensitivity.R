@@ -283,55 +283,6 @@ phi_mat <- map(
   })
 
 
-# calculate cumulative survival across segments for each year
-cum_surv_list <- pmap(
-  list(phi_mat, dat_tbl_trim$stock_group, dat_tbl_trim$years), 
-  function (x, yy, group_names) {
-    if(dim(x)[2] != length(group_names)) 
-      stop("Array dimensions do not match group levels.")
-    
-    dims <- list(iter = seq(1, dim(x)[1], by = 1),
-                 segment = seq(1, dim(x)[3], by = 1))
-    
-    dumm <- expand.grid(iter = dims$iter,
-                        segment = 0, 
-                        Freq = 1, 
-                        group = group_names)
-    
-    # calculate the cumulative product across segments for each group and 
-    # iteration, then convert to a dataframe
-    cumprod_list <- vector(length(group_names), mode = "list") 
-    for (i in seq_along(group_names)) {
-      cumprod_mat <- t(apply(x[ , i, ], 1, cumprod))
-      dimnames(cumprod_mat) = dims[1:2]
-      cumprod_list[[i]] <- cumprod_mat %>% 
-        as.table() %>% 
-        as.data.frame() %>% 
-        mutate(group = group_names[i])
-    }
-    
-    cumprod_list %>% 
-      bind_rows() %>% 
-      rbind(dumm, .) %>%
-      mutate(segment = as.integer(as.character(segment)),
-             stock_group = yy) %>%
-      rename(est = Freq) %>% 
-      #add segment key
-      left_join(., seg_key, by = c("stock_group", "segment")) %>% 
-      mutate(par = case_when(
-        segment == max(segment) ~ "beta",
-        TRUE ~ "phi"
-      )) %>% 
-      group_by(segment, group) %>% 
-      mutate(median = median(est),
-             low = quantile(est, 0.05),
-             up = quantile(est, 0.95)) %>% 
-      ungroup() %>% 
-      arrange(segment, group, iter) 
-  }
-)
-dat_tbl_trim$cum_survival <- cum_surv_list
-
 
 ## calculate average among years
 phi_mat_mean <- map(

@@ -176,7 +176,10 @@ bind_rows(preds) %>%
 
 # POSTERIOR PREDICTIONS --------------------------------------------------------
 
-post <- extract.samples(m4)
+# post <- extract.samples(m4)
+# saveRDS(post, here::here("data", "model_outputs", "hier_binomial_cyer_samps.rds"))
+post <- readRDS(here::here("data", "model_outputs", "hier_binomial_cyer_samps.rds"))
+
 
 post_pred_foo <- function(dat_in) {
   delta_inj_eff <- cbind(0, post$delta)
@@ -359,7 +362,8 @@ sigma_stk_pt <- rbind(sigma_yr, sigma_stk) %>%
 # stock and year rho (correlations among random intercepts)
 mean_rho_stock <- colMeans(post$Rho_stk)
 mean_rho_yr <- colMeans(post$Rho_yr)
-colnames(mean_rho_stock) <- rownames(mean_rho_stock) <- c("fl", "lipid", "surv", "date")
+colnames(mean_rho_stock) <- rownames(mean_rho_stock) <- c("fl", "lipid", "surv",
+                                                          "date")
 colnames(mean_rho_yr) <- rownames(mean_rho_yr) <- c("fl", "lipid", "surv")
 
 cor_plot_list <- purrr::map2(

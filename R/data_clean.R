@@ -26,6 +26,14 @@ indicator_key <- read.csv(
 cyer_dat <- readRDS(here::here("data", "harvest", "cleaned_cyer_dat.rds")) %>% 
   rename(ctc_indicator = stock)
 
+left_join(cyer_dat, 
+          indicator_key %>% 
+            select(agg_name, ctc_indicator) %>% 
+            distinct(),
+          by = "ctc_indicator") %>% 
+  ggplot(.) + 
+  geom_boxplot(aes(x = agg_name, y = isbm_cyer))
+
 
 stage_dat <- readRDS(
   here::here("data", "agg_lifestage_df.RDS")) %>% 
