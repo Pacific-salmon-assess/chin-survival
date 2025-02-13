@@ -26,23 +26,100 @@ stock_pal <- c("#b30000", "#6baed6", "#08306b", "#fec44f", "#ccece6", "#238b45",
                "#bcbddc", "#807dba", "#54278f", "#3f007d", "#fde0dd", "#f768a1")
 names(stock_pal) <- levels(det_dat1$stock_group)
 
-full_samp_size <- det_dat1 %>% 
-  group_by(stock_group) %>% 
-  summarize(
-    n = length(unique(vemco_code))
-  )
 
-stock_fl <- ggplot() +
+png(here::here("figs", "supp", "stock_fl.png"), 
+    height = 4, width = 5.5, units = "in", res = 200)
+ggplot() +
   geom_boxplot(data = det_dat1,
                aes(x = stock_group, y = fl, fill = stock_group)) +
   scale_fill_manual(values = stock_pal) +
-  labs(x = "Stock", y = "Fork Length (cm)") +
+  labs(y = "Fork Length (cm)") +
   ggsidekick::theme_sleek() +
-  theme(legend.position = "none") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
   geom_text(
-    data = full_samp_size, aes(x = stock_group, y = -Inf, label = n),
-    vjust = -1
+    data = det_dat1 %>% 
+      filter(!is.na(fl)) %>% 
+      group_by(stock_group) %>% 
+      summarize(
+        n = length(unique(vemco_code))
+      ),
+    aes(x = stock_group, y = -Inf, label = n),
+    vjust = -0.1
   )
+dev.off()
+
+
+png(here::here("figs", "supp", "stock_lipid.png"), 
+    height = 4, width = 5.5, units = "in", res = 200)
+ggplot() +
+  geom_boxplot(data = det_dat1,
+               aes(x = stock_group, y = lipid, fill = stock_group)) +
+  scale_fill_manual(values = stock_pal) +
+  labs(y = "Lipid Content (% wet weight)") +
+  ggsidekick::theme_sleek() +
+  theme(axis.title.x = element_blank(),
+        legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(
+    data = det_dat1 %>% 
+      filter(!is.na(lipid)) %>% 
+      group_by(stock_group) %>% 
+      summarize(
+        n = length(unique(vemco_code))
+      ),
+    aes(x = stock_group, y = -Inf, label = n),
+    vjust = -0.1
+  )
+dev.off()
+
+
+png(here::here("figs", "supp", "stock_date.png"), 
+    height = 4, width = 5.5, units = "in", res = 200)
+ggplot() +
+  geom_boxplot(data = det_dat1,
+               aes(x = stock_group, y = year_day, fill = stock_group)) +
+  scale_fill_manual(values = stock_pal) +
+  labs(y = "Tagging Date (year day)") +
+  ggsidekick::theme_sleek() +
+  theme(axis.title.x = element_blank(),
+        legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(
+    data = det_dat1 %>% 
+      group_by(stock_group) %>% 
+      summarize(
+        n = length(unique(vemco_code))
+      ),
+    aes(x = stock_group, y = -Inf, label = n),
+    vjust = -0.1
+  )
+dev.off()
+
+
+png(here::here("figs", "supp", "stock_cyer.png"), 
+    height = 4, width = 5.5, units = "in", res = 200)
+ggplot() +
+  geom_boxplot(data = det_dat1,
+               aes(x = stock_group, y = isbm_cyer, fill = stock_group)) +
+  scale_fill_manual(values = stock_pal) +
+  labs(y = "Exploitation Rate") +
+  ggsidekick::theme_sleek() +
+  theme(axis.title.x = element_blank(),
+        legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(
+    data = det_dat1 %>% 
+      filter(!is.na(isbm_cyer)) %>% 
+      group_by(stock_group) %>% 
+      summarize(
+        n = length(unique(vemco_code))
+      ),
+    aes(x = stock_group, y = -Inf, label = n),
+    vjust = -0.1
+  )
+dev.off()
 
 
 ## injury scores
