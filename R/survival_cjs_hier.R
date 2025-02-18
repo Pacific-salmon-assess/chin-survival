@@ -1018,12 +1018,23 @@ surv_plot_mean <- ggplot(data = mean_surv_dat) +
 # as above but remove beta estimates and subset to high res stocks
 surv_plot_mean_trim <- mean_surv_dat %>% 
   filter(
-    par == "phi",
-    !stock_group %in% c("Cali", "WA_OR", "WCVI")
+    par == "phi"
   ) %>% 
-  plot_surv(., show_mcmc = F) + 
-  ylim(c(0.45, 1)) +
-  facet_wrap(~stock_group, scales = "free_x", nrow = 2)
+  ggplot(.) +
+  geom_pointrange(
+    aes(x = fct_reorder(segment_name, segment), 
+        y = median, ymin = low, ymax = up, fill = terminal),
+    shape = 21
+  ) +
+  ggsidekick::theme_sleek() +
+  scale_fill_manual(values = fill_pal, label = c("Non-terminal", "Terminal")) +
+  theme(legend.text=element_text(size = 9),
+        legend.title = element_blank(),
+        axis.text.x = element_text(size = rel(.8))) +
+  guides(fill = guide_legend(override.aes = list(shape = 21))) +
+  facet_wrap(~stock_group, scales = "free_x", ncol = 2) +
+  labs(x = "Segment Name", y = "Cumulative Survival") +
+  ylim(c(0.45, 1)) 
 
 
 pdf(here::here("figs", "cjs", "cum_surv_ind_hier_trials.pdf"), 
@@ -1041,7 +1052,7 @@ png(here::here("figs", "cjs", "cum_surv_mean_hier_clean.png"),
 surv_plot_mean
 dev.off()
 
-png(here::here("figs", "cjs", "cum_surv_mean_hier_clean_trim.png"), 
+png(here::here("figs", "cjs", "cum_surv_mean_hier_clean_nobeta.png"), 
     height = 5, width = 7.5, units = "in", res = 200)
 surv_plot_mean_trim
 dev.off()
