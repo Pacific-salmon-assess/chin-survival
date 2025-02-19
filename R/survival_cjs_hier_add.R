@@ -194,6 +194,67 @@ cjs_hier_sims <- pmap(
   })
 
 
+dd <- pmap(
+  list(x = dat_tbl_trim$dat_in[2], stock_group = dat_tbl_trim$stock_group[2],
+       bio_dat = dat_tbl_trim$bio_dat[2]),
+  .f = function(x, stock_group, bio_dat) {
+    
+    if (stock_group == "Fraser") {
+      mod <- hier_mod_sims_stk
+      x$nstock <- bio_dat$agg %>% unique() %>% length()
+      x$stock <- bio_dat$agg %>%
+        as.factor() %>%
+        droplevels() %>%
+        as.numeric()
+      
+      pars <- c(pars_in,
+                # stock specific pars and quants
+                "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
+                "alpha_stk_phi_z")
+      
+      inits <- lapply(1:n_chains, function (i) {
+        list(
+          alpha_phi = rnorm(1, 0, 0.5),
+          # note z transformed so inverted compared to beta_phi or beta_p
+          alpha_yr_phi_z = rnorm(x$nyear, 0, 0.5),
+          alpha_stk_phi_z = rnorm(x$nstock, 0, 0.5),
+          alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
+          sigma_alpha_yr_phi = rexp(1, 2),
+          sigma_alpha_stk_phi = rexp(1, 2),
+          alpha_p = rnorm(1, 0, 0.5),
+          alpha_yr_p = matrix(
+            rnorm(x$nyear * (x$n_occasions), 0, 0.5), nrow = x$nyear
+          )
+        )
+      })
+      
+    } else{
+      mod <- hier_mod_sims
+      
+      pars <- pars_in
+      
+      # matrix of inits with same dims as estimated parameter matrices
+      inits <- lapply(1:n_chains, function (i) {
+        list(
+          alpha_phi = rnorm(1, 0, 0.5),
+          alpha_yr_phi_z = rnorm(x$nyear, 0, 0.5),
+          alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
+          sigma_alpha_yr_phi = rexp(1, 2),
+          alpha_p = rnorm(1, 0, 0.5),
+          alpha_yr_p = matrix(rnorm(x$nyear * (x$n_occasions), 0, 0.5),
+                              nrow = x$nyear)
+        )
+      })
+    }
+    
+    sampling(
+      mod, data = x, pars = pars,
+      init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
+      open_progress = FALSE,
+      control = list(adapt_delta = 0.96)
+    )
+  })
+
 
 saveRDS(cjs_hier_sims,
         here::here("data", "model_outputs", "hier_cjs_fit_tbl_add.RDS"))
@@ -288,3 +349,132 @@ pdf(here::here("figs", "diagnostics", "posterior_checks_hier_add.pdf"),
     height = 5, width = 8)
 pp_plot_list
 dev.off()
+
+
+
+## Calculate cumulative survival for Fraser by stock ---------------------------
+
+# stock name key
+stk_key <- data.frame(stock = dat_tbl_trim$bio_dat[[2]]$agg) %>%
+  mutate(
+    agg_n = as.factor(stock) %>% 
+      droplevels() %>% 
+      as.numeric()
+  ) %>% 
+  distinct() %>% 
+  arrange(agg_n)
+
+phi_stk <- extract(dd[[1]])[["phi_stk"]]
+
+# calculate cumulative product for each stk and iteration then convert to DF
+dims <- list(iter = seq(1, dim(phi_stk)[1], by = 1),
+             segment = seq(1, dim(phi_stk)[3], by = 1))
+
+dumm <- expand.grid(iter = dims$iter,
+                    segment = 0, 
+                    Freq = 1, 
+                    agg_n = stk_key$agg_n)
+
+# calculate the cumulative product across segments for each group and 
+# iteration, then convert to a dataframe
+cumprod_list <- vector(length(stk_key$agg_n), mode = "list") 
+for (i in seq_along(stk_key$agg_n)) {
+  cumprod_mat <- t(apply(phi_stk[ , i, ], 1, cumprod))
+  dimnames(cumprod_mat) = dims[1:2]
+  cumprod_list[[i]] <- cumprod_mat %>% 
+    as.table() %>% 
+    as.data.frame() %>% 
+    mutate(agg_n = stk_key$agg_n[i])
+}
+
+stk_cumprod_plot <- cumprod_list %>% 
+  bind_rows() %>% 
+  rbind(dumm, .) %>%
+  mutate(segment = as.integer(as.character(segment)),
+         stock_group = "Fraser") %>%
+  rename(est = Freq) %>% 
+  #add segment key
+  left_join(., seg_key, by = c("stock_group", "segment")) %>% 
+  left_join(., stk_key, by = "agg_n") %>% 
+  mutate(segment_name = fct_reorder(as.factor(segment_name), segment),
+         hab = case_when(
+           segment == max(segment) ~ "river",
+           TRUE ~ "marine"
+         )) %>% 
+  group_by(segment, segment_name, stock) %>% 
+  summarize(median = median(est),
+            low = quantile(est, 0.05),
+            up = quantile(est, 0.95)) %>% 
+  ungroup() %>% 
+  mutate(agg_name_f = NA) %>% 
+  ggplot(.) +
+  geom_pointrange(aes(x = fct_reorder(segment_name, segment), 
+                      y = median, ymin = low, ymax = up, fill = stock),
+                  shape = 21, position = position_dodge(width = 0.5)) +
+  ggsidekick::theme_sleek() +
+  theme(axis.title.x = element_blank(), 
+        axis.title.y = element_blank(),
+        legend.text=element_text(size = 9),
+        legend.title = element_blank(),
+        axis.text.x = element_text(size = rel(.8)),
+        legend.position = "top") +
+  lims(y = c(0, 1))  
+
+png(here::here("figs", "cjs", "fraser_stock_surv.png"), 
+    height = 4.5, width = 5.5, units = "in", res = 200)
+stk_cumprod_plot
+dev.off()
+
+
+stk_effect <- extract(dd[[1]])[["alpha_stk_phi"]]
+colnames(stk_effect) <- stk_key$stock
+
+library(ggridges)
+
+png(here::here("figs", "cjs", "fraser_stk_effect.png"), 
+    height = 4.5, width = 5.5, units = "in", res = 200)
+stk_effect %>% 
+  as.data.frame() %>% 
+  pivot_longer(
+    cols = everything(),
+    names_to = "stk",
+    values_to = "est"
+  ) %>% 
+  group_by(
+    stk
+  ) %>% 
+  summarize(
+    med = median(est),
+    lo = rethinking::HPDI(est, prob = 0.9)[1],
+    up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) %>% 
+  mutate(
+    stk = factor(
+      stk, 
+      levels = c("Fraser Spr. Yr.", "Fraser Sum. Yr.", "Fraser Sum. 4.1", 
+                 "Fraser Fall")),
+    stk = fct_recode(stk, 
+                     "Spring 1.x" = "Fraser Spr. Yr.",
+                     "Summer 1.3" = "Fraser Sum. Yr.", 
+                     "Summer 0.3" = "Fraser Sum. 4.1", 
+                     "Fall 0.3" = "Fraser Fall")
+  ) %>% 
+  ggplot(.) +
+  geom_pointrange(aes(x = stk, y = med, ymin = lo, ymax = up, fill = stk),
+                  shape = 21) +
+  scale_fill_brewer(palette = "YlGnBu") +
+  labs(x = "Fraser River Stock Group", y = "Stock-Specific Survival Effect") +
+  geom_hline(yintercept = 0, lty = 2) +
+  ggsidekick::theme_sleek() +
+  theme(legend.title = element_blank(),
+        legend.position = "none")
+dev.off()
+
+
+summ <- rstan::summary(dd[[1]])[[1]]
+rbind(summ[which(grepl("alpha_phi", row.names(summ))), ],
+      summ[which(grepl("alpha_t_phi", row.names(summ))), ]
+)
+summ[which(grepl("alpha_stk_phi", row.names(summ))), ]
+
+     

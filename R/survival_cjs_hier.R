@@ -118,6 +118,38 @@ saveRDS(mean_det_pt, here::here("figs", "average_detections.rds" ))
 
 
 
+# check fraser
+left_join(dat_tbl_trim$bio_dat[[2]] %>% 
+            select(vemco_code, agg),
+          dat_tbl_trim$wide_array_dat[[2]]) %>% 
+  group_by(year, agg) %>%
+  summarise(
+    n = n(),
+    across(-c(vemco_code, n), function(x) {sum(x) / n})
+  ) %>% 
+  pivot_longer(
+    cols = -c(year, agg, n),
+    names_to = "array_num",
+    values_to = "ppn_detected"
+  )  %>% 
+  ggplot(.) +
+  geom_point(
+    aes(x = array_num, y = ppn_detected, 
+        fill = as.factor(year)),
+    position = position_dodge(width = 0.5),
+    shape = 21
+  ) +
+  scale_fill_discrete(name = "Year") +
+  facet_wrap(~stock_group, scales = "free_x") +
+  ggsidekick::theme_sleek() +
+  labs(y = "Proportion Tags Detected") +
+  theme(
+    legend.position = "top",
+    axis.title.x = element_blank()
+  ) +
+  facet_wrap(~agg)
+
+
 # Fit model --------------------------------------------------------------------
 
 ## Fixed temporal effects model (survival and probability vary among stages) 
@@ -1310,3 +1342,4 @@ stk_effect %>%
   theme(legend.title = element_blank(),
         legend.position = "none")
 dev.off()
+
