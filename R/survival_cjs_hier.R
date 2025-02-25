@@ -1120,7 +1120,7 @@ p_total <- term_surv_dat %>%
 term_dist <- read.csv(here::here("data", "terminal_locations.csv")) %>% 
   filter(!location == "bonneville")
 
-p_dist <- term_surv_dat %>% 
+term_surv_dat_scaled <- term_surv_dat %>% 
   select(iter, est, stock_group) %>%
   left_join(., term_dist, by = "stock_group") %>%
   mutate(
@@ -1134,8 +1134,14 @@ p_dist <- term_surv_dat %>%
     med = median(scaled_surv),
     lo = rethinking::HPDI(scaled_surv, prob = 0.9)[1],
     up = rethinking::HPDI(scaled_surv, prob = 0.9)[2]
-  ) %>% 
-  ggplot(.) +
+  )
+
+# export for comparison with sockeye 
+# saveRDS(term_surv_dat_scaled,
+#         here::here("data", "term_surv_rate.rds"))
+
+
+p_dist <- ggplot(term_surv_dat_scaled) +
   geom_pointrange(aes(x = stock_group, y = med, ymin = lo, ymax = up)) +
   labs(y = "Cumulative Terminal\nSurvival Rate per 100 km") +
   ggsidekick::theme_sleek() +

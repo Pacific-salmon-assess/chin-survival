@@ -476,5 +476,6 @@ rbind(summ[which(grepl("alpha_phi", row.names(summ))), ],
       summ[which(grepl("alpha_t_phi", row.names(summ))), ]
 )
 summ[which(grepl("alpha_stk_phi", row.names(summ))), ]
-
+summ[which(grepl("sigma_alpha_yr_phi", row.names(summ))), ]
+sigma_alpha_yr_phi
      
