@@ -723,3 +723,144 @@ ggplot(ri_yr_dat, aes(x = model)) +
 
 # focus on estimating parameters of interest only, including detection 
 # probability
+
+
+## EXPLORE OBSERVATION ERROR ---------------------------------------------------
+
+## true survival is a function of one covariate and observed survival includes
+# error
+surv_bar <- -1  # intercept
+beta_cs <- 0.5 # condition effect
+
+eta <- surv_bar + beta_cs * dat$cond
+p <- 1 / (1 + exp(-(eta)))  # Probability of survival
+set.seed(123)
+s_true <- rbinom(n, 1, p)  # Binary outcome
+
+# detection probability
+det_p <- 0.95 
+dat$s_obs <- ifelse(s_true == 1 & runif(n) < det_p, 1, 0)
+
+dat_list <- list(
+  s_obs = dat$s_obs,
+  cond = dat$cond
+)
+
+m1 <- ulam(
+  alist(
+
+    # FALSE NEG
+    s_obs | s_obs == 1 ~ custom( log( p * (1 - det_p) ) ),
+    s_obs | s_obs == 0 ~ custom( log( (1 - p) + p * det_p ) ),
+    
+    # FALSE POS
+    # s_obs|s_obs == 1 ~ custom( log(p + (1 - p) * det_p)),
+    # s_obs|s_obs == 0 ~ custom( log((1 - p) * (1 - det_p))),
+
+    # s_obs|s_obs==1 ~ custom( log_sum_exp( log_p , log1m_exp(log_p)+log(det_p) ) ),
+    # s_obs|s_obs==0 ~ custom( log1m_exp(log_p) + log1m(det_p) ),
+    # obs model
+    det_p ~ beta(1, 6),
+    
+    # process model
+    logit(p) <- surv_bar + beta_cs * cond,
+    # log_p <- log_inv_logit(surv_bar + beta_cs * cond),
+    # log_p <- log_inv_logit( a + z[mom_id]*sigma + x[dyad_id]*tau ),
+    
+    beta_cs ~ normal(0, 0.5),
+    surv_bar ~ dnorm(0, 2)
+  ),
+  data = dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+m1b <- ulam(
+  alist(
+    # obs model
+    s_obs | s_obs == 1 ~ custom( log( p * (det_p) ) ),
+    s_obs | s_obs == 0 ~ custom( log( (1 - p) + p * (1 - det_p) ) ),
+    # s_obs | s_obs == 1 ~ custom(log_sum_exp(log_p + log(det_p), log1m_exp(log_p) + log1m_exp(det_p))),
+    # s_obs | s_obs == 0 ~ custom(log_sum_exp(log1m_exp(log_p) + log(det_p), log_p + log1m_exp(det_p))),
+    det_p ~ beta(19, 2),  # Adjusted to favor ~0.95 detection probability
+    
+    # process model
+    logit(p) <- surv_bar + beta_cs * cond,
+    # log_p <- log_inv_logit(surv_bar + beta_cs * cond),
+    
+    beta_cs ~ normal(0, 0.5),
+    surv_bar ~ dnorm(0, 2)
+  ),
+  data = dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+
+
+m2 <- ulam(
+  alist(
+    # process model
+    s_obs ~ dbinom(1 , p) ,
+    logit(p) <- surv_bar + beta_cs * cond,
+    
+    beta_cs ~ normal(0, 0.5),
+    surv_bar ~ dnorm(0, 2)
+  ),
+  data = dat_list, chains=4 , cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+
+
+m1 <- ulam(
+  alist(
+    # Observation model (adjusted for detection probability)
+     
+    # Prior for detection probability (strong prior on high detection)
+    det_p ~ beta(19, 1),  # Adjusted to favor ~0.95 detection probability
+    
+    # Process model
+    logit(p) <- surv_bar + beta_cs * cond,
+    
+    # Priors
+    beta_cs ~ normal(0, 0.5),
+    surv_bar ~ normal(0, 2)
+  ),
+  data = dat_list, chains=4, cores=4,
+  control = list(adapt_delta = 0.95)
+)
+
+    
+X3 <- ulam(
+  alist(
+    #X|X==1 ~ custom( log( p + (1-p)*f ) ),
+    X|X==1 ~ custom( log_sum_exp( log_p , log1m_exp(log_p)+log(f) ) ),
+    #X|X==0 ~ custom( log( (1-p)*(1-f) ) ),
+    X|X==0 ~ custom( log1m_exp(log_p) + log1m(f) ),
+    log_p <- log_inv_logit( a + z[mom_id]*sigma + x[dyad_id]*tau ),
+    a ~ normal(0,1.5),
+    z[mom_id] ~ normal(0,1),
+    sigma ~ normal(0,1),
+    x[dyad_id] ~ normal(0,1),
+    tau ~ normal(0,1)
+  ) , data=dat , chains=4 , cores=4 , iter=4000 ,
+  constraints=list(sigma="lower=0",tau="lower=0") )
+
+m1 <- ulam(
+  alist(
+    # Observation model
+    s_obs ~ bernoulli( p * (1 - det_p) + (1 - p) * det_p ),
+    
+    # Detection probability (bounded between 0 and 1)
+    det_p ~ beta(2, 4),  # Assumes ~80% detection probability
+    
+    # Process model
+    s_true ~ bernoulli(p),
+    logit(p) <- surv_bar + beta_cs * cond,
+    
+    # Priors
+    beta_cs ~ normal(0, 0.5),
+    surv_bar ~ normal(0, 2)
+  ),
+  data = dat_list, chains=4, cores=4,
+  control = list(adapt_delta = 0.95)
+)
