@@ -737,64 +737,46 @@ p <- 1 / (1 + exp(-(eta)))  # Probability of survival
 set.seed(123)
 s_true <- rbinom(n, 1, p)  # Binary outcome
 
-# detection probability
-det_p <- 0.95 
-dat$s_obs <- ifelse(s_true == 1 & runif(n) < det_p, 1, 0)
+# detection probability varies across two groups 
+dat_obs <- dat %>% 
+  mutate(
+    group_id = sample(c(1, 2), size = nrow(dat), replace = TRUE),
+    det_p = ifelse(group_id == "1", 0.9, 0.3),
+    s_obs = ifelse(s_true == 1 & runif(n) < det_p, 1, 0)
+  )
 
 dat_list <- list(
-  s_obs = dat$s_obs,
-  cond = dat$cond
-)
-
-m1 <- ulam(
-  alist(
-
-    # FALSE NEG
-    s_obs | s_obs == 1 ~ custom( log( p * (1 - det_p) ) ),
-    s_obs | s_obs == 0 ~ custom( log( (1 - p) + p * det_p ) ),
-    
-    # FALSE POS
-    # s_obs|s_obs == 1 ~ custom( log(p + (1 - p) * det_p)),
-    # s_obs|s_obs == 0 ~ custom( log((1 - p) * (1 - det_p))),
-
-    # s_obs|s_obs==1 ~ custom( log_sum_exp( log_p , log1m_exp(log_p)+log(det_p) ) ),
-    # s_obs|s_obs==0 ~ custom( log1m_exp(log_p) + log1m(det_p) ),
-    # obs model
-    det_p ~ beta(1, 6),
-    
-    # process model
-    logit(p) <- surv_bar + beta_cs * cond,
-    # log_p <- log_inv_logit(surv_bar + beta_cs * cond),
-    # log_p <- log_inv_logit( a + z[mom_id]*sigma + x[dyad_id]*tau ),
-    
-    beta_cs ~ normal(0, 0.5),
-    surv_bar ~ dnorm(0, 2)
-  ),
-  data = dat_list, chains=4 , cores = 4,
-  control = list(adapt_delta = 0.95)
+  s_obs = dat_obs$s_obs,
+  group_id = dat_obs$group_id,
+  cond = dat_obs$cond
 )
 
 m1b <- ulam(
   alist(
     # obs model
-    s_obs | s_obs == 1 ~ custom( log( p * (det_p) ) ),
-    s_obs | s_obs == 0 ~ custom( log( (1 - p) + p * (1 - det_p) ) ),
-    # s_obs | s_obs == 1 ~ custom(log_sum_exp(log_p + log(det_p), log1m_exp(log_p) + log1m_exp(det_p))),
-    # s_obs | s_obs == 0 ~ custom(log_sum_exp(log1m_exp(log_p) + log(det_p), log_p + log1m_exp(det_p))),
+    # s_obs | s_obs == 1 ~ custom( log( p * (det_p[group_id]) ) ),
+    # s_obs | s_obs == 0 ~ custom( log( (1 - p) + p * (1 - det_p[group_id]) ) ),
+    s_obs | s_obs == 1 ~ custom( 
+      log_p + log(det_p) 
+      ),
+    s_obs | s_obs == 0 ~ custom(
+      log_sum_exp(log1m_exp(log_p), log_p + log1m(det_p)) 
+      ),
+    # Prior for detection probability
+    # NOTE REPLACE IN STAN CODE
     det_p ~ beta(19, 2),  # Adjusted to favor ~0.95 detection probability
+    # det_p ~ beta(3, 2),  # Adjusted to favor ~0.6 detection probability
     
-    # process model
-    logit(p) <- surv_bar + beta_cs * cond,
-    # log_p <- log_inv_logit(surv_bar + beta_cs * cond),
+    # Process model
+    log_p <- log_inv_logit(surv_bar + beta_cs * cond),
     
+    # Priors
     beta_cs ~ normal(0, 0.5),
     surv_bar ~ dnorm(0, 2)
   ),
-  data = dat_list, chains=4 , cores = 4,
+  data = dat_list, chains=4 , cores=4,
   control = list(adapt_delta = 0.95)
 )
-
-
 
 m2 <- ulam(
   alist(
@@ -809,58 +791,21 @@ m2 <- ulam(
   control = list(adapt_delta = 0.95)
 )
 
-
-
-m1 <- ulam(
-  alist(
-    # Observation model (adjusted for detection probability)
-     
-    # Prior for detection probability (strong prior on high detection)
-    det_p ~ beta(19, 1),  # Adjusted to favor ~0.95 detection probability
-    
-    # Process model
-    logit(p) <- surv_bar + beta_cs * cond,
-    
-    # Priors
-    beta_cs ~ normal(0, 0.5),
-    surv_bar ~ normal(0, 2)
-  ),
-  data = dat_list, chains=4, cores=4,
-  control = list(adapt_delta = 0.95)
+## not possible to estimate two separate detection probabilities with ulam,
+# write in stan instead
+dat_list <- list(
+  # N = length(dat$s_obs),  # Total number of observations
+  s_obs = as.integer(dat$s_obs),
+  cond = dat$cond,
+  group_id = as.integer(dat$group_id)  # Ensure it's 1 or 2
 )
 
-    
-X3 <- ulam(
-  alist(
-    #X|X==1 ~ custom( log( p + (1-p)*f ) ),
-    X|X==1 ~ custom( log_sum_exp( log_p , log1m_exp(log_p)+log(f) ) ),
-    #X|X==0 ~ custom( log( (1-p)*(1-f) ) ),
-    X|X==0 ~ custom( log1m_exp(log_p) + log1m(f) ),
-    log_p <- log_inv_logit( a + z[mom_id]*sigma + x[dyad_id]*tau ),
-    a ~ normal(0,1.5),
-    z[mom_id] ~ normal(0,1),
-    sigma ~ normal(0,1),
-    x[dyad_id] ~ normal(0,1),
-    tau ~ normal(0,1)
-  ) , data=dat , chains=4 , cores=4 , iter=4000 ,
-  constraints=list(sigma="lower=0",tau="lower=0") )
+library(rstan)
 
-m1 <- ulam(
-  alist(
-    # Observation model
-    s_obs ~ bernoulli( p * (1 - det_p) + (1 - p) * det_p ),
-    
-    # Detection probability (bounded between 0 and 1)
-    det_p ~ beta(2, 4),  # Assumes ~80% detection probability
-    
-    # Process model
-    s_true ~ bernoulli(p),
-    logit(p) <- surv_bar + beta_cs * cond,
-    
-    # Priors
-    beta_cs ~ normal(0, 0.5),
-    surv_bar ~ normal(0, 2)
-  ),
-  data = dat_list, chains=4, cores=4,
-  control = list(adapt_delta = 0.95)
-)
+samp_mod <- stan_model(here::here("R", "stan_models", "obs-error-example.stan"))
+
+m1_stan <- sampling(samp_mod, data = dat_list, 
+                    chains = 4, iter = 4000, warmup = 1000, 
+                    control = list(adapt_delta = 0.95))
+
+print(m1_stan, pars = c("det_p", "beta_cs", "surv_bar", "det_p"))
