@@ -54,34 +54,32 @@ adjustmentSets(dag_full, exposure = "I", outcome = "S")
 ## generative model
 online_dag <- dagitty('
 dag {
-"apparent survival" [outcome,pos="0.665,1.409"]
-"detection probability" [pos="-0.770,0.090"]
 "fork length" [exposure,pos="0.106,0.772"]
+"observed survival" [outcome,pos="0.620,1.084"]
 "tagging date" [exposure,pos="-0.713,1.122"]
-condition [latent,pos="-0.103,0.591"]
+"true survival" [latent,pos="0.374,1.087"]
+condition [latent,pos="-0.088,0.591"]
 exploitation [exposure,pos="0.307,0.102"]
-injury [exposure,pos="-0.012,1.599"]
-lipid [exposure,pos="0.378,0.688"]
-stock [adjusted,pos="-0.869,0.298"]
-year [adjusted,pos="-0.397,-0.024"]
-"detection probability" -> "apparent survival"
-"fork length" -> "apparent survival"
-"tagging date" -> "apparent survival"
+injury [exposure,pos="0.016,1.481"]
+lipid [exposure,pos="0.443,0.574"]
+stock [adjusted,pos="-0.734,0.399"]
+year [adjusted,pos="-0.230,-0.056"]
+"fork length" -> "true survival"
+"fork length" -> injury
+"tagging date" -> "true survival"
 "tagging date" -> condition
+"true survival" -> "observed survival"
 condition -> "fork length"
 condition -> lipid
-exploitation -> "apparent survival"
-injury -> "apparent survival"
-lipid -> "apparent survival"
-stock -> "apparent survival"
-stock -> "detection probability"
+exploitation -> "true survival"
+injury -> "true survival"
+lipid -> "true survival"
+stock -> "fork length"
 stock -> "tagging date"
-stock -> condition
-stock -> exploitation
-year -> "apparent survival"
-year -> "detection probability"
+stock -> "true survival"
+stock -> lipid
+year -> "true survival"
 year -> condition
-year -> exploitation
 }
 ')
 
