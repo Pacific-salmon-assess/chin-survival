@@ -732,72 +732,95 @@ ggplot(ri_yr_dat, aes(x = model)) +
 surv_bar <- -1  # intercept
 beta_cs <- 0.5 # condition effect
 
-eta <- surv_bar + beta_cs * dat$cond
+eta <- surv_bar #+ beta_cs * dat$cond 
 p <- 1 / (1 + exp(-(eta)))  # Probability of survival
 set.seed(123)
 s_true <- rbinom(n, 1, p)  # Binary outcome
 
-# detection probability varies across two groups 
+# detection probability varies across five groups with the first three having
+# posterior estimates from a previous model that can be passed as data
 dat_obs <- dat %>% 
   mutate(
-    group_id = sample(c(1, 2), size = nrow(dat), replace = TRUE),
+    group_id = sample(c(1, 5), size = nrow(dat), replace = TRUE),
     det_p = ifelse(group_id == "1", 0.9, 0.3),
     s_obs = ifelse(s_true == 1 & runif(n) < det_p, 1, 0)
   )
 
 dat_list <- list(
   s_obs = dat_obs$s_obs,
-  group_id = dat_obs$group_id,
-  cond = dat_obs$cond
+  group_id = dat_obs$group_id
 )
 
-m1b <- ulam(
-  alist(
-    # obs model
-    # s_obs | s_obs == 1 ~ custom( log( p * (det_p[group_id]) ) ),
-    # s_obs | s_obs == 0 ~ custom( log( (1 - p) + p * (1 - det_p[group_id]) ) ),
-    s_obs | s_obs == 1 ~ custom( 
-      log_p + log(det_p) 
-      ),
-    s_obs | s_obs == 0 ~ custom(
-      log_sum_exp(log1m_exp(log_p), log_p + log1m(det_p)) 
-      ),
-    # Prior for detection probability
-    # NOTE REPLACE IN STAN CODE
-    det_p ~ beta(19, 2),  # Adjusted to favor ~0.95 detection probability
-    # det_p ~ beta(3, 2),  # Adjusted to favor ~0.6 detection probability
-    
-    # Process model
-    log_p <- log_inv_logit(surv_bar + beta_cs * cond),
-    
-    # Priors
-    beta_cs ~ normal(0, 0.5),
-    surv_bar ~ dnorm(0, 2)
-  ),
-  data = dat_list, chains=4 , cores=4,
-  control = list(adapt_delta = 0.95)
-)
+# m1b <- ulam(
+#   alist(
+#     # obs model
+#     s_obs | s_obs == 1 ~ custom( 
+#       log_p + log(det_p) 
+#       ),
+#     s_obs | s_obs == 0 ~ custom(
+#       log_sum_exp(log1m_exp(log_p), log_p + log1m(det_p)) 
+#       ),
+#     # Prior for detection probability
+#     det_p ~ beta(19, 2),  # Adjusted to favor ~0.95 detection probability
+#     # det_p ~ beta(3, 2),  # Adjusted to favor ~0.6 detection probability
+#     
+#     # Process model
+#     log_p <- log_inv_logit(surv_bar + beta_cs * cond),
+#     
+#     # Priors
+#     beta_cs ~ normal(0, 0.5),
+#     surv_bar ~ dnorm(0, 2)
+#   ),
+#   data = dat_list, chains=4 , cores=4,
+#   control = list(adapt_delta = 0.95)
+# )
 
-m2 <- ulam(
-  alist(
-    # process model
-    s_obs ~ dbinom(1 , p) ,
-    logit(p) <- surv_bar + beta_cs * cond,
-    
-    beta_cs ~ normal(0, 0.5),
-    surv_bar ~ dnorm(0, 2)
-  ),
-  data = dat_list, chains=4 , cores = 4,
-  control = list(adapt_delta = 0.95)
-)
-
-## not possible to estimate two separate detection probabilities with ulam,
+## not possible to estimate separate detection probabilities with ulam,
 # write in stan instead
+# also modify detection probability so that it varies across five groups with 
+# the first three having posterior estimates from a previous model that can be 
+# passed as data
+# NOTE remove condition effect since it reduces precision of estimates
+
+# posterior matrix
+set.seed(123)  # For reproducibility
+
+M <- 4000  # Number of posterior samples
+det_p_posterior <- matrix(0, nrow = M, ncol = 5)
+det_p_posterior[, 1] <- rbeta(M, shape1 = 40, shape2 = 7)   # Median ~0.85
+det_p_posterior[, 2] <- rbeta(M, shape1 = 50, shape2 = 4)   # Median ~0.92
+det_p_posterior[, 3] <- rbeta(M, shape1 = 75, shape2 = 1.5) # Median ~0.98
+
+
+# true det_p
+det_p_true <- data.frame(
+  group_id = seq(1, 5, 1),
+  det_p = c(.85, .92, .98, 0.3, 0.2), #median
+  use_posterior = ifelse(det_p > 0.5, 1, 0)
+)
+
+dat_obs <- dat %>% 
+  mutate(
+    group_id = sample(seq(1, 5, 1), size = nrow(dat), replace = TRUE)
+  ) %>%  
+  left_join(., det_p_true, by = "group_id") %>%
+  mutate(
+    s_obs = ifelse(s_true == 1 & runif(n) < det_p, 1, 0)
+  )
+
+ggplot(dat_obs) +
+  geom_bar(aes(x = s_obs)) +
+  facet_wrap(~group_id)
+
 dat_list <- list(
-  # N = length(dat$s_obs),  # Total number of observations
-  s_obs = as.integer(dat$s_obs),
-  cond = dat$cond,
-  group_id = as.integer(dat$group_id)  # Ensure it's 1 or 2
+  N = nrow(dat_obs),
+  s_obs = dat_obs$s_obs,
+  group_id = dat_obs$group_id,
+  G = length(unique(dat_obs$group_id)),
+  use_posterior = det_p_true$use_posterior,
+  # P = sum(det_p_true$use_posterior), # number of groups using posterior
+  M = nrow(det_p_posterior),
+  det_p_posterior = det_p_posterior
 )
 
 library(rstan)
@@ -805,7 +828,9 @@ library(rstan)
 samp_mod <- stan_model(here::here("R", "stan_models", "obs-error-example.stan"))
 
 m1_stan <- sampling(samp_mod, data = dat_list, 
-                    chains = 4, iter = 4000, warmup = 1000, 
+                    # chains = 1, iter = 2000, warmup = 1000, 
+                    chains = 4, iter = 4000, warmup = 1000,
                     control = list(adapt_delta = 0.95))
 
-print(m1_stan, pars = c("det_p", "beta_cs", "surv_bar", "det_p"))
+print(m1_stan, pars = c(#"beta_cs", 
+                        "surv_bar", "det_p_out"))
