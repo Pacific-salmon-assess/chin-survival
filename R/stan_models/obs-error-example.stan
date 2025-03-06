@@ -14,17 +14,13 @@ data{
   	int<lower=1> M;                   // Number of posterior samples per group
  	matrix[M, G] det_p_posterior;      // Posterior samples for groups 
 }
-parameters{
-  	real<lower=0, upper=1> det_p_estimate[G];  // Detection probabilities for groups that don't have posterior
-  	// real beta_cs;
-    real surv_bar;
-}
-model{
-    // Sample posterior values each iteration
-	real det_p_data[G]; // Precomputed posterior samples for groups with use_posterior == 1
+// NOTE: following converges but is not sampling from posterior each iteration, only once when the model is compiled
+transformed data {
+    real det_p_data[G]; // Precomputed posterior samples for groups with use_posterior == 1
     int post_sample_idx[G]; // Stores sampled indices for posterior groups
 
-    for (g in 1:G) {
+    // Sample posterior values before inference begins
+	for (g in 1:G) {
         post_sample_idx[g] = categorical_rng(rep_vector(1.0 / M, M));  // Randomly select a sample
         if (use_posterior[g] == 1) {
             det_p_data[g] = det_p_posterior[post_sample_idx[g], g]; // Use sampled posterior
@@ -32,9 +28,16 @@ model{
             det_p_data[g] = 0;  // Placeholder for estimated groups
         }
     }
-
-    // Priors
-    for (g in 1:G) {
+}
+parameters{
+  	real<lower=0, upper=1> det_p_estimate[G];  // Detection probabilities for groups that don't have posterior
+  	// real beta_cs;
+    real surv_bar;
+}
+model{
+    // priors
+    // det_p_estimate ~ beta(2, 10); // Weak prior for estimated groups
+  	for (g in 1:G) {
         if (use_posterior[g] == 0) {
             det_p_estimate[g] ~ beta(2, 10); // Weak prior for estimated groups
         }
@@ -60,6 +63,19 @@ model{
 	}
 }
 generated quantities {
+    // Sample posterior values each iteration
+	real det_p_data[G]; // Precomputed posterior samples for groups with use_posterior == 1
+    int post_sample_idx[G]; // Stores sampled indices for posterior groups
+
+    for (g in 1:G) {
+        post_sample_idx[g] = categorical_rng(rep_vector(1.0 / M, M));  // Randomly select a sample
+        if (use_posterior[g] == 1) {
+            det_p_data[g] = det_p_posterior[post_sample_idx[g], g]; // Use sampled posterior
+        } else {
+            det_p_data[g] = 0;  // Placeholder for estimated groups
+        }
+    }
+
     // Export draws from input data (use_posterior == 1) or from posterior dist (use_posterior == 0)
     real det_p_out[G];  // Store final det_p_data values
     for (g in 1:G) {
