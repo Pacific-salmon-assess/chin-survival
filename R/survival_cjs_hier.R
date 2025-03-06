@@ -1131,13 +1131,24 @@ term_surv_dat_scaled <- term_surv_dat %>%
     stock_group
   ) %>% 
   summarize(
-    med = median(scaled_surv),
-    lo = rethinking::HPDI(scaled_surv, prob = 0.9)[1],
+    median = median(scaled_surv),
+    low = rethinking::HPDI(scaled_surv, prob = 0.9)[1],
     up = rethinking::HPDI(scaled_surv, prob = 0.9)[2]
   )
 
 # export for comparison with sockeye 
-# saveRDS(term_surv_dat_scaled,
+# rbind(
+#   term_surv_dat %>% 
+#     select(colnames(term_surv_dat_scaled)) %>% 
+#     distinct() %>%
+#     mutate(
+#       data = "unscaled"
+#     ),
+#   term_surv_dat_scaled %>% 
+#     mutate(
+#       data= "scaled"
+#     )) %>% 
+#   saveRDS(.,
 #         here::here("data", "term_surv_rate.rds"))
 
 

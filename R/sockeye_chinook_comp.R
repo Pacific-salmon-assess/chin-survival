@@ -17,9 +17,8 @@ scale_foo <- function (x, dist) {
   x^(1 / (dist / 100))
 }
 
-scaled_sox <- data.frame(
-  stock_group = "Fraser", 
-  med = scale_foo(c((6 / 252), (12 / 195)), 470),
+sox <- data.frame(
+  median = c((6 / 252), (12 / 195)),
   se = c(
     sqrt(
       (6 / 252) * (1 - (6 / 252)) / 100
@@ -31,17 +30,29 @@ scaled_sox <- data.frame(
   study = c("DFO", "UBC")
 ) %>% 
   mutate(
-    lo = med - se,
-    up = med + se,
-    species = "sockeye"
+    stock_group = "Fraser", 
+    low = median - se,
+    up = median + se,
+    species = "sockeye",
+    data = "unscaled"
+  ) 
+
+scaled_sox <- sox %>% 
+  mutate(
+    median = scale_foo(median, 470),
+    se = sqrt(median * (1 - median) / 100)
+    ) %>% 
+  mutate(
+    low = median - se,
+    up = median + se,
+    data = "scaled"
   ) %>% 
-  select(
-    colnames(scaled_chin)
-  )
+  rbind(., sox)
+
 
 
 surv_comp <- rbind(
-  scaled_chin, scaled_sox
+  scaled_chin, scaled_sox %>% select(colnames(scaled_chin))
 ) %>% 
   mutate(
     xx = factor(
@@ -49,10 +60,26 @@ surv_comp <- rbind(
       labels = c("Cali", "Fraser", "Low Col.", "South Puget", "Up Col.",
                  "Fraser DFO", "Fraser UBC")
       )
-  ) %>% 
-  filter(!study == "UBC") %>% 
-  ggplot(.) +
-  geom_pointrange(aes(x = xx, y = med, ymin = lo, ymax = up, fill = species),
+  ) 
+
+p1 <- ggplot(surv_comp %>% 
+         filter(data == "unscaled",
+                !study == "UBC")) +
+  geom_pointrange(aes(x = xx, y = median, ymin = low, ymax = up, 
+                      fill = species),
+                  shape = 21) +
+  labs(y = "Cumulative Survival Rate") +
+  ggsidekick::theme_sleek() +
+  theme(axis.title.x = element_blank(),
+        legend.title = element_blank(),
+        legend.position = "top") +
+  lims(y = c(0, 1))
+
+p2 <- ggplot(surv_comp %>% 
+               filter(data == "scaled",
+                      !study == "UBC")) +
+  geom_pointrange(aes(x = xx, y = median, ymin = low, ymax = up, 
+                      fill = species),
                   shape = 21) +
   labs(y = "Cumulative Survival\nRate per 100 km") +
   ggsidekick::theme_sleek() +
@@ -61,20 +88,12 @@ surv_comp <- rbind(
         legend.position = "top") +
   lims(y = c(0, 1))
 
-surv_comp2 <- rbind(
-  scaled_chin, scaled_sox
-) %>% 
-  mutate(
-    xx = factor(
-      paste(species, stock_group, study, sep = " "),
-      labels = c("Cali", "Fraser", "Low Col.", "South Puget", "Up Col.",
-                 "Fraser DFO", "Fraser UBC")
-    )
-  ) %>% 
-  ggplot(.) +
-  geom_pointrange(aes(x = xx, y = med, ymin = lo, ymax = up, fill = species),
+p3 <- ggplot(surv_comp %>% 
+               filter(data == "unscaled")) +
+  geom_pointrange(aes(x = xx, y = median, ymin = low, ymax = up, 
+                      fill = species),
                   shape = 21) +
-  labs(y = "Cumulative Survival\nRate per 100 km") +
+  labs(y = "Cumulative Survival Rate") +
   ggsidekick::theme_sleek() +
   theme(axis.title.x = element_blank(),
         legend.title = element_blank(),
@@ -82,16 +101,24 @@ surv_comp2 <- rbind(
   lims(y = c(0, 1))
 
 ggsave(
-  filename = here::here("figs", "cjs", "sox_chin_comp.png"),
-  plot = surv_comp,
+  filename = here::here("figs", "cjs", "sox_chin_comp_unscaled.png"),
+  plot = p1,
   width = 6,
   height = 4,
   units = "in",
   device = "png"
 )
 ggsave(
-  filename = here::here("figs", "cjs", "sox_chin_comp2.png"),
-  plot = surv_comp2,
+  filename = here::here("figs", "cjs", "sox_chin_comp_scaled.png"),
+  plot = p2,
+  width = 6,
+  height = 4,
+  units = "in",
+  device = "png"
+)
+ggsave(
+  filename = here::here("figs", "cjs", "sox_chin_comp_unscaled_plusUBC.png"),
+  plot = p3,
   width = 6,
   height = 4,
   units = "in",
