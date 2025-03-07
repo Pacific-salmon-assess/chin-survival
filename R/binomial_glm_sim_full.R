@@ -725,6 +725,103 @@ ggplot(ri_yr_dat, aes(x = model)) +
 # probability
 
 
+
+## ORDERED CATEGORICAL RESPONSE ------------------------------------------------
+
+## Test model estimating size effects on injury for potential incorporation as 
+# submodel
+
+library(rethinking)
+
+# Simulate example data
+set.seed(123)
+N <- 200  # Sample size
+X <- rnorm(N, mean = 0, sd = 1)  # Continuous predictor
+
+# Generate latent variable and assign ordered categories
+latent_Y <- 1.5 * X + rnorm(N, mean = 0, sd = 1)  # Linear effect with noise
+thresholds <- quantile(latent_Y, probs = c(0.25, 0.50, 0.75))  # Define cutpoints
+
+# Convert latent Y into ordered categorical response
+Y <- cut(latent_Y, breaks = c(-Inf, thresholds, Inf), labels = 1:4, ordered_result = TRUE)
+Y <- as.integer(Y)  # Convert to numeric for modeling (1, 2, 3, 4)
+
+ggplot(data.frame(X, Y = factor(Y)), aes(x = X, fill = Y)) +
+  geom_histogram(bins = 30, position = "stack") +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = "X (Continuous Predictor)", y = "Count", fill = "Category",
+       title = "Category Distribution Across X") +
+  theme_minimal()
+
+# Create the data list for Stan
+data_list <- list(
+  N = N,
+  X = X,
+  Y = Y
+)
+
+# Define the ordinal regression model using the log-cumulative-odds function
+m_ord <- ulam(
+  alist(
+    Y ~ dordlogit(phi, cutpoints),  # Ordered logistic likelihood
+    phi <- a + b * X,  # Linear predictor
+    a ~ normal(0, 1),  # Intercept prior
+    b ~ normal(0, 1),  # Slope prior
+    cutpoints ~ normal(0, 1)  # Priors for category thresholds
+  ), data = data_list, chains = 4, cores = 4
+)
+
+# Summarize the model
+precis(m_ord, depth = 2)
+
+
+# Define three values of X to evaluate
+X_vals <- c(-1, 0, 1)  # Example: Low (-1), Medium (0), High (1)
+
+# Extract posterior samples
+post <- extract.samples(m_ord)
+
+# Compute phi (linear predictor) for each X value
+phi_pred <- sapply(X_vals, function(x) post$a + post$b * x)
+
+# Compute category probabilities for each X value
+p_category <- lapply(phi_pred, function(phi) {
+  apply(post$cutpoints, 1, function(c) {
+    # Compute cumulative probabilities using the correct logit transformation
+    p_cum <- plogis(phi - c)  # Correct order
+    p <- c(p_cum[1], diff(p_cum), 1 - tail(p_cum, 1))  # Convert to category probabilities
+    return(p)
+  })
+})
+
+# Compute mean probabilities for each category
+p_means <- sapply(p_category, function(p) apply(p, 1, mean))
+
+# Convert to a data frame for visualization
+p_df <- data.frame(
+  X = rep(X_vals, each = 4),
+  Category = factor(rep(1:4, times = length(X_vals)), levels = 1:4, ordered = TRUE),
+  Probability = as.vector(p_means)
+)
+
+# 📊 Visualize the Composition of Y Across X Values
+library(ggplot2)
+ggplot(p_df, aes(x = factor(X), y = Probability, fill = Category)) +
+  geom_bar(stat = "identity", position = "stack") +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = "X Value", y = "Probability", fill = "Category",
+       title = "Posterior Predicted Composition of Y Across X") +
+  theme_minimal()
+
+ggplot(p_df, aes(x = X, fill = Category)) +
+  geom_histogram(alpha = 0.5, stat = "count") +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = "X Value", y = "Probability", fill = "Category",
+       title = "Posterior Predicted Composition of Y Across X") +
+  theme_minimal()
+
+
+
 ## EXPLORE OBSERVATION ERROR ---------------------------------------------------
 
 ## true survival is a function of one covariate and observed survival includes
