@@ -739,11 +739,12 @@ N <- 200  # Sample size
 X <- rnorm(N, mean = 0, sd = 1)  # Continuous predictor
 
 # Generate latent variable and assign ordered categories
-latent_Y <- 1.5 * X + rnorm(N, mean = 0, sd = 1)  # Linear effect with noise
+latent_Y <- 1.5 * X + rnorm(N, mean = 0, sd = 0.4)  # Linear effect with noise
 thresholds <- quantile(latent_Y, probs = c(0.25, 0.50, 0.75))  # Define cutpoints
 
 # Convert latent Y into ordered categorical response
-Y <- cut(latent_Y, breaks = c(-Inf, thresholds, Inf), labels = 1:4, ordered_result = TRUE)
+Y <- cut(latent_Y, breaks = c(-Inf, thresholds, Inf), labels = 1:4,
+         ordered_result = TRUE)
 Y <- as.integer(Y)  # Convert to numeric for modeling (1, 2, 3, 4)
 
 ggplot(data.frame(X, Y = factor(Y)), aes(x = X, fill = Y)) +
@@ -752,6 +753,18 @@ ggplot(data.frame(X, Y = factor(Y)), aes(x = X, fill = Y)) +
   labs(x = "X (Continuous Predictor)", y = "Count", fill = "Category",
        title = "Category Distribution Across X") +
   theme_minimal()
+
+data.frame(X = X, Y = Y) %>%
+  mutate(
+    X_quartile = cut(X, breaks = quantile(X, probs = seq(0, 1, by = 0.25)), 
+                     include.lowest = TRUE, labels = c("Q1", "Q2", "Q3", "Q4"))
+  ) %>% 
+  ggplot(., aes(x = X_quartile, fill = as.factor(Y))) +
+  geom_bar(position = "stack") +
+  labs(x = "X Quartile", y = "Count of Y", fill = "Y") +
+  ggtitle("Stacked Bar Plot of Y Across Quartiles of X") +
+  theme_minimal()
+
 
 # Create the data list for Stan
 data_list <- list(
@@ -775,51 +788,46 @@ m_ord <- ulam(
 precis(m_ord, depth = 2)
 
 
-# Define three values of X to evaluate
-X_vals <- c(-1, 0, 1)  # Example: Low (-1), Medium (0), High (1)
+# Define new X values at which we want predictions
+new_X <- c(-1, 0, 1)
 
-# Extract posterior samples
+# Extract posterior samples of model parameters
 post <- extract.samples(m_ord)
 
-# Compute phi (linear predictor) for each X value
-phi_pred <- sapply(X_vals, function(x) post$a + post$b * x)
-
-# Compute category probabilities for each X value
-p_category <- lapply(phi_pred, function(phi) {
-  apply(post$cutpoints, 1, function(c) {
-    # Compute cumulative probabilities using the correct logit transformation
-    p_cum <- plogis(phi - c)  # Correct order
-    p <- c(p_cum[1], diff(p_cum), 1 - tail(p_cum, 1))  # Convert to category probabilities
-    return(p)
-  })
+# Compute the latent variable phi for new values of X
+phi_samples <- sapply(new_X, function(x) {
+  post$a + post$b * x
 })
 
-# Compute mean probabilities for each category
-p_means <- sapply(p_category, function(p) apply(p, 1, mean))
+# Convert phi into category probabilities using the ordinal logistic function
+pred_probs <- lapply(1:ncol(phi_samples), function(i) {  # Loop over X values
+  t(sapply(1:nrow(phi_samples), function(j) {  # Loop over posterior samples
+    pordlogit(1:4, phi_samples[j, i], post$cutpoints[j, ])  # Use correct cutpoints
+  }))
+})
 
-# Convert to a data frame for visualization
-p_df <- data.frame(
-  X = rep(X_vals, each = 4),
-  Category = factor(rep(1:4, times = length(X_vals)), levels = 1:4, ordered = TRUE),
-  Probability = as.vector(p_means)
-)
+cat_probs <- lapply(pred_probs, function(p) {
+  t(sapply(1:nrow(p), function(j) {  # Loop over posterior samples
+    c(p[j, 1], diff(p[j, ]))
+  }))
+})
 
-# 📊 Visualize the Composition of Y Across X Values
-library(ggplot2)
-ggplot(p_df, aes(x = factor(X), y = Probability, fill = Category)) +
+
+# Compute median probabilities across posterior samples
+median_probs <- sapply(cat_probs, function(p) apply(p, 2, median))
+
+# Convert to long format for ggplot
+df_plot <- as.data.frame(median_probs) %>%
+  mutate(Category = factor(1:4)) %>%
+  pivot_longer(starts_with("V"), names_to = "X", values_to = "Probability") %>% 
+  mutate(
+    X = factor(X, levels = c("V1", "V2", "V3"), labels = c("-1", "0", "1"))
+  )
+ggplot(df_plot, aes(x = X, y = Probability, fill = Category)) +
   geom_bar(stat = "identity", position = "stack") +
-  scale_fill_brewer(palette = "Set2") +
-  labs(x = "X Value", y = "Probability", fill = "Category",
-       title = "Posterior Predicted Composition of Y Across X") +
+  labs(x = "X Value", y = "Median Predicted Proportion", fill = "Y Category") +
+  ggtitle("Stacked Bar Chart of Median Predicted Proportions") +
   theme_minimal()
-
-ggplot(p_df, aes(x = X, fill = Category)) +
-  geom_histogram(alpha = 0.5, stat = "count") +
-  scale_fill_brewer(palette = "Set2") +
-  labs(x = "X Value", y = "Probability", fill = "Category",
-       title = "Posterior Predicted Composition of Y Across X") +
-  theme_minimal()
-
 
 
 ## EXPLORE OBSERVATION ERROR ---------------------------------------------------
