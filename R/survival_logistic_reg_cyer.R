@@ -886,3 +886,49 @@ png(here::here("figs", "binomial-glm-cyer", "stock_surv.png"), units = "in",
 pred_stk_comb
 dev.off()
 
+
+
+## ESTIMATE INJURY EFFECTS IN ISOLATION ----------------------------------------
+
+dat_list <- list(
+  surv = as.integer(det_dat$term_det),
+  fl_z = det_dat$fl_z,
+  lipid_z = det_dat$lipid_z,
+  day_z = det_dat$day_z,
+  cyer_z = det_dat$cyer_z,
+  inj = det_dat$inj,
+  term_p = det_dat$term_p,
+  yr = det_dat$yr,
+  stk = det_dat$stk,
+  alpha = rep(2, length(unique(det_dat$inj)) - 1)
+)
+
+
+det_dat %>%
+  mutate(
+    size_bin = case_when(
+      fl <= 65 ~ "xsmall",
+      fl <= 70 ~ "small",
+      fl <= 80 ~ "med",
+      fl > 80 ~ "big"
+    )
+  ) %>% 
+  ggplot(., aes(x = size_bin, fill = as.factor(inj))) +
+  geom_bar(position = "stack") +
+  ggsidekick::theme_sleek()
+
+
+m_ord <- ulam(
+  alist(
+    inj ~ dordlogit(phi, cutpoints),  # Ordered logistic likelihood
+    phi <- a + b * fl_z,  # Linear predictor
+    a ~ normal(0, 1),  # Intercept prior
+    b ~ normal(0, 1),  # Slope prior
+    cutpoints ~ normal(0, 1)  # Priors for category thresholds
+  ), 
+  data = dat_list, chains = 4, cores = 4
+)
+
+precis(m_ord, depth = 2)
+# very weak effect of size plus data are biased (not all injured fish tagged
+# and therefore not a representive sample of size effects on injury)

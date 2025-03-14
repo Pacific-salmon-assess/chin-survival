@@ -176,6 +176,7 @@ rec <- rec_all  %>%
       (region %in% c("river", "columbia", "swwa_or") | marine == "no") & 
         (longitude > -124.15 & longitude < -121.94 & 
            latitude < 46.3 & latitude > 45) ~ "lower_col",
+      region == "puget" & latitude < 47.3 ~ "in_river",
       region == "river" ~ "in_river", #fish caught in terminal locations 
       marine == "no" ~ "in_river",
       region == "wcvi" & latitude < 48.405 & longitude > -125.5 ~ "nwwa",
