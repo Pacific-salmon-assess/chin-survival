@@ -44,7 +44,7 @@ params_fixp <- c(
   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
   "L_Rho_yr", "alpha_p", "alpha_yr_p",
   # transformed pars or estimated quantities
-  "Rho_yr", "phi_yr", "p_yr", "y_hat"
+  "Rho_yr", "phi_yr", "p_yr"
 )
 alpha_yr_p_dim <- dd$nyear * (dd$n_occasions)
 
@@ -68,7 +68,7 @@ inits <- lapply(1:n_chains, function (i) {
   )
 })
 
-fit_priors <- sampling(hier_mod_sims_priors_only, data = dd, pars = params,
+fit_priors <- sampling(hier_mod_sims_priors_only, data = dd, pars = params_fixp,
          init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
          open_progress = FALSE,
          control = list(adapt_delta = 0.95))

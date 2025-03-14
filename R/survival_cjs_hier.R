@@ -787,6 +787,27 @@ sigma_plot_list <- purrr::map2(
   }
 )
 
+# prior-posterior predictions for sigma
+prior_df <- data.frame(est = rexp(4000, rate = 1), parameter = "Prior")
+
+sigma_plot_list2 <- purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum <- extract(x)[["sigma_alpha_yr_phi"]] %>% 
+      as.data.frame() %>%
+      pivot_longer(everything(), names_to = "segment", values_to = "est", 
+                   names_prefix = "V")
+    ggplot() +
+      geom_density(data = dum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      facet_wrap(~segment) + 
+      ggsidekick::theme_sleek() +
+      labs(x = "Migration Stage", y = "Sigma Year Estimate", title = y)
+  }
+)
+
 
 pdf(here::here("figs", "cjs", "estimated_rho.pdf"), 
     height = 4.5, width = 6)
@@ -796,6 +817,11 @@ dev.off()
 pdf(here::here("figs", "cjs", "estimated_sigma_beta.pdf"), 
              height = 4.5, width = 6)
 sigma_plot_list
+dev.off()
+
+pdf(here::here("figs", "cjs", "sigma_year_posterior_prior_comp.pdf"), 
+    height = 4.5, width = 6)
+sigma_plot_list2
 dev.off()
 
 
@@ -971,7 +997,7 @@ yr_p_dat <- purrr::map2(
 
 
 png(here::here("figs", "cjs", "estimated_yearly_p.png"), 
-    height = 5.5, width = 7.5, units = "in", res = 250)
+    height = 4.5, width = 9, units = "in", res = 250)
 ggplot(yr_p_dat) +
   geom_pointrange(
     aes(x = segment_name, y = med, ymin = lo, ymax = up, fill = year),
@@ -1319,7 +1345,6 @@ dev.off()
 stk_effect <- extract(dat_tbl_trim$cjs_hier[[2]])[["alpha_stk_phi"]]
 colnames(stk_effect) <- stk_key$stock
 
-library(ggridges)
 
 png(here::here("figs", "cjs", "fraser_stk_effect.png"), 
     height = 4.5, width = 5.5, units = "in", res = 200)
@@ -1360,3 +1385,22 @@ stk_effect %>%
         legend.position = "none")
 dev.off()
 
+
+prior_df <- data.frame(est = rexp(4000, rate = 1), parameter = "Prior")
+
+stk_sigma <- extract(dat_tbl_trim$cjs_hier[[2]])[["sigma_alpha_stk_phi"]]  %>% 
+  as.data.frame() %>%
+  pivot_longer(everything(), names_to = "segment", values_to = "est", 
+               names_prefix = "V")
+
+png(here::here("figs", "cjs", "fraser_stk_sigma_post_prior.png"), 
+    height = 4.5, width = 5.5, units = "in", res = 200)
+ggplot() +
+  geom_density(data = stk_sigma, aes(x = est), 
+               fill = "red", colour = "red", alpha = 0.4) +
+  geom_density(data = prior_df, aes(x = est), 
+               fill = "blue", colour = "blue", alpha = 0.4) +
+  facet_wrap(~segment) + 
+  ggsidekick::theme_sleek() +
+  labs(x = "Migration Stage", y = "Sigma Stock Estimate")
+dev.off()
