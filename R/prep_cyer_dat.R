@@ -4,7 +4,9 @@
 # 1) CTC estimates for exploitation in marine areas (southern BC, Puget Sound; 
 # coastal WA outstanding)
 # 2) In-river harvest estimates for Columbia River summer and fall MUs
-# TODO: update with Area G AABM data
+# TODO: WCVI AABM needs to be added for all years; reconcile Noel's data vs. 
+# raw inputs
+
 
 library(tidyverse)
 
@@ -99,7 +101,7 @@ cyer_2023 <- expand.grid(
     by = c("strata", "stock")
   ) %>% 
   filter(
-    grepl("isbm", strata),
+    grepl("isbm", strata) | grepl("aabm_wcvi", strata),
     !grepl("nbc", strata),
     stock %in% c("CHI", "NIC")
   ) %>% 
@@ -114,7 +116,7 @@ cyer_2023 <- expand.grid(
 
 cyer_pub2 <- cyer_pub %>% 
   filter(
-    grepl("isbm", strata),
+    grepl("isbm", strata) | grepl("aabm_wcvi", strata),
     !grepl("nbc", strata),
     stock %in% c("CHI", "NIC"),
     year > 2018
@@ -138,7 +140,7 @@ cyer_dat_out<- rbind(
 ) %>% 
   # exclude strata outside of sampling area
   filter(
-    grepl("isbm", strata)
+    grepl("isbm", strata) | grepl("aabm_wcvi", strata)
   ) %>% 
   group_by(stock, year) %>% 
   summarize(

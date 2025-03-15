@@ -804,7 +804,8 @@ sigma_plot_list2 <- purrr::map2(
                    fill = "blue", colour = "blue", alpha = 0.4) +
       facet_wrap(~segment) + 
       ggsidekick::theme_sleek() +
-      labs(x = "Migration Stage", y = "Sigma Year Estimate", title = y)
+      labs(y = "Sigma Year Estimate", title = y) +
+      theme(axis.title.x = element_blank())
   }
 )
 
@@ -1402,5 +1403,6 @@ ggplot() +
                fill = "blue", colour = "blue", alpha = 0.4) +
   facet_wrap(~segment) + 
   ggsidekick::theme_sleek() +
-  labs(x = "Migration Stage", y = "Sigma Stock Estimate")
+  labs(y = "Sigma Stock Estimate") +
+  theme(axis.title.x = element_blank())
 dev.off()
