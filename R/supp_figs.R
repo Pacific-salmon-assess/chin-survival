@@ -102,7 +102,7 @@ png(here::here("figs", "supp", "stock_cyer.png"),
     height = 4, width = 5.5, units = "in", res = 200)
 ggplot() +
   geom_boxplot(data = det_dat1,
-               aes(x = stock_group, y = isbm_cyer, fill = stock_group)) +
+               aes(x = stock_group, y = focal_er, fill = stock_group)) +
   scale_fill_manual(values = stock_pal) +
   labs(y = "Exploitation Rate") +
   ggsidekick::theme_sleek() +
@@ -111,7 +111,7 @@ ggplot() +
         axis.text.x = element_text(angle = 45, hjust = 1)) +
   geom_text(
     data = det_dat1 %>% 
-      filter(!is.na(isbm_cyer)) %>% 
+      filter(!is.na(focal_er)) %>% 
       group_by(stock_group) %>% 
       summarize(
         n = length(unique(vemco_code))
