@@ -790,22 +790,29 @@ sigma_plot_list <- purrr::map2(
 # prior-posterior predictions for sigma
 prior_df <- data.frame(est = rexp(4000, rate = 1), parameter = "Prior")
 
-sigma_plot_list2 <- purrr::map2(
+purrr::map2(
   dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
   function(x , y) {
     dum <- extract(x)[["sigma_alpha_yr_phi"]] %>% 
       as.data.frame() %>%
       pivot_longer(everything(), names_to = "segment", values_to = "est", 
                    names_prefix = "V")
-    ggplot() +
+    
+    p <- ggplot() +
       geom_density(data = dum, aes(x = est), 
                    fill = "red", colour = "red", alpha = 0.4) +
       geom_density(data = prior_df, aes(x = est), 
                    fill = "blue", colour = "blue", alpha = 0.4) +
       facet_wrap(~segment) + 
       ggsidekick::theme_sleek() +
-      labs(y = "Sigma Year Estimate", title = y) +
-      theme(axis.title.x = element_blank())
+      labs(x = "Sigma Year Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("sigma_year_posterior_prior_comp_", y, ".png", sep = "")
+      
+    png(here::here("figs", "cjs", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
   }
 )
 
@@ -1403,6 +1410,5 @@ ggplot() +
                fill = "blue", colour = "blue", alpha = 0.4) +
   facet_wrap(~segment) + 
   ggsidekick::theme_sleek() +
-  labs(y = "Sigma Stock Estimate") +
-  theme(axis.title.x = element_blank())
+  labs(x = "Sigma Year Estimate", y = "Kernel Density") 
 dev.off()
