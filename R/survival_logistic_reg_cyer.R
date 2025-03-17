@@ -18,7 +18,7 @@ options(mc.cores = parallel::detectCores())
 
 det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds")) %>% 
   filter(
-    !is.na(isbm_cyer),
+    !is.na(focal_er),
     stage_1 == "mature"
   )
 
@@ -31,7 +31,7 @@ det_dat <- det_dat1 %>%
     wt_z = scale(wt) %>% as.numeric(),
     log_wt_z = scale(log(wt)) %>% as.numeric(),
     day_z = scale(year_day) %>% as.numeric(),
-    cyer_z = scale(isbm_cyer) %>% as.numeric(),
+    cyer_z = scale(focal_er) %>% as.numeric(),
     terminal_p = as.factor(terminal_p),
     year = as.factor(year),
     stock_group = factor(
@@ -275,7 +275,7 @@ for(i in seq_along(day_seq)) {
     ) %>% 
     mutate(
       cyer_z = as.numeric(cyer_z),
-      cyer = (cyer_z * sd(det_dat$isbm_cyer)) + mean(det_dat$isbm_cyer),
+      cyer = (cyer_z * sd(det_dat$focal_er)) + mean(det_dat$focal_er),
       day = day_label[i]
     )
 }
@@ -726,7 +726,7 @@ diff_hist <- data.frame(
 
 
 # stock, including indirect effects on date/size/lipid
-
+# TODO: add alternative with stock-specific CYER
 # mean date by stock
 pred_mu_date <- post$beta_stk[ , , 4]
 
