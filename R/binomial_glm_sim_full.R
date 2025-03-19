@@ -834,7 +834,7 @@ ggplot(df_plot, aes(x = X, y = Probability, fill = Category)) +
 
 ## true survival is a function of one covariate and observed survival includes
 # error
-surv_bar <- -1  # intercept
+surv_bar <- -0.5  # intercept
 beta_cs <- 0.5 # condition effect
 
 eta <- surv_bar #+ beta_cs * dat$cond 
@@ -842,20 +842,27 @@ p <- 1 / (1 + exp(-(eta)))  # Probability of survival
 set.seed(123)
 s_true <- rbinom(n, 1, p)  # Binary outcome
 
+
+## not possible to estimate separate detection probabilities with ulam,
+# write in stan instead
+# also modify detection probability so that it varies across five groups with 
+# the first three having posterior estimates from a previous model that can be 
+# passed as data
+
 # detection probability varies across five groups with the first three having
 # posterior estimates from a previous model that can be passed as data
-dat_obs <- dat %>% 
-  mutate(
-    group_id = sample(c(1, 5), size = nrow(dat), replace = TRUE),
-    det_p = ifelse(group_id == "1", 0.9, 0.3),
-    s_obs = ifelse(s_true == 1 & runif(n) < det_p, 1, 0)
-  )
-
-dat_list <- list(
-  s_obs = dat_obs$s_obs,
-  group_id = dat_obs$group_id
-)
-
+# dat_obs <- dat %>% 
+#   mutate(
+#     group_id = sample(c(1, 5), size = nrow(dat), replace = TRUE),
+#     det_p = ifelse(group_id == "1", 0.9, 0.3),
+#     s_obs = ifelse(s_true == 1 & runif(n) < det_p, 1, 0)
+#   )
+# 
+# dat_list <- list(
+#   s_obs = dat_obs$s_obs,
+#   group_id = dat_obs$group_id
+# )
+#
 # m1b <- ulam(
 #   alist(
 #     # obs model
@@ -880,12 +887,6 @@ dat_list <- list(
 #   control = list(adapt_delta = 0.95)
 # )
 
-## not possible to estimate separate detection probabilities with ulam,
-# write in stan instead
-# also modify detection probability so that it varies across five groups with 
-# the first three having posterior estimates from a previous model that can be 
-# passed as data
-# NOTE remove condition effect since it reduces precision of estimates
 
 # posterior matrix
 set.seed(123)  # For reproducibility
@@ -896,22 +897,33 @@ det_p_posterior[, 1] <- rbeta(M, shape1 = 40, shape2 = 7)   # Median ~0.85
 det_p_posterior[, 2] <- rbeta(M, shape1 = 50, shape2 = 4)   # Median ~0.92
 det_p_posterior[, 3] <- rbeta(M, shape1 = 75, shape2 = 1.5) # Median ~0.98
 
+mean(logit(det_p_posterior[,1]))
+mean(logit(det_p_posterior[,2]))
+mean(logit(det_p_posterior[,3]))
+
+
+# logit p 
+mean_logit_p <- logit(c(.85, .92, .98, 0.2))
+sd_logit_p <- c(0.4, 0.5, 0.95, 0.5)
 
 # true det_p
 det_p_true <- data.frame(
-  group_id = seq(1, 5, 1),
-  det_p = c(.85, .92, .98, 0.3, 0.2), #median
-  use_posterior = ifelse(det_p > 0.5, 1, 0)
-)
-
-dat_obs <- dat %>% 
+  group_id = seq(1, 4, 1),
+  logit_p = mean_logit_p
+) %>% 
   mutate(
-    group_id = sample(seq(1, 5, 1), size = nrow(dat), replace = TRUE)
+    use_posterior = ifelse(inv_logit(logit_p) > 0.5, 1, 0)
+  )
+
+dat_obs <- data.frame(
+    group_id = sample(seq(1, 4, 1), size = nrow(dat), replace = TRUE),
+    s_true = s_true
   ) %>%  
   left_join(., det_p_true, by = "group_id") %>%
   mutate(
+    det_p = inv_logit(logit_p),
     s_obs = ifelse(s_true == 1 & runif(n) < det_p, 1, 0)
-  )
+  ) 
 
 ggplot(dat_obs) +
   geom_bar(aes(x = s_obs)) +
@@ -920,22 +932,21 @@ ggplot(dat_obs) +
 dat_list <- list(
   N = nrow(dat_obs),
   s_obs = dat_obs$s_obs,
+  logit_p_obs = mean_logit_p,
+  logit_p_obs_sd = sd_logit_p,
   group_id = dat_obs$group_id,
   G = length(unique(dat_obs$group_id)),
-  use_posterior = det_p_true$use_posterior,
-  # P = sum(det_p_true$use_posterior), # number of groups using posterior
-  M = nrow(det_p_posterior),
-  det_p_posterior = det_p_posterior
+  use_posterior = det_p_true$use_posterior
 )
+
 
 library(rstan)
 
-samp_mod <- stan_model(here::here("R", "stan_models", "obs-error-example.stan"))
+samp_mod <- stan_model(here::here("R", "stan_models", "obs-error-example2.stan"))
 
 m1_stan <- sampling(samp_mod, data = dat_list, 
-                    # chains = 1, iter = 2000, warmup = 1000, 
-                    chains = 4, iter = 4000, warmup = 1000,
-                    control = list(adapt_delta = 0.95))
+                    chains = 4, iter = 2000, warmup = 1000)
 
-print(m1_stan, pars = c(#"beta_cs", 
-                        "surv_bar", "det_p_out"))
+print(m1_stan, 
+      pars = c("surv_bar", "p", "logit_p_true_unobs", "logit_p_true_obs"))
+print(traceplot(m1_stan, pars = "p"))
