@@ -337,11 +337,13 @@ ggplot(det_dat1, aes(x = cyer_z, y = final_det)) +
 
 ## DATE VS CONDITION -----------------------------------------------------------
 
+library(lme4)
+
 # determine whether submodel of date vs. condition should be non-linear or not
-fit_fl <- lm(fl ~ year_day, data = det_dat1)
-fit_fl_log <- lm(log(fl) ~ year_day, data = det_dat1)
-fit_lip <- lm(lipid ~ year_day, data = det_dat1)
-fit_lip_log <- lm(log(lipid) ~ year_day, data = det_dat1)
+fit_fl <- lmer(fl ~ year_day + (1 | stock_group), data = det_dat1)
+fit_fl_log <- lmer(log(fl) ~ year_day + (1 | stock_group), data = det_dat1)
+fit_lip <- lmer(lipid ~ year_day + (1 | stock_group), data = det_dat1)
+fit_lip_log <- lmer(log(lipid) ~ year_day + (1 | stock_group), data = det_dat1)
 fit_list <- list(fit_fl, fit_fl_log, fit_lip, fit_lip_log)
 
 
@@ -357,7 +359,9 @@ plot(lip_resid ~ year_day, data = det_dat_resid)
 plot(lip_log_resid ~ year_day, data = det_dat_resid)
 
 pred_dat <- data.frame(
-  year_day = seq(min(det_dat1$year_day), max(det_dat1$year_day), length.out = 50)
+  year_day = seq(min(det_dat1$year_day), max(det_dat1$year_day), 
+                 length.out = 50),
+  stock_group = det_dat1$stock_group[2]
 )
 
 names_vec <- c(
@@ -369,8 +373,12 @@ names_vec <- c(
 purrr::map2(
   fit_list, names_vec,
   function(x, y) {
-    pp <- predict(x, newdata = pred_dat, interval = "confidence")
-    dum <- cbind(pred_dat, as.data.frame(pp))
+    pp <- predict(x, newdata = pred_dat, re.form = NA, se.fit = TRUE)
+    dum <- pred_dat %>% 
+      mutate(fit = pp$fit,
+             se = pp$se.fit,
+             upr = fit + 1.96 * se,
+             lwr = fit - 1.96 * se)
     
     p <- if(grepl("log", y)) {
       ggplot() +
