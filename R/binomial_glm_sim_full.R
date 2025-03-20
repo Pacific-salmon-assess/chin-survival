@@ -909,7 +909,8 @@ sd_logit_p <- c(0.4, 0.5, 0.95, 0.5)
 # true det_p
 det_p_true <- data.frame(
   group_id = seq(1, 4, 1),
-  logit_p = mean_logit_p
+  logit_p = mean_logit_p,
+  sd_logit_p = sd_logit_p
 ) %>% 
   mutate(
     use_posterior = ifelse(inv_logit(logit_p) > 0.5, 1, 0)
@@ -932,10 +933,11 @@ ggplot(dat_obs) +
 dat_list <- list(
   N = nrow(dat_obs),
   s_obs = dat_obs$s_obs,
-  logit_p_obs = mean_logit_p,
-  logit_p_obs_sd = sd_logit_p,
+  logit_p_obs = det_p_true$logit_p[det_p_true$use_posterior == 1],
+  logit_p_obs_sd = det_p_true$sd_logit_p[det_p_true$use_posterior == 1],
   group_id = dat_obs$group_id,
   G = length(unique(dat_obs$group_id)),
+  G_obs = length(det_p_true$use_posterior[det_p_true$use_posterior == 1]),
   use_posterior = det_p_true$use_posterior
 )
 

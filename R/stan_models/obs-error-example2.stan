@@ -1,5 +1,7 @@
 // Model based on rethinking ulam function
-
+// Note assumes that all groups without observed detection probabilities have
+// the same detection probability parameter based on prior and occur last in 
+// group_id
 data{
     int<lower=1> N;                  // Number of observations
 	array[N] int group_id;
@@ -7,10 +9,10 @@ data{
 
     // Number of groups 
 	int<lower=1> G;  // Total groups
-  	int<lower=1> G_obs;  // Total groups with posterior estimates
+    int<lower=1> G_obs;  // Total groups with posteriors observed
     int<lower=0, upper=1> use_posterior[G];  // Flag: 1 if posterior, 0 if estimate
 
-    // Posterior estimates for groups 1-3, placeholders for remainder
+    // Posterior estimates for groups with observed detection probabilities
   	vector[G_obs] logit_p_obs;     // Mean logit detection prob from posterior
     vector<lower=0>[G_obs] logit_p_obs_sd;     // SD logit detection prob from posterior
 }
