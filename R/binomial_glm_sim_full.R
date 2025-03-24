@@ -901,9 +901,11 @@ mean(logit(det_p_posterior[,1]))
 mean(logit(det_p_posterior[,2]))
 mean(logit(det_p_posterior[,3]))
 
+hist(inv_logit(rnorm(1000, -1.7, 1))) #current prior
+hist(logit(rnorm(1000, 0.4, 1.25)))
 
 # logit p 
-mean_logit_p <- logit(c(.85, .92, .98, 0.2))
+mean_logit_p <- logit(c(.85, .92, 0.4, 0.8))
 sd_logit_p <- c(0.4, 0.5, 0.95, 0.5)
 
 # true det_p
@@ -913,7 +915,7 @@ det_p_true <- data.frame(
   sd_logit_p = sd_logit_p
 ) %>% 
   mutate(
-    use_posterior = ifelse(inv_logit(logit_p) > 0.5, 1, 0)
+    use_posterior = ifelse(group_id %in% c("3", "4"), 0, 1)
   )
 
 dat_obs <- data.frame(
@@ -943,6 +945,7 @@ dat_list <- list(
 
 
 library(rstan)
+library(tidybayes)
 
 samp_mod <- stan_model(here::here("R", "stan_models", "obs-error-example2.stan"))
 
@@ -952,3 +955,16 @@ m1_stan <- sampling(samp_mod, data = dat_list,
 print(m1_stan, 
       pars = c("surv_bar", "p", "logit_p_true_unobs", "logit_p_true_obs"))
 print(traceplot(m1_stan, pars = "p"))
+
+
+spread_draws(m1_stan, logit_p_true_obs[group_id]) %>% 
+  rename(logit_p_predict = logit_p_true_obs) %>% 
+  mutate(observed = TRUE) %>% 
+  bind_rows(spread_draws(m1_stan, logit_p_true_unobs[group_id]) %>%
+              rename(logit_p_predict = logit_p_true_unobs) %>% 
+              mutate(observed = FALSE) %>% 
+              filter(group_id %in% c(3, 4))) %>% 
+  ggplot(aes(x = group_id, y = logit_p_predict, color = observed))+
+  stat_pointinterval()+
+  geom_point(data = det_p_true, aes(y = logit_p, color = NULL), size = 3)+
+  theme_bw()

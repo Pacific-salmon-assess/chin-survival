@@ -1,7 +1,6 @@
 // Model based on rethinking ulam function
 // Note assumes that all groups without observed detection probabilities have
-// the same detection probability parameter based on prior and occur last in 
-// group_id
+// a detection probability parameter based on prior
 data{
     int<lower=1> N;                  // Number of observations
 	array[N] int group_id;
