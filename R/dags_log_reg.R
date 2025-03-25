@@ -55,7 +55,7 @@ adjustmentSets(dag_full, exposure = "I", outcome = "S")
 online_dag <- dagitty('
 dag {
 "fork length" [exposure,pos="0.106,0.772"]
-"observed survival" [outcome,pos="0.620,1.084"]
+"observed survival" [outcome,pos="0.554,1.080"]
 "tagging date" [exposure,pos="-0.713,1.122"]
 "true survival" [latent,pos="0.374,1.087"]
 condition [latent,pos="-0.088,0.591"]
@@ -119,3 +119,74 @@ year -> condition
 # be captured later in the year and have higher survival); ignore stock/year 
 # effects on probability/CYER because including them doesn't impact estimates
 # and not of interest causally
+
+
+
+## MSF DAG
+
+msf_dag <- dagitty('
+dag {
+  "fin damage" [pos="-0.032,1.122"]
+  "fork length" [exposure,pos="-0.179,0.891"]
+  "handling time" [exposure,pos="0.113,0.824"]
+  "hook location" [pos="-0.246,1.232"]
+  "hook size" [pos="-0.349,1.404"]
+  "maturation stage" [pos="0.071,0.069"]
+  "net use" [pos="-0.335,1.057"]
+  "observed survival" [outcome,pos="0.467,1.071"]
+  "scale loss" [pos="0.079,1.039"]
+  "tagging date" [exposure,pos="-0.285,0.570"]
+  "true survival" [latent,pos="0.279,1.077"]
+  SST [exposure,pos="0.242,0.743"]
+  condition [latent,pos="-0.088,0.591"]
+  exploitation [exposure,pos="0.307,0.102"]
+  eye [pos="-0.121,1.437"]
+  injury [exposure,pos="0.123,1.258"]
+  injury1 [pos="-0.095,1.264"]
+  lipid [exposure,pos="0.443,0.574"]
+  region [exposure,pos="0.425,0.191"]
+  sex [exposure,pos="0.144,0.434"]
+  stock [adjusted,pos="-0.579,0.420"]
+  year [adjusted,pos="-0.230,-0.056"]
+  "fin damage" -> injury
+  "fork length" -> "fin damage"
+  "fork length" -> "handling time"
+  "fork length" -> "hook location"
+  "fork length" -> "scale loss"
+  "fork length" -> "true survival"
+  "handling time" -> "true survival"
+  "hook location" -> eye
+  "hook location" -> injury1
+  "hook size" -> "hook location"
+  "hook size" -> eye
+  "hook size" -> injury1
+  "maturation stage" -> "fin damage"
+  "maturation stage" -> "scale loss"
+  "maturation stage" -> condition
+  "maturation stage" -> sex
+  "net use" -> "fin damage"
+  "net use" -> "scale loss"
+  "scale loss" -> injury
+  "tagging date" -> "true survival"
+  "tagging date" -> SST
+  "tagging date" -> condition
+  "true survival" -> "observed survival"
+  SST -> "true survival"
+  condition -> "fork length"
+  condition -> lipid
+  exploitation -> "true survival"
+  eye -> injury
+  injury -> "true survival"
+  injury1 -> injury
+  lipid -> "true survival"
+  region -> "true survival"
+  sex -> "true survival"
+  stock -> "fork length"
+  stock -> "tagging date"
+  stock -> "true survival"
+  stock -> lipid
+  year -> "true survival"
+  year -> condition
+}
+'
+)

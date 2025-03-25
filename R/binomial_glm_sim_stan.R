@@ -59,8 +59,11 @@ det_key <- bind_rows(det_key2) %>%
   mutate(
     sd_logit_det_prob = 0.4,
     # define groups that have posterior samples
-    post = ifelse(pop %in% c("d", "e"), 0, 1)
-  )
+    post = ifelse(pop %in% c("d", "e"), 0, 1),
+    det_group_id = paste(pop, yr, sep = "_") %>% 
+      as.factor() %>% 
+      as.numeric()
+  ) 
 
 
 ## yr intercepts (condition, survival)
@@ -108,10 +111,7 @@ dat <- data.frame(
     lipid = NA,
     yr_f = as.factor(yr),
     pop_f = as.factor(pop),
-    pop_n = as.numeric(pop_f),
-    det_group_id = paste(pop, yr, sep = "_") %>% 
-      as.factor() %>% 
-      as.numeric()
+    pop_n = as.numeric(pop_f)
   ) 
 
 # simulate continuous covariates
@@ -143,8 +143,8 @@ beta_cyer <- -1 # er effect
 beta_d_cyer <- 0.5 # date ER interaction
 
 true_pars <- data.frame(
-  par = c("(Intercept)", "samp_date", "cyer", "cond", "size", "lipid",
-          "samp_date:cyer"),
+  par = c("(Intercept)", "beta_ds", "beta_cyer", "beta_cs", "beta_fs", "beta_ls",
+          "beta_d_cyer"),
   true = c(surv_bar, beta_ds, beta_cyer, beta_cs, 0.3 * beta_cs, 0.9 * beta_cs,
            beta_d_cyer)
 )
@@ -172,18 +172,29 @@ dat_list <- list(
   N = length(dat$s_true),
   N_year = length(unique(dat$yr)),
   N_stock = length(unique(dat$pop_n)),
+  N_det_id = length(unique(det_key$det_group_id)),
+  N_det_id_obs = det_key %>% 
+    filter(post == 1) %>% 
+    pull(det_group_id) %>% 
+    unique() %>% 
+    length(),
+  use_posterior = det_key$post,
+  
   s_true = dat$s_true,
+  s_obs = dat$s_obs,
+  
+  logit_det_mu = dat$logit_det_prob,
+  logit_det_sd = dat$sd_logit_det_prob,
+  
   pop_n = dat$pop_n,
   yr = dat$yr,
   det_group_id = dat$det_group_id,
+
   cyer = dat$cyer %>% scale() %>% as.numeric(),
   samp_date = dat$samp_date %>% scale() %>% as.numeric(),
   lipid = dat$lipid %>% scale() %>% as.numeric(),
-  size = dat$size %>% scale() %>% as.numeric(),
-  cond = dat$cond %>% scale() %>% as.numeric(),
-  logit_det_mu = dat$logit_det_prob,
-  logit_det_sd = dat$sd_logit_det_prob
-)
+  size = dat$size %>% scale() %>% as.numeric()
+  )
 
 
 
@@ -243,11 +254,21 @@ precis(fit, depth = 2)
 stancode(fit)
 
 
+# true survival model
 mod1 <- stan_model(here::here("R", "stan_models", "true_surv_jll.stan"))
 
 m1_stan <- sampling(mod1, data = dat_list, 
                     chains = 4, iter = 2000, warmup = 1000,
                     control = list(adapt_delta = 0.95))
+
+# true survival model
+mod2 <- stan_model(here::here("R", "stan_models", "obs_surv_jll.stan"))
+
+m2_stan <- sampling(mod2, data = dat_list, 
+                    chains = 4, iter = 2000, warmup = 1000,
+                    control = list(adapt_delta = 0.95))
+
+
 
 
 alpha_pars <- names(m1_stan)[grepl("alpha", names(m1_stan))]
@@ -266,7 +287,14 @@ post <- as_draws_df(m1_stan)
 # Extract parameters (excluding transformed or latent variables if needed)
 draws <- post %>%
   # spread_draws(alpha_bar, alpha_yr[i, j], alpha_pop[k, l]) %>% 
-  spread_draws(matches("beta")) %>% 
-  glimpse()
-  pivot_longer(cols = c(a, b, sigma), names_to = "parameter", values_to = "value")
+  spread_draws(beta_dl, beta_df, beta_cyer, beta_d_cyer, beta_ls, beta_fs, 
+               beta_ds) %>% 
+  pivot_longer(starts_with("beta_"), names_to = "par", 
+               values_to = "value") %>% 
+  left_join(., true_pars, by = "par")
+
+ggplot(draws %>% filter(!is.na(true))) +
+  geom_boxplot(aes(x = par, y = value)) +
+  geom_point(aes(x = par, y = true), colour = "red") +
+  ggsidekick::theme_sleek()
 
