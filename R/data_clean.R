@@ -151,7 +151,7 @@ det_dat1 <- dat_tbl %>%
       stock_group %in% c("South Puget", "Up Col.", "Low Col.") ~ 1,
       grepl("Fraser", stock_group) ~ 1,
       # specify years when extensive in-river detections available
-      stock_group == "WCVI" & year %in% c("2021", "2022") ~ 1
+      stock_group == "WCVI" & year %in% c("2021", "2022") ~ 1,
       TRUE ~ 0
     )
   ) %>% 
@@ -177,13 +177,16 @@ saveRDS(det_dat1, here::here("data", "surv_log_reg_data.rds"))
 
 ## CJS Model Data
 
+chin_no_severe <- chin2 %>% 
+  filter(!adj_inj == "3")
+
 # add updated Fraser groupings and imputed lipid content
 dat_tbl_trim <- dat_tbl %>% 
   filter(!stock_group %in% c("ECVI", "North Puget", "WA_OR", "WCVI")) %>% 
   mutate(
     bio_dat = purrr::map(bio_dat, function (x) {
       x %>%
-        filter(vemco_code %in% chin2$acoustic_year) %>%
+        filter(vemco_code %in% chin_no_severe$acoustic_year) %>%
         select(-c(agg, lipid)) %>% 
         left_join(
           ., 
@@ -193,7 +196,7 @@ dat_tbl_trim <- dat_tbl %>%
     }),
     wide_array_dat = purrr::map(wide_array_dat, function (x) {
       x %>%
-        filter(vemco_code %in% chin2$acoustic_year) %>% 
+        filter(vemco_code %in% chin_no_severe$acoustic_year) %>% 
         select(-agg)
     })
   ) %>%

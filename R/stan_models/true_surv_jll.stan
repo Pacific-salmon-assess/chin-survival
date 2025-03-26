@@ -4,21 +4,20 @@ data{
     int<lower=1> N;             // Number of observations
     int<lower=1> N_year;             // Number of years
     int<lower=1> N_stock;             // Number of stocks
-    vector[N] logit_det_sd;
-    vector[N] logit_det_mu;
-    vector[N] cond;
-    array[N] int det_group_id;
+    
     array[N] int s_true;
+    
     vector[N] cyer;
     vector[N] lipid;
     vector[N] size;
     vector[N] samp_date;
+
     array[N] int yr;
     array[N] int pop_n;
 }
 parameters{
-    matrix[3,5] z_yr;
-    matrix[4,5] z_pop;
+    matrix[3,N_year] z_yr;
+    matrix[4,N_stock] z_pop;
     real beta_dl;
     real beta_df;
     real beta_cyer;
@@ -47,14 +46,14 @@ model{
     vector[N] mu_lipid;
     vector[N] p;
     
-    Sigma_sl ~ exponential( 1 );
-    sigma_date ~ exponential( 1 );
-    sigma_pop ~ exponential( 1 );
+    Sigma_sl ~ exponential( 2 );
+    sigma_date ~ exponential( 2 );
+    sigma_pop ~ exponential( 2 );
     L_Rho_pop ~ lkj_corr_cholesky( 2 );
-    sigma_yr ~ exponential( 1 );
+    sigma_yr ~ exponential( 2 );
     L_Rho_yr ~ lkj_corr_cholesky( 2 );
     Rho_sl ~ lkj_corr( 2 );
-    alpha_bar ~ normal( 0 , 1 );
+    alpha_bar ~ normal( 0.5 , 1 );
     beta_ds ~ normal( 0 , 0.5 );
     beta_fs ~ normal( 0 , 0.5 );
     beta_ls ~ normal( 0 , 0.5 );
@@ -85,7 +84,8 @@ model{
         array[N] vector[2] MU;
         for ( j in 1:N ) MU[j] = [ mu_size[j] , mu_lipid[j] ]';
         for ( j in 1:N ) YY[j] = [ size[j] , lipid[j] ]';
-        YY ~ multi_normal( MU , quad_form_diag(Rho_sl , Sigma_sl) );
+        // YY ~ multi_normal( MU , quad_form_diag(Rho_sl , Sigma_sl) );
+        YY ~ multi_normal_cholesky(MU, diag_pre_multiply(Sigma_sl, cholesky_decompose(Rho_sl)));
     }
 
     for ( i in 1:N ) {
@@ -99,4 +99,14 @@ generated quantities{
     matrix[4,4] Rho_pop;
     Rho_pop = multiply_lower_tri_self_transpose(L_Rho_pop);
     Rho_yr = multiply_lower_tri_self_transpose(L_Rho_yr);
+
+    int s_obs_rep[N];
+
+    for (i in 1:N) {
+      real phi = inv_logit(alpha_bar + beta_ds * samp_date[i] + 
+      beta_fs * size[i] + beta_ls * lipid[i] + beta_cyer * cyer[i] + 
+       beta_d_cyer * samp_date[i] * cyer[i]);
+      
+      s_obs_rep[i] = bernoulli_rng(phi);
+    }
 }

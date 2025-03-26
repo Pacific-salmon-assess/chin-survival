@@ -120,12 +120,12 @@ beta_cl <- 0.9 #results in a mean correlation of ~0.6
 beta_cf <- 0.3
 
 for (i in 1:nrow(dat)) { 
-  dat$samp_date[i] <- rnorm(1, alpha_pop_date[dat$pop_n[i]], 1)
+  dat$samp_date[i] <- rnorm(1, alpha_pop_date[dat$pop_n[i]], 0.5)
   dat$cond[i] <- rnorm(
     1, 
     alpha_pop_cond[dat$pop_n[i]] + alpha_yr_cond[dat$yr[i]] + 
       beta_dc * dat$samp_date[i], 
-    1
+    0.5
   )
   # generate observations from latent state 
   dat$size[i] <- rnorm(1, beta_cf * dat$cond[i], 0.5)
@@ -136,17 +136,27 @@ for (i in 1:nrow(dat)) {
 
 
 ## fixed effect parameters
-surv_bar <- -0.5  # intercept
+surv_bar <- 1  # intercept
 beta_cs <- 0.5 # condition effect
 beta_ds <- 0.4 # date effect
 beta_cyer <- -1 # er effect
 beta_d_cyer <- 0.5 # date ER interaction
 
 true_pars <- data.frame(
-  par = c("(Intercept)", "beta_ds", "beta_cyer", "beta_cs", "beta_fs", "beta_ls",
+  par = c("alpha_bar", "beta_ds", "beta_cyer", "beta_cs", "beta_fs", "beta_ls",
           "beta_d_cyer"),
   true = c(surv_bar, beta_ds, beta_cyer, beta_cs, 0.3 * beta_cs, 0.9 * beta_cs,
            beta_d_cyer)
+)
+
+# focus on survival only
+true_pars_year_ri <- data.frame(
+    year = seq(1, 5, by = 1),
+    true = alpha_yr_surv
+  )
+true_pars_pop_ri <- data.frame(
+  pop = seq(1, 5, by = 1),
+  true = alpha_pop_surv
 )
 
 
@@ -156,7 +166,7 @@ eta <- surv_bar +
   beta_cs * dat$cond +
   beta_ds * dat$samp_date +
   beta_cyer * dat$cyer +
-  (beta_d_cyer * dat$samp_date * dat$cyer) 
+  (beta_d_cyer * dat$samp_date * dat$cyer)
 
 p_true <- 1 / (1 + exp(-(eta)))  # Probability of survival
 dat$s_true <- rbinom(n, 1, p_true)  # Binary outcome
@@ -183,8 +193,8 @@ dat_list <- list(
   s_true = dat$s_true,
   s_obs = dat$s_obs,
   
-  logit_det_mu = dat$logit_det_prob,
-  logit_det_sd = dat$sd_logit_det_prob,
+  logit_det_mu = det_key$logit_det_prob,
+  logit_det_sd = det_key$sd_logit_det_prob,
   
   pop_n = dat$pop_n,
   yr = dat$yr,
@@ -201,57 +211,57 @@ dat_list <- list(
 ## MODEL FIT -------------------------------------------------------------------
 
 ## rethinking version with no observation process
-fit <- ulam(
-  alist(
-    # date
-    samp_date ~ dnorm(mu_date, sigma_date),
-    mu_date <- alpha_pop[pop_n, 1],
-    
-    # covariance among size and lipid
-    c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho_sl, Sigma_sl),
-    mu_size <- alpha_yr[yr, 1] + alpha_pop[pop_n, 2] + beta_df * samp_date,
-    mu_lipid <- alpha_yr[yr, 2] + alpha_pop[pop_n, 3] + beta_dl * samp_date,
-    
-    # survival
-    s_true ~ dbinom(1 , p) ,
-    logit(p) <- alpha_bar + alpha_pop[pop_n, 4] + alpha_yr[yr, 3] +
-      beta_ds * samp_date +
-      beta_fs * size +
-      beta_ls * lipid +
-      beta_cyer * cyer + (beta_d_cyer * samp_date * cyer),
-    
-    # adaptive priors
-    transpars> matrix[yr, 3]:alpha_yr <-
-      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
-    matrix[3, yr]:z_yr ~ normal(0 , 1),
-    transpars> matrix[pop_n, 4]:alpha_pop <-
-      compose_noncentered(sigma_pop , L_Rho_pop , z_pop),
-    matrix[4, pop_n]:z_pop ~ normal(0 , 1),
-    
-    # priors
-    c(beta_df, beta_dl) ~ normal(0, 1),
-    beta_cyer ~ normal(-0.5, 0.5),
-    c(beta_ds, beta_fs, beta_ls, beta_d_cyer) ~ normal(0, 0.5),
-    alpha_bar ~ dnorm(0, 1),
-    Rho_sl ~ lkj_corr( 2 ),
-    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
-    vector[3]:sigma_yr ~ exponential(1),
-    cholesky_factor_corr[4]:L_Rho_pop ~ lkj_corr_cholesky(2),
-    vector[4]:sigma_pop ~ exponential(1),
-    c(Sigma_sl, sigma_date) ~ exponential(1),
-    
-    # compute ordinary correlation matrixes from Cholesky factors
-    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
-    gq> matrix[4, 4]:Rho_pop <<- Chol_to_Corr(L_Rho_pop)
-  ),
-  # set iterations and chains low because just want to extract stan code
-  data = dat_list, chains = 4, cores = 4, iter = 2000,
-  control = list(adapt_delta = 0.95)
-)
-
-precis(fit, depth = 2)
-
-stancode(fit)
+# fit <- ulam(
+#   alist(
+#     # date
+#     samp_date ~ dnorm(mu_date, sigma_date),
+#     mu_date <- alpha_pop[pop_n, 1],
+#     
+#     # covariance among size and lipid
+#     c(size, lipid) ~ multi_normal(c(mu_size, mu_lipid), Rho_sl, Sigma_sl),
+#     mu_size <- alpha_yr[yr, 1] + alpha_pop[pop_n, 2] + beta_df * samp_date,
+#     mu_lipid <- alpha_yr[yr, 2] + alpha_pop[pop_n, 3] + beta_dl * samp_date,
+#     
+#     # survival
+#     s_true ~ dbinom(1 , p) ,
+#     logit(p) <- alpha_bar + alpha_pop[pop_n, 4] + alpha_yr[yr, 3] +
+#       beta_ds * samp_date +
+#       beta_fs * size +
+#       beta_ls * lipid +
+#       beta_cyer * cyer + (beta_d_cyer * samp_date * cyer),
+#     
+#     # adaptive priors
+#     transpars> matrix[yr, 3]:alpha_yr <-
+#       compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
+#     matrix[3, yr]:z_yr ~ normal(0 , 1),
+#     transpars> matrix[pop_n, 4]:alpha_pop <-
+#       compose_noncentered(sigma_pop , L_Rho_pop , z_pop),
+#     matrix[4, pop_n]:z_pop ~ normal(0 , 1),
+#     
+#     # priors
+#     c(beta_df, beta_dl) ~ normal(0, 1),
+#     beta_cyer ~ normal(-0.5, 0.5),
+#     c(beta_ds, beta_fs, beta_ls, beta_d_cyer) ~ normal(0, 0.5),
+#     alpha_bar ~ dnorm(0, 1),
+#     Rho_sl ~ lkj_corr( 2 ),
+#     cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
+#     vector[3]:sigma_yr ~ exponential(1),
+#     cholesky_factor_corr[4]:L_Rho_pop ~ lkj_corr_cholesky(2),
+#     vector[4]:sigma_pop ~ exponential(1),
+#     c(Sigma_sl, sigma_date) ~ exponential(1),
+#     
+#     # compute ordinary correlation matrixes from Cholesky factors
+#     gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
+#     gq> matrix[4, 4]:Rho_pop <<- Chol_to_Corr(L_Rho_pop)
+#   ),
+#   # set iterations and chains low because just want to extract stan code
+#   data = dat_list, chains = 4, cores = 4, iter = 2000,
+#   control = list(adapt_delta = 0.95)
+# )
+# 
+# precis(fit, depth = 2)
+# 
+# stancode(fit)
 
 
 # true survival model
@@ -269,32 +279,114 @@ m2_stan <- sampling(mod2, data = dat_list,
                     control = list(adapt_delta = 0.95))
 
 
+# true survival model
+mod3 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_FE.stan"))
+
+m3_stan <- sampling(mod3, data = dat_list, 
+                    chains = 4, iter = 2000, warmup = 1000,
+                    control = list(adapt_delta = 0.95))
 
 
-alpha_pars <- names(m1_stan)[grepl("alpha", names(m1_stan))]
-alpha_pop_pars <- names(m1_stan)[grepl("alpha_pop", names(m1_stan))]
-sigma_pars <- names(m1_stan)[grepl("sigma", names(m1_stan))]
-beta_pars <- names(m1_stan)[grepl("beta", names(m1_stan))]
+alpha_pars <- names(m2_stan)[grepl("alpha", names(m2_stan))]
+alpha_pop_pars <- names(m2_stan)[grepl("alpha_pop", names(m2_stan))]
+sigma_pars <- names(m2_stan)[grepl("sigma", names(m2_stan))]
+beta_pars <- names(m2_stan)[grepl("beta", names(m2_stan))]
 
 print(m1_stan, 
-      pars = c(alpha_pars, beta_pars, sigma_pars))
-print(m1_stan, 
-      pars = alpha_pop_pars)
+      pars = "alpha_bar")
+print(m2_stan, 
+      pars = "alpha_bar")
+print(m3_stan, 
+      pars = "alpha_bar")
 
 
-post <- as_draws_df(m1_stan)
+fit_list <- list(m1_stan, m2_stan)
+post_list <- purrr::map(fit_list, ~ as_draws_df(.x))
 
-# Extract parameters (excluding transformed or latent variables if needed)
-draws <- post %>%
-  # spread_draws(alpha_bar, alpha_yr[i, j], alpha_pop[k, l]) %>% 
-  spread_draws(beta_dl, beta_df, beta_cyer, beta_d_cyer, beta_ls, beta_fs, 
-               beta_ds) %>% 
-  pivot_longer(starts_with("beta_"), names_to = "par", 
-               values_to = "value") %>% 
-  left_join(., true_pars, by = "par")
 
-ggplot(draws %>% filter(!is.na(true))) +
-  geom_boxplot(aes(x = par, y = value)) +
-  geom_point(aes(x = par, y = true), colour = "red") +
+alpha_dat <- purrr::map2(
+  post_list,
+  c("m1", "m2"),
+  function(x, y) {
+    a_yr <- x %>%
+      spread_draws(alpha_yr[i, j]) %>%
+      filter(j == "3") %>% 
+      rename(year = i, value = alpha_yr) %>% 
+      left_join(., true_pars_year_ri, by = "year") %>% 
+      mutate(
+        par = paste("alpha_yr", year, sep = "_")
+      ) %>%
+      ungroup() %>% 
+      select(value, true, par)
+    a_pop <- x %>%
+      spread_draws(alpha_pop[k, l]) %>%
+      filter(l == "4") %>%
+      rename(pop = k, value = alpha_pop) %>%
+      left_join(., true_pars_pop_ri, by = "pop") %>%
+      mutate(
+        par = paste("alpha_pop", pop, sep = "_")
+      ) %>%
+      ungroup() %>%
+      select(colnames(a_yr))
+    a_bar <- x %>%
+      spread_draws(alpha_bar) %>%
+      rename(value = alpha_bar) %>%
+      mutate(
+        par = "alpha_bar"
+      ) %>%
+      left_join(., true_pars, by = "par") %>%
+      ungroup() %>%
+      select(value, true, par)
+    
+    list(a_yr, a_pop, a_bar) %>%
+      bind_rows() %>%
+      mutate(
+        model = y
+      )
+  }
+) %>% 
+  bind_rows()
+
+ggplot(alpha_dat) +
+  geom_boxplot(aes(x = model, y = value)) +
+  geom_point(aes(x = model, y = true), colour = "red") +
+  facet_wrap(~par) +
   ggsidekick::theme_sleek()
 
+beta_dat <- purrr::map2(
+  post_list,
+  c("m1", "m2"),
+  function(x, y) {
+    x %>%
+      # spread_draws(alpha_bar, alpha_yr[i, j], alpha_pop[k, l]) %>% 
+      spread_draws(beta_dl, beta_df, beta_cyer, beta_d_cyer, beta_ls, beta_fs, 
+                   beta_ds) %>% 
+      pivot_longer(starts_with("beta_"), names_to = "par", 
+                   values_to = "value") %>% 
+      mutate(
+        model = y
+      )
+  }
+) %>% 
+  bind_rows()
+
+ggplot() +
+  geom_boxplot(data = beta_dat, aes(x = par, y = value)) +
+  geom_point(data = true_pars %>% filter(par %in% beta_dat$par),
+             aes(x = par, y = true), colour = "red") +
+  ggsidekick::theme_sleek()
+
+
+post2 <- as_draws_df(m2_stan)
+
+det_p_draws <- post2 %>%
+  spread_draws(p[i]) %>% 
+  rename(det_group_id = i) %>% 
+  left_join(., det_key, by = "det_group_id") %>% 
+  ungroup()
+
+ggplot() +
+  geom_boxplot(data = det_p_draws, aes(x = as.factor(yr), y = p)) +
+  geom_point(data = det_key, aes(x = as.factor(yr), y = det_prob), colour = "red") +
+  facet_wrap(~pop) +
+  ggsidekick::theme_sleek()
