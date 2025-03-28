@@ -42,7 +42,8 @@ cyer_dat <- as.data.frame(cyer_mat) %>%
 # simplifying assumption that posterior is used as true mean
 det_key1 <- data.frame(
   pop = c("a", "b", "c", "d", "e"),
-  mu_det_prob = logit(c(.85, .92, .98, 0.2, 0.3))
+  mu_det_prob = logit(c(.85, .92, .98, .8, .7))
+  # mu_det_prob = logit(c(.85, .92, .98, 0.2, 0.3))
 ) 
 det_key2 <- vector(mode = "list", length = length(unique(det_key1$pop)))
 for (i in 1:nrow(det_key1)) {
@@ -59,7 +60,7 @@ det_key <- bind_rows(det_key2) %>%
   mutate(
     sd_logit_det_prob = 0.4,
     # define groups that have posterior samples
-    post = ifelse(pop %in% c("d", "e"), 0, 1),
+    post = 1,#ifelse(pop %in% c("d", "e"), 0, 1),
     det_group_id = paste(pop, yr, sep = "_") %>% 
       as.factor() %>% 
       as.numeric()
@@ -78,17 +79,18 @@ alpha_yr_cond <- yr_ints[ , 1]
 alpha_yr_surv <- yr_ints[ , 2]
 
 
-# pop intercepts (condition, date, survival)
+# pop intercepts (date, lipid, size, survival)
 # correlated versions
 pop_rho <- 0.9
-pop_mu <- c(0, 0, 0) #average effects both centered on zero
-pop_sigmas <- c(0.4, 0.5, 0.5)
-pop_Rho <- diag(1, 3) + matrix(pop_rho, 3, 3) - diag(pop_rho, 3)
+pop_mu <- c(0, 0, 0, 0) #average effects both centered on zero
+pop_sigmas <- c(0.3, 0.4, 0.4, 0.5)
+pop_Rho <- diag(1, 4) + matrix(pop_rho, 4, 4) - diag(pop_rho, 4)
 pop_Sigma <- diag(pop_sigmas) %*% pop_Rho %*% diag(pop_sigmas)
 pop_ints <- MASS::mvrnorm(n_pops, pop_mu, pop_Sigma)
-alpha_pop_cond <- pop_ints[ , 1]
-alpha_pop_date <- pop_ints[ , 2]
-alpha_pop_surv <- pop_ints[ , 3]
+alpha_pop_size <- pop_ints[ , 1]
+alpha_pop_lipid <- pop_ints[ , 2]
+alpha_pop_date <- pop_ints[ , 3]
+alpha_pop_surv <- pop_ints[ , 4]
 
 
 ## Make dataframe with full structure of correlations
@@ -120,16 +122,17 @@ beta_cl <- 0.9 #results in a mean correlation of ~0.6
 beta_cf <- 0.3
 
 for (i in 1:nrow(dat)) { 
-  dat$samp_date[i] <- rnorm(1, alpha_pop_date[dat$pop_n[i]], 0.5)
+  dat$samp_date[i] <- rnorm(1, alpha_pop_date[dat$pop_n[i]], 0.4)
   dat$cond[i] <- rnorm(
     1, 
-    alpha_pop_cond[dat$pop_n[i]] + alpha_yr_cond[dat$yr[i]] + 
-      beta_dc * dat$samp_date[i], 
-    0.5
+    alpha_yr_cond[dat$yr[i]] + beta_dc * dat$samp_date[i], 
+    0.4
   )
   # generate observations from latent state 
-  dat$size[i] <- rnorm(1, beta_cf * dat$cond[i], 0.5)
-  dat$lipid[i] <- rnorm(1, beta_cl * dat$cond[i], 0.5)
+  dat$size[i] <- rnorm(1, beta_cf * dat$cond[i] + 
+                         alpha_pop_size[dat$pop_n[i]], 0.4)
+  dat$lipid[i] <- rnorm(1, beta_cl * dat$cond[i] + 
+                          alpha_pop_lipid[dat$pop_n[i]], 0.4)
   dat$alpha_yr[i] <- alpha_yr_surv[dat$yr[i]]
   dat$alpha_pop[i] <- alpha_pop_surv[dat$pop_n[i]]
 }
@@ -137,16 +140,18 @@ for (i in 1:nrow(dat)) {
 
 ## fixed effect parameters
 surv_bar <- 1  # intercept
-beta_cs <- 0.5 # condition effect
-beta_ds <- 0.4 # date effect
+# beta_cs <- 0.5 # condition effect
+beta_fs <- 0.2 # size effect
+beta_ls <- 0.4 # lipid effect
+beta_ds <- 0.5 # date effect
 beta_cyer <- -1 # er effect
 beta_d_cyer <- 0.5 # date ER interaction
 
 true_pars <- data.frame(
-  par = c("alpha_bar", "beta_ds", "beta_cyer", "beta_cs", "beta_fs", "beta_ls",
-          "beta_d_cyer"),
-  true = c(surv_bar, beta_ds, beta_cyer, beta_cs, 0.3 * beta_cs, 0.9 * beta_cs,
-           beta_d_cyer)
+  par = c("beta_dc", "beta_cl", "beta_cf", "alpha_bar", "beta_ds", "beta_cyer",
+          "beta_cs", "beta_fs", "beta_ls", "beta_d_cyer"),
+  true = c(beta_dc, beta_cl, beta_cf, surv_bar, beta_ds, beta_cyer, beta_cs,
+           beta_fs, beta_ls, beta_d_cyer)
 )
 
 # focus on survival only
@@ -163,7 +168,9 @@ true_pars_pop_ri <- data.frame(
 ## simulate true survival
 eta <- surv_bar + 
   dat$alpha_yr + dat$alpha_pop +
-  beta_cs * dat$cond +
+  # beta_cs * dat$cond +
+  beta_fs * dat$size +
+  beta_ls * dat$lipid +
   beta_ds * dat$samp_date +
   beta_cyer * dat$cyer +
   (beta_d_cyer * dat$samp_date * dat$cyer)
@@ -176,6 +183,13 @@ dat$s_true <- rbinom(n, 1, p_true)  # Binary outcome
 dat$s_obs <- ifelse(
   dat$s_true == 1 & runif(n) < dat$det_prob, 1, 0
 )
+
+ggplot(dat) +
+  geom_bar(aes(x = s_obs)) +
+  facet_wrap(~pop)
+ggplot(dat) +
+  geom_bar(aes(x = s_true)) +
+  facet_wrap(~pop)
 
 
 dat_list <- list(
@@ -271,7 +285,7 @@ m1_stan <- sampling(mod1, data = dat_list,
                     chains = 4, iter = 2000, warmup = 1000,
                     control = list(adapt_delta = 0.95))
 
-# true survival model
+# observed survival model
 mod2 <- stan_model(here::here("R", "stan_models", "obs_surv_jll.stan"))
 
 m2_stan <- sampling(mod2, data = dat_list, 
@@ -279,12 +293,12 @@ m2_stan <- sampling(mod2, data = dat_list,
                     control = list(adapt_delta = 0.95))
 
 
-# true survival model
-mod3 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_FE.stan"))
-
-m3_stan <- sampling(mod3, data = dat_list, 
-                    chains = 4, iter = 2000, warmup = 1000,
-                    control = list(adapt_delta = 0.95))
+# simplified observed survival model (no RIs)
+# mod3 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_FE.stan"))
+# 
+# m3_stan <- sampling(mod3, data = dat_list, 
+#                     chains = 4, iter = 2000, warmup = 1000,
+#                     control = list(adapt_delta = 0.95))
 
 
 alpha_pars <- names(m2_stan)[grepl("alpha", names(m2_stan))]
@@ -296,16 +310,15 @@ print(m1_stan,
       pars = "alpha_bar")
 print(m2_stan, 
       pars = "alpha_bar")
-print(m3_stan, 
-      pars = "alpha_bar")
-
+print(m2_stan, 
+      pars = "Rho_yr")
 
 fit_list <- list(m1_stan, m2_stan)
 post_list <- purrr::map(fit_list, ~ as_draws_df(.x))
 
 
 alpha_dat <- purrr::map2(
-  post_list,
+  post_list[1:2],
   c("m1", "m2"),
   function(x, y) {
     a_yr <- x %>%
@@ -374,12 +387,11 @@ ggplot() +
   geom_boxplot(data = beta_dat, aes(x = par, y = value)) +
   geom_point(data = true_pars %>% filter(par %in% beta_dat$par),
              aes(x = par, y = true), colour = "red") +
-  ggsidekick::theme_sleek()
+  ggsidekick::theme_sleek() +
+  facet_wrap(~model)
 
 
-post2 <- as_draws_df(m2_stan)
-
-det_p_draws <- post2 %>%
+det_p_draws <- post_list[[2]] %>%
   spread_draws(p[i]) %>% 
   rename(det_group_id = i) %>% 
   left_join(., det_key, by = "det_group_id") %>% 
@@ -387,6 +399,55 @@ det_p_draws <- post2 %>%
 
 ggplot() +
   geom_boxplot(data = det_p_draws, aes(x = as.factor(yr), y = p)) +
-  geom_point(data = det_key, aes(x = as.factor(yr), y = det_prob), colour = "red") +
+  geom_point(data = det_key, aes(x = as.factor(yr), y = det_prob), 
+             colour = "red") +
   facet_wrap(~pop) +
   ggsidekick::theme_sleek()
+
+
+# posterior detection
+dat$ind <- seq(1, nrow(dat), by = 1)
+mu_draws <- post_list[[2]] %>%
+  spread_draws(s_obs_rep[i]) %>%
+  rename(ind = i) %>% 
+  ungroup() %>% 
+  group_by(ind) %>% 
+  summarize(mean_s = mean(s_obs_rep))
+
+
+calc_pit <- function(y, posterior_pred) {
+  # Get the proportion of posterior samples that are less than or equal to the observed value
+  n_obs <- length(y)
+  pit_residuals <- numeric(n_obs)
+  
+  for (i in 1:n_obs) {
+    # Calculate pmin and pmax for each observation
+    y_prime <- posterior_pred[i, ]  # posterior predictions for i-th observation
+    pmin_i <- mean(y_prime < y[i])
+    pmax_i <- mean(y_prime <= y[i])
+    
+    # Generate the PIT residuals as a random draw from uniform(pmin, pmax)
+    pit_residuals[i] <- runif(1, pmin_i, pmax_i)
+  }
+  
+  return(pit_residuals)
+}
+
+# Calculate PIT residuals
+post_rep <- as.matrix(m2_stan, pars = "s_obs_rep")
+pit_residuals <- calc_pit(y = dat$s_obs, posterior_pred = post_rep)
+qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
+       main = "QQ-plot of PIT Residuals")
+abline(0, 1)
+
+post_rep1 <- as.matrix(m1_stan, pars = "s_obs_rep")
+length(post_rep1[post_rep1 == "0"]) / length(post_rep1)
+length(dat$s_obs[dat$s_obs == "0"]) / length(dat$s_obs)
+
+post_rep3 <- as.matrix(m3_stan, pars = "s_obs_rep")
+length(post_rep3[post_rep3 == "0"]) / length(post_rep3)
+length(dat$s_obs[dat$s_true == "0"]) / length(dat$s_true)
+
+
+length(post_rep[post_rep == "0"]) / length(post_rep)
+length(dat$s_true[dat$s_true == "0"]) / length(dat$s_true)
