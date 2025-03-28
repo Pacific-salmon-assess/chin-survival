@@ -87,9 +87,9 @@ pop_sigmas <- c(0.3, 0.4, 0.4, 0.5)
 pop_Rho <- diag(1, 4) + matrix(pop_rho, 4, 4) - diag(pop_rho, 4)
 pop_Sigma <- diag(pop_sigmas) %*% pop_Rho %*% diag(pop_sigmas)
 pop_ints <- MASS::mvrnorm(n_pops, pop_mu, pop_Sigma)
-alpha_pop_size <- pop_ints[ , 1]
-alpha_pop_lipid <- pop_ints[ , 2]
-alpha_pop_date <- pop_ints[ , 3]
+alpha_pop_date <- pop_ints[ , 1]
+alpha_pop_size <- pop_ints[ , 2]
+alpha_pop_lipid <- pop_ints[ , 3]
 alpha_pop_surv <- pop_ints[ , 4]
 
 
@@ -118,8 +118,8 @@ dat <- data.frame(
 
 # simulate continuous covariates
 beta_dc <- 0.7
-beta_cl <- 0.9 #results in a mean correlation of ~0.6
-beta_cf <- 0.3
+beta_cl <- 0.9 
+beta_cf <- 0.4
 
 for (i in 1:nrow(dat)) { 
   dat$samp_date[i] <- rnorm(1, alpha_pop_date[dat$pop_n[i]], 0.4)
@@ -293,6 +293,7 @@ m2_stan <- sampling(mod2, data = dat_list,
                     control = list(adapt_delta = 0.95))
 
 
+
 # simplified observed survival model (no RIs)
 # mod3 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_FE.stan"))
 # 
@@ -310,8 +311,6 @@ print(m1_stan,
       pars = "alpha_bar")
 print(m2_stan, 
       pars = "alpha_bar")
-print(m2_stan, 
-      pars = "Rho_yr")
 
 fit_list <- list(m1_stan, m2_stan)
 post_list <- purrr::map(fit_list, ~ as_draws_df(.x))
@@ -366,22 +365,30 @@ ggplot(alpha_dat) +
   facet_wrap(~par) +
   ggsidekick::theme_sleek()
 
-beta_dat <- purrr::map2(
-  post_list,
-  c("m1", "m2"),
-  function(x, y) {
-    x %>%
-      # spread_draws(alpha_bar, alpha_yr[i, j], alpha_pop[k, l]) %>% 
-      spread_draws(beta_dl, beta_df, beta_cyer, beta_d_cyer, beta_ls, beta_fs, 
-                   beta_ds) %>% 
-      pivot_longer(starts_with("beta_"), names_to = "par", 
-                   values_to = "value") %>% 
-      mutate(
-        model = y
-      )
-  }
-) %>% 
-  bind_rows()
+# beta_dat <- purrr::map2(
+#   post_list[[2]],
+#   c("m2"),
+#   function(x, y) {
+#     x %>%
+#       spread_draws(beta_dc, beta_cl, beta_cf, beta_ds, beta_cyer,
+#                    beta_fs, beta_ls, beta_d_cyer) %>% 
+#       pivot_longer(starts_with("beta_"), names_to = "par", 
+#                    values_to = "value") %>% 
+#       mutate(
+#         model = y
+#       )
+#   }
+# ) %>% 
+#   bind_rows()
+
+beta_dat <- post_list[[2]] %>%
+  spread_draws(beta_dc, beta_cl, beta_cf, beta_ds, beta_cyer,
+               beta_fs, beta_ls, beta_d_cyer) %>% 
+  pivot_longer(starts_with("beta_"), names_to = "par", 
+               values_to = "value") %>% 
+  mutate(
+    model = "m2"
+  )
 
 ggplot() +
   geom_boxplot(data = beta_dat, aes(x = par, y = value)) +
