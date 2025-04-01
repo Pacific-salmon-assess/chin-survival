@@ -51,21 +51,20 @@ adjustmentSets(dag_full, exposure = "I", outcome = "S")
 # year effects on survival, size, and lipid
 # size and lipid effects on survival 
 
-## generative model
+## model with latent process
 online_dag <- dagitty('
 dag {
 "fork length" [exposure,pos="0.106,0.772"]
 "observed survival" [outcome,pos="0.554,1.080"]
 "tagging date" [exposure,pos="-0.713,1.122"]
 "true survival" [latent,pos="0.374,1.087"]
-condition [latent,pos="-0.088,0.591"]
+condition [latent,pos="-0.020,0.589"]
 exploitation [exposure,pos="0.307,0.102"]
 injury [exposure,pos="0.016,1.481"]
 lipid [exposure,pos="0.443,0.574"]
 stock [adjusted,pos="-0.734,0.399"]
 year [adjusted,pos="-0.230,-0.056"]
 "fork length" -> "true survival"
-"fork length" -> injury
 "tagging date" -> "true survival"
 "tagging date" -> condition
 "true survival" -> "observed survival"
@@ -83,42 +82,71 @@ year -> condition
 }
 ')
 
-## recovery model
+# model with covariance
 online_dag2 <- dagitty('
 dag {
-"apparent survival" [outcome,pos="0.619,1.400"]
-"detection probability" [pos="-0.770,0.090"]
-"fork length" [exposure,pos="0.106,0.772"]
-"tagging date" [exposure,pos="-0.713,1.122"]
-condition [latent,pos="-0.066,0.528"]
-exploitation [exposure,pos="0.307,0.102"]
-injury [exposure,pos="-0.012,1.599"]
-lipid [exposure,pos="0.378,0.688"]
-stock [adjusted,pos="-0.860,0.500"]
-year [adjusted,pos="-0.244,-0.053"]
-"detection probability" -> "apparent survival"
-"fork length" -> "apparent survival"
-"tagging date" -> "apparent survival"
-"tagging date" -> condition
-condition -> "fork length"
-condition -> lipid
-exploitation -> "apparent survival"
-injury -> "apparent survival"
-lipid -> "apparent survival"
-stock -> "apparent survival"
-stock -> "tagging date"
-stock -> condition
-year -> condition
+  "fork length" [exposure,pos="0.106,0.772"]
+  "observed survival" [outcome,pos="0.528,1.089"]
+  "tagging date" [exposure,pos="-0.713,1.122"]
+  "true survival" [latent,pos="0.374,1.087"]
+  condition [latent,pos="0.163,0.545"]
+  exploitation [exposure,pos="0.307,0.102"]
+  injury [exposure,pos="0.016,1.481"]
+  lipid [exposure,pos="0.212,0.341"]
+  stock [adjusted,pos="-0.734,0.399"]
+  year [adjusted,pos="-0.230,-0.056"]
+  "fork length" -> "true survival"
+  "tagging date" -> "fork length"
+  "tagging date" -> "true survival"
+  "tagging date" -> lipid
+  "true survival" -> "observed survival"
+  condition -> "fork length"
+  condition -> lipid
+  exploitation -> "true survival"
+  injury -> "true survival"
+  lipid -> "true survival"
+  stock -> "fork length"
+  stock -> "tagging date"
+  stock -> "true survival"
+  stock -> lipid
+  year -> "fork length"
+  year -> "true survival"
+  year -> lipid
+}
+')
+
+
+## latent model 2
+msf_dag <- dagitty('
+dag {
+  "fork length" [outcome,pos="0.106,0.772"]
+  "observed survival" [outcome,pos="0.554,1.080"]
+  "tagging date" [exposure,pos="-0.713,1.122"]
+  "true survival" [latent,pos="0.374,1.087"]
+  condition [latent,pos="0.051,0.579"]
+  exploitation [exposure,pos="0.307,0.102"]
+  injury [exposure,pos="0.016,1.481"]
+  lipid [outcome,pos="0.443,0.574"]
+  stock [adjusted,pos="-0.734,0.399"]
+  year [adjusted,pos="-0.230,-0.056"]
+  "tagging date" -> "true survival"
+  "tagging date" -> condition
+  "true survival" -> "observed survival"
+  condition -> "fork length"
+  condition -> "true survival"
+  condition -> lipid
+  exploitation -> "true survival"
+  injury -> "true survival"
+  stock -> "fork length"
+  stock -> "tagging date"
+  stock -> "true survival"
+  stock -> lipid
+  year -> "true survival"
+  year -> condition
 }
 '
 )
 
-
-# recover parameters of direct interest; include effects of stock/year to test
-# for covariance among intercepts (i.e. stocks with positive condition tend to 
-# be captured later in the year and have higher survival); ignore stock/year 
-# effects on probability/CYER because including them doesn't impact estimates
-# and not of interest causally
 
 
 

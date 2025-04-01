@@ -341,11 +341,17 @@ ggplot(det_dat1, aes(x = cyer_z, y = final_det)) +
 
 library(lme4)
 
+det_dat1$year_f <- as.factor(det_dat1$year)
+
 # determine whether submodel of date vs. condition should be non-linear or not
-fit_fl <- lmer(fl ~ year_day + (1 | stock_group), data = det_dat1)
-fit_fl_log <- lmer(log(fl) ~ year_day + (1 | stock_group), data = det_dat1)
-fit_lip <- lmer(lipid ~ year_day + (1 | stock_group), data = det_dat1)
-fit_lip_log <- lmer(log(lipid) ~ year_day + (1 | stock_group), data = det_dat1)
+fit_fl <- lmer(fl ~ year_day + (1 | stock_group) + (1 | year_f),
+               data = det_dat1)
+fit_fl_log <- lmer(log(fl) ~ year_day + (1 | stock_group) + (1 | year_f),
+                   data = det_dat1)
+fit_lip <- lmer(lipid ~ year_day + (1 | stock_group) + (1 | year_f),
+                data = det_dat1)
+fit_lip_log <- lmer(log(lipid) ~ year_day + (1 | stock_group) + (1 | year_f),
+                    data = det_dat1)
 fit_list <- list(fit_fl, fit_fl_log, fit_lip, fit_lip_log)
 
 
