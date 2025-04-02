@@ -126,9 +126,9 @@ mu_size <- mu_lipid <- rep(NA, times = nrow(dat))
 for (i in 1:nrow(dat)) { 
   dat$samp_date[i] <- rnorm(1, alpha_pop_date[dat$pop_n[i]], 0.4)
   mu_size[i] <- beta_df * dat$samp_date[i] +
-    alpha_pop_size[dat$pop_n[i]] #+ alpha_yr_size[dat$yr[i]]
+    alpha_pop_size[dat$pop_n[i]] + alpha_yr_size[dat$yr[i]]
   mu_lipid[i] <- beta_dl * dat$samp_date[i] +
-    alpha_pop_lipid[dat$pop_n[i]] #+ alpha_yr_lipid[dat$yr[i]]
+    alpha_pop_lipid[dat$pop_n[i]] + alpha_yr_lipid[dat$yr[i]]
   dat$alpha_yr[i] <- alpha_yr_surv[dat$yr[i]]
   dat$alpha_pop[i] <- alpha_pop_surv[dat$pop_n[i]]
 }
@@ -137,7 +137,7 @@ dat$samp_date <- dat$samp_date %>% scale() %>% as.numeric()
 
 # account for covariance in size/lipid
 cond_sigma <- 0.6
-cond_rho <- 0.2
+cond_rho <- 0.35
 Sigma_cond <- matrix(c(cond_sigma^2, cond_rho * cond_sigma * cond_sigma,
                   cond_rho * cond_sigma * cond_sigma, cond_sigma^2), nrow = 2)
 size_lipid_mat <- MASS::mvrnorm(
@@ -154,7 +154,7 @@ beta_fs <- 0.2 # size effect
 beta_ls <- 0.4 # lipid effect
 beta_ds <- 0.5 # date effect
 beta_cyer <- -1 # er effect
-beta_d_cyer <- 0 # date ER interaction
+beta_d_cyer <- 0.4 # date ER interaction
 
 true_pars <- data.frame(
   par = c("beta_dl", "beta_df", "alpha_bar", "beta_ds", "beta_cyer",
@@ -178,7 +178,7 @@ true_pars_pop_ri <- data.frame(
 
 ## simulate true survival
 eta <- surv_bar + 
-  #dat$alpha_yr + 
+  dat$alpha_yr + 
   dat$alpha_pop +
   beta_fs * dat$size +
   beta_ls * dat$lipid +
@@ -286,6 +286,26 @@ ggplot(pred_df, aes(x = p, fill = samp_date)) +
   ) 
 
 
+## full prior predictive check using stan model without observation component
+# to evaluate additive effects of many covariates 
+prior_mod <- stan_model(
+  here::here("R", "stan_models", "true_surv_jll2_PRIOR_CHECK.stan")
+  )
+prior_stan <- sampling(prior_mod, data = dat_list, 
+                       chains = 4, iter = 1000, warmup = 500)
+
+prior_draws <- as_draws(prior_stan)
+
+dat$ind <- seq(1, nrow(dat), by = 1)
+mean_ind <- prior_draws3 %>%
+  spread_draws(s_obs_rep[i]) %>%
+  rename(ind = i) %>%
+  group_by(ind) %>% 
+  summarize(mean_s = mean(s_obs_rep))
+hist(mean_ind$mean_s)
+
+
+
 ## MODEL FIT -------------------------------------------------------------------
 
 ## rethinking version with no observation process
@@ -343,9 +363,10 @@ ggplot(pred_df, aes(x = p, fill = samp_date)) +
 
 
 # true survival model
-mod1 <- stan_model(here::here("R", "stan_models", "true_surv_jll2.stan"))
+mod1 <- stan_model(here::here("R", "stan_models", "true_surv_jll.stan"))
 m1_stan <- sampling(mod1, data = dat_list, 
-                    chains = 4, iter = 2000, warmup = 1000)
+                    chains = 4, iter = 2000, warmup = 1000,
+                    control = list(adapt_delta = 0.96))
 
 # observed survival model with latent process
 # FAILED TO CONVERGE DESPITE MULTIPLE REPARs
@@ -359,113 +380,28 @@ m1_stan <- sampling(mod1, data = dat_list,
 mod3 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_cov.stan"))
 m3_stan <- sampling(mod3, data = dat_list, 
                     chains = 4, iter = 2000, warmup = 1000,
-                    control = list(adapt_delta = 0.95))
-
-
-mod4 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_cov2.stan"))
-m4_stan <- sampling(mod4, data = dat_list,
-                    chains = 4, iter = 2000, warmup = 1000,
-                    control = list(adapt_delta = 0.95))
+                    control = list(adapt_delta = 0.96))
 
 
 
-alpha_pars <- names(m1_stan)[grepl("alpha", names(m2_stan))]
-alpha_pop_pars <- names(m2_stan)[grepl("alpha_pop", names(m2_stan))]
-sigma_pars <- names(m3_stan)[grepl("sigma", names(m3_stan))]
-beta_pars <- names(m2_stan)[grepl("beta", names(m2_stan))]
 
-print(m1_stan, "alpha_bar")
-print(m2_stan, beta_pars)
-
-print(m3_stan, 
-      pars = "alpha_bar")
-print(m4_stan, 
-      pars = "alpha_bar")
-
-print(m3_stan, 
-      pars = beta_pars)
-print(m3_stan, 
-      pars = sigma_pars)
-
-
-# check low neff
-summary_fit <- summary(m3_stan)$summary
-neff_df <- data.frame(
-  parameter = rownames(summary_fit),
-  n_eff = summary_fit[, "n_eff"],
-  stringsAsFactors = FALSE
-)
-neff_df[is.na(neff_df$n_eff) | neff_df$n_eff < 1000, ]
-
-
-m2_draws <- as.array(m2_stan)  # convert stanfit to array
+m3_draws <- as.array(m3_stan)  # convert stanfit to array
 bayesplot::mcmc_pairs(
-  m2_draws,
-  pars = c("beta_cl", "beta_cf", "beta_dc", "beta_ds", "beta_cyer", "beta_cs")
+  m3_draws,
+  pars = c("beta_dl", "beta_df", "beta_d_cyer", "beta_ls", "beta_fs",
+           "beta_ds", "beta_cyer")
 )
 
 
 
-fit_list <- list(m3_stan, m4_stan)
+fit_list <- list(m1_stan, m3_stan)
 post_list <- purrr::map(fit_list, ~ as_draws_df(.x))
-
-
-alpha_dat <- purrr::map2(
-  post_list[1:2],
-  c("m1", "m2"),
-  function(x, y) {
-    # a_yr <- x %>%
-    #   spread_draws(alpha_yr[i, j]) %>%
-    #   filter(j == "3") %>% 
-    #   rename(year = i, value = alpha_yr) %>% 
-    #   left_join(., true_pars_year_ri, by = "year") %>% 
-    #   mutate(
-    #     par = paste("alpha_yr", year, sep = "_")
-    #   ) %>%
-    #   ungroup() %>% 
-    #   select(value, true, par)
-    a_pop <- x %>%
-      spread_draws(alpha_pop[k, l]) %>%
-      filter(l == "4") %>%
-      rename(pop = k, value = alpha_pop) %>%
-      left_join(., true_pars_pop_ri, by = "pop") %>%
-      mutate(
-        par = paste("alpha_pop", pop, sep = "_")
-      ) %>%
-      ungroup() %>%
-      select(value, true, par)
-    a_bar <- x %>%
-      spread_draws(alpha_bar) %>%
-      rename(value = alpha_bar) %>%
-      mutate(
-        par = "alpha_bar"
-      ) %>%
-      left_join(., true_pars, by = "par") %>%
-      ungroup() %>%
-      select(value, true, par)
-    
-    list(#a_yr, 
-      a_pop, a_bar) %>%
-      bind_rows() %>%
-      mutate(
-        model = y
-      )
-  }
-) %>% 
-  bind_rows()
-
-ggplot(alpha_dat %>% filter(!par == "alpha_bar")) +
-  geom_boxplot(aes(x = model, y = value)) +
-  geom_point(aes(x = model, y = true), colour = "red") +
-  facet_wrap(~par) +
-  ggsidekick::theme_sleek()
 
 beta_dat <- purrr::map2(
   post_list,
-  c("m1", "m4"),
+  c("m1", "m3"),
   function(x, y) {
     x %>%
-      # spread_draws(beta_ds) %>% 
       spread_draws(beta_ds, beta_cyer, beta_fs, beta_ls, beta_d_cyer,
                    beta_dl, beta_df
                    ) %>%
@@ -486,23 +422,8 @@ ggplot() +
   facet_wrap(~model)
 
 
-m4_beta <- as_draws_df(m3_stan) %>%
-  spread_draws(beta_dl, beta_df, beta_cyer, beta_d_cyer, beta_ls, beta_fs, beta_ds) %>% 
-  # spread_draws(beta_dc, beta_cf, beta_cl, beta_cyer, beta_d_cyer, beta_ls, beta_fs,
-  #              beta_ds) %>% 
-  pivot_longer(starts_with("beta_"), names_to = "par",
-               values_to = "value")
 
-ggplot() +
-  geom_boxplot(data = m4_beta, aes(x = par, y = value)) +
-  geom_point(data = true_pars %>% filter(par %in% m4_beta$par),
-             aes(x = par, y = true), colour = "red") +
-  ggsidekick::theme_sleek()
-
-
-
-
-det_p_draws <- as_draws_df(m4_stan) %>%
+det_p_draws <- as_draws_df(m3_stan) %>%
   spread_draws(p[i]) %>% 
   rename(det_group_id = i) %>% 
   left_join(., det_key, by = "det_group_id") %>% 
@@ -518,7 +439,7 @@ ggplot() +
 
 # posterior detection
 dat$ind <- seq(1, nrow(dat), by = 1)
-mu_draws <- post_list[[2]] %>%
+mu_draws <-as_draws_df(m3_stan) %>%
   spread_draws(s_obs_rep[i]) %>%
   rename(ind = i) %>% 
   ungroup() %>% 
@@ -545,30 +466,23 @@ calc_pit <- function(y, posterior_pred) {
 }
 
 # Calculate PIT residuals
-post_rep <- as.matrix(m2_stan, pars = "s_obs_rep")
+post_rep <- as.matrix(m3_stan, pars = "s_obs_rep")
 pit_residuals <- calc_pit(y = dat$s_obs, posterior_pred = post_rep)
 qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
        main = "QQ-plot of PIT Residuals")
 abline(0, 1)
 
+
+# observed vs true sruvival posterior draws
 post_rep1 <- as.matrix(m1_stan, pars = "s_true_rep")
 length(post_rep1[post_rep1 == "0"]) / length(post_rep1)
 length(dat$s_obs[dat$s_true == "0"]) / length(dat$s_true)
 
-
-post_rep2 <- as.matrix(m2_stan, pars = "s_obs_rep")
-length(post_rep2[post_rep2 == "0"]) / length(post_rep2)
-length(dat$s_obs[dat$s_true == "0"]) / length(dat$s_true)
-
-post_rep_obs <- as.matrix(m4_stan, pars = "s_obs_rep")
+post_rep_obs <- as.matrix(m3_stan, pars = "s_obs_rep")
 length(post_rep_obs[post_rep_obs == "0"]) / length(post_rep_obs)
 length(dat$s_obs[dat$s_obs == "0"]) / length(dat$s_obs)
 
-post_rep_true <- as.matrix(m4_stan, pars = "s_true_rep")
+post_rep_true <- as.matrix(m3_stan, pars = "s_true_rep")
 length(post_rep_true[post_rep_true == "0"]) / length(post_rep_true)
 length(dat$s_true[dat$s_true == "0"]) / length(dat$s_true)
 
-
-
- length(post_rep[post_rep == "0"]) / length(post_rep)
-length(dat$s_true[dat$s_true == "0"]) / length(dat$s_true)

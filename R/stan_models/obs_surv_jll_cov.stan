@@ -75,14 +75,14 @@ model{
     sigma_yr ~ exponential( 2 );
     L_Rho_yr ~ lkj_corr_cholesky( 2 );
     Rho_sl ~ lkj_corr( 2 );
-    alpha_bar ~ normal( 0.5, 1 );
-    beta_ds ~ normal( 0.5 , 1 );
-    beta_fs ~ normal( 0.5 , 1 );
-    beta_ls ~ normal( 0.5 , 1 );
-    beta_d_cyer ~ normal( 0 , 1 );
-    beta_cyer ~ normal( -0.5 , 1 );
-    beta_df ~ normal( 0.5 , 1 );
-    beta_dl ~ normal( 0.5 , 1 );
+    alpha_bar ~ normal( 0.9, 1.5 );
+    beta_ds ~ normal( 0.25 , 0.5 );
+    beta_fs ~ normal( 0 , 0.5 );
+    beta_ls ~ normal( 0 , 0.5 );
+    beta_d_cyer ~ normal( 0 , 0.5 );
+    beta_cyer ~ normal( -0.5 , 0.5 );
+    beta_df ~ normal( 0.25 , 1 );
+    beta_dl ~ normal( 0.25 , 1 );
     to_vector( z_pop ) ~ normal( 0 , 1 );
     to_vector( z_yr ) ~ normal( 0 , 1 );
 
