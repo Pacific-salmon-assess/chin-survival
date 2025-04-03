@@ -71,49 +71,38 @@ cwt_dat <- purrr::map2(
 
 # southern US harvest not available for 2023; calculate mean values 2016-22 for
 # each fishery, add to original dataset for 23 then rescale
-cwt_dat_long <- cwt_dat %>% 
-  filter(comment == "ok") %>% 
-  mutate(indicator = paste(indicator, mark, sep = "_")) %>% 
-  pivot_longer(cols = c(starts_with("aabm"), starts_with("isbm"),
-                        starts_with("term"), stray, esc),
-               names_to = "strata", values_to = "percent_run") %>% 
-  mutate(
-    year = as.numeric(year),
-    southern_us = ifelse(
-      (grepl("falcon", strata) | grepl("_sus_", strata) | 
-         grepl("puget", strata) | grepl("wac", strata)),
-      TRUE,
-      FALSE
-    ),
-    canadian_er = ifelse(
-      (grepl("nbc", strata) | grepl("sbc", strata) | 
-         grepl("wcvi", strata) | grepl("term_can", strata)),
-      TRUE,
-      FALSE
-    ),
-    missing_from_fmi = ifelse(
-      strata %in% c("isbm_nbc_t", "isbm_nbc_n", "isbm_sbc_t", "isbm_sbc_n",
-                    "term_can_n"),
-      TRUE,
-      FALSE
-    )
-  ) 
-
+# REPLACED WITH OVERALL AVERAGE BELOW SINCE 23 data only available for few stocks
+# cwt_dat_long <- cwt_dat %>% 
+#   filter(comment == "ok") %>% 
+#   mutate(indicator = paste(indicator, mark, sep = "_")) %>% 
+#   pivot_longer(cols = c(starts_with("aabm"), starts_with("isbm"),
+#                         starts_with("term"), stray, esc),
+#                names_to = "strata", values_to = "percent_run") %>% 
+#   mutate(
+#     year = as.numeric(year),
+#     southern_us = ifelse(
+#       (grepl("falcon", strata) | grepl("_sus_", strata) | 
+#          grepl("puget", strata) | grepl("wac", strata)),
+#       TRUE,
+#       FALSE
+#     )
+#   ) 
 # calculate mean southern US exploitation rate to use since 2022 values 
 # unavailable
-mean_sus <- cwt_dat_long %>% 
-  filter(year > 2015 & year < 2023) %>% 
-  group_by(strata, indicator) %>% 
-  summarize(mean_percent_run = mean(percent_run))
+# mean_sus <- cwt_dat_long %>% 
+#   filter(year > 2015 & year < 2023) %>% 
+#   group_by(strata, indicator) %>% 
+#   summarize(mean_percent_run = mean(percent_run))
 
 
-cwt_dat_long2 <- left_join(cwt_dat_long, mean_sus, 
-                           by = c("indicator", "strata")) %>% 
-  mutate(
-    percent_run = ifelse(year == "2023" & southern_us == TRUE,
-                         mean_percent_run,
-                         percent_run)
-  ) %>% 
+cwt_dat_long2 <- cwt_dat_long %>% 
+  # left_join(cwt_dat_long, mean_sus, 
+  #                          by = c("indicator", "strata")) %>% 
+  # mutate(
+  #   percent_run = ifelse(year == "2023" & southern_us == TRUE,
+  #                        mean_percent_run,
+  #                        percent_run)
+  # ) %>% 
   group_by(
     indicator, year
   ) %>% 
@@ -148,7 +137,10 @@ ggplot(cyer_dat) +
 # export exploitation rate for focal domain
 cwt_dat_out <- cwt_dat_long2 %>% 
   filter(grepl("isbm", strata) | grepl("aabm_wcvi", strata),
-         !grepl("isbm_nbc", strata)) %>% 
+         !grepl("isbm_nbc", strata),
+         # remove incomplete 2023 years and replace with average
+         !year == "2023"
+         ) %>% 
   group_by(year, indicator) %>% 
   summarize(
     focal_er = sum(scaled_percent)
@@ -159,7 +151,18 @@ cwt_dat_out <- cwt_dat_long2 %>%
     stock = str_split(indicator, "_")  %>%
       purrr::map(., head, n = 1) %>%
       unlist() 
-  ) 
+  )
+# use recevent average as proxy for 2023
+recent_avg <- cwt_dat_out %>% 
+  filter(year > 2018 & year < 2023) %>% 
+  group_by(indicator, clip, stock,) %>% 
+  summarize(focal_er = mean(focal_er)) %>% 
+  ungroup() %>% 
+  mutate(
+    year = 2023
+  ) %>% 
+  select(colnames(cwt_dat_out))
+  
 
-saveRDS(cwt_dat_out,
+saveRDS(rbind(cwt_dat_out, recent_avg),
         here::here("data", "harvest", "cleaned_cyer_dat.rds"))
