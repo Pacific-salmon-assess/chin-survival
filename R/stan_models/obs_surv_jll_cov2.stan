@@ -7,7 +7,8 @@ data{
     int<lower=1> N_stock;           // Number of stocks
     int<lower=1> N_det_id;          // Year-stock specific id for assigning posterior det probs
     int<lower=1> N_det_id_obs;         // Number of stock-years with posterior det prob data 
-    
+    vector[3] alpha_i;              // Initial values for dirichlet
+
     array[N] int s_obs;             // Observed survival
     
     // Posterior detection probability estimates
@@ -22,7 +23,7 @@ data{
 
     vector[N] cyer_z;
     vector[N] lipid_z;
-    vector[N] size_z;
+    vector[N] fl_z;
     vector[N] day_z;
 }
 parameters{
@@ -70,7 +71,7 @@ transformed parameters{
 }
 model{
     vector[N] mu_day;
-    vector[N] mu_size;
+    vector[N] mu_fl;
     vector[N] mu_lipid;
     vector[N] logit_phi;
     vector[N] log_phi;
@@ -90,14 +91,14 @@ model{
     beta_fs ~ normal( 0 , 0.5 );
     beta_ls ~ normal( 0 , 0.5 );
     beta_is ~ normal( -0.25 , 0.5 );
-    beta_d_cyer ~ normal( 0 , 0.5 );
-    beta_cyer ~ normal( -0.25 , 0.5 );
+    beta_ds_cs ~ normal( 0 , 0.5 );
+    beta_cs ~ normal( -0.25 , 0.5 );
     beta_df ~ normal( 0.25 , 1 );
     beta_dl ~ normal( 0.25 , 1 );
     to_vector( z_stk ) ~ normal( 0 , 1 );
     to_vector( z_yr ) ~ normal( 0 , 1 );
 
-    delta ~ dirichlet(alpha);
+    delta ~ dirichlet(alpha_i);
     delta_inj = append_row(0, delta);
 
     // detection probability submodel
@@ -109,7 +110,7 @@ model{
     }
     
     for ( i in 1:N ) {
-        logit_phi[i] = alpha_s + alpha_stk[stk_n[i], 4] + alpha_yr[yr[i], 3] + beta_ds * day_z[i] + beta_fs * fl[i] + beta_ls * lipid_z[i] + beta_cs * cyer[i] + (beta_ds_cs * day_z[i] * cyer_z[i]) + beta_is * sum(delta_inj[1:inj[i]]);
+        logit_phi[i] = alpha_s + alpha_stk[stk_n[i], 4] + alpha_yr[yr[i], 3] + beta_ds * day_z[i] + beta_fs * fl_z[i] + beta_ls * lipid_z[i] + beta_cs * cyer_z[i] + (beta_ds_cs * day_z[i] * cyer_z[i]) + beta_is * sum(delta_inj[1:inj[i]]);
 
         log_phi[i] = log_inv_logit(logit_phi[i]);
 
@@ -152,7 +153,7 @@ generated quantities{
     int s_true_rep[N];
 
     for (i in 1:N) {
-      real phi = inv_logit(alpha_s + alpha_stk[stk_n[i], 4] + alpha_yr[yr[i], 3] + beta_ds * day_z[i] + beta_fs * fl_z[i] + beta_ls * lipid_z[i] + beta_cs * cyer[i] + (beta_ds_cs * day_z[i] * cyer_z[i]));
+      real phi = inv_logit(alpha_s + alpha_stk[stk_n[i], 4] + alpha_yr[yr[i], 3] + beta_ds * day_z[i] + beta_fs * fl_z[i] + beta_ls * lipid_z[i] + beta_cs * cyer_z[i] + (beta_ds_cs * day_z[i] * cyer_z[i]));
       
       real p_det = p[det_group_id[i]];
     

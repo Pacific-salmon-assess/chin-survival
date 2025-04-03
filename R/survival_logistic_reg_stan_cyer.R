@@ -4,12 +4,14 @@
 # Excludes immature tags and fish with unknown stock ID
 # Identical to survival_logistic_reg.R but excludes stocks without exploitation
 # rate estimates and models interaction between exploitation and capture date
-# Feb. 22, 2021
-# Updated July 4, 2022
+# April 3, 2025
 
 library(tidyverse)
 library(rethinking)
 library(grid)
+library(rstan)
+library(tidybayes)
+
 
 rstan::rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
@@ -23,8 +25,50 @@ det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds")) %>%
   )
 
 
+# import posterior estimates of detection probability based on CJS models
+# add high detection probability for WCVI in 2021 and 2022 because a) all 
+# tagged fish Robertson Creek and b) 100% of in-river detections observed on
+# multiple arrays
+post_p_wcvi <- data.frame(
+  stock_group = "WCVI",
+  year = c("2021", "2022"),
+  mean_logit_p = 5.64,
+  sd_logit_p = 1.09
+)
+post_p <- readRDS(here::here("data", "posterior_p.rds")) %>% 
+  rbind(., post_p_wcvi) %>% 
+  mutate(det_group_id = paste(as.character(stock_group), year, sep = "_")) %>% 
+  select(-c(stock_group, year))
+key <- det_dat1 %>% 
+  mutate(
+    det_group_id = ifelse(
+      grepl("Fraser", stock_group), "Fraser", as.character(stock_group)
+    ) %>% 
+      paste(., year, sep = "_")
+  ) %>% 
+  select(stock_group, year, det_group_id) %>% 
+  distinct() %>% 
+  arrange(stock_group, year, det_group_id) %>% 
+  left_join(., post_p, by = "det_group_id") %>% 
+  #replace NAs with placeholders
+  mutate(
+    post = ifelse(is.na(mean_logit_p), 0, 1),
+    mean_logit_p = ifelse(is.na(mean_logit_p), 0.001, mean_logit_p),
+    sd_logit_p = ifelse(is.na(sd_logit_p), 1, sd_logit_p)
+  ) %>% 
+  # sort so that unobserved stocks follow observed
+  arrange(desc(post), stock_group, year, det_group_id) %>% 
+  mutate(
+    det_group_id_n = seq(1, nrow(.), by = 1)
+  )
+
 # scale continuous covariates
 det_dat <- det_dat1 %>% 
+  left_join(
+    .,
+    key %>% select(stock_group, year, det_group_id_n), 
+    by = c("stock_group", "year")
+  ) %>% 
   mutate(
     lipid_z = scale(lipid) %>% as.numeric(),
     fl_z = scale(fl) %>% as.numeric(),
@@ -32,7 +76,6 @@ det_dat <- det_dat1 %>%
     log_wt_z = scale(log(wt)) %>% as.numeric(),
     day_z = scale(year_day) %>% as.numeric(),
     cyer_z = scale(focal_er) %>% as.numeric(),
-    terminal_p = as.factor(terminal_p),
     year = as.factor(year),
     stock_group = factor(
       stock_group, 
@@ -46,87 +89,56 @@ det_dat <- det_dat1 %>%
     term_p = as.integer(terminal_p),
     yr = as.integer(year),
     stk = as.integer(stock_group)
-  )
+  ) 
 
 
 # FIT LOGISTIC REG MODELS ------------------------------------------------------
 
 
 dat_list <- list(
-  surv = as.integer(det_dat$term_det),
+  N = nrow(det_dat),
+  N_year = length(unique(det_dat$year)),
+  N_stock = length(unique(det_dat$stk)),
+  N_det_id = length(unique(key$det_group_id_n)),
+  N_det_id_obs = sum(key$post),
+  
+  s_obs = as.integer(det_dat$term_det),
+  
+  logit_det_sd = key$sd_logit_p,
+  logit_det_mu = key$mean_logit_p,
+  use_posterior = key$post,
+  det_group_id = det_dat$det_group_id_n,
+  
+  yr = det_dat$yr,
+  stk_n = det_dat$stk,
+  inj = det_dat$inj,
   fl_z = det_dat$fl_z,
   lipid_z = det_dat$lipid_z,
   day_z = det_dat$day_z,
   cyer_z = det_dat$cyer_z,
-  inj = det_dat$inj,
-  term_p = det_dat$term_p,
-  yr = det_dat$yr,
-  stk = det_dat$stk,
-  alpha = rep(2, length(unique(det_dat$inj)) - 1)
+  alpha_i = rep(2, length(unique(det_dat$inj)) - 1)
 )
 
 
-m4 <- ulam(
-  alist(
-    # stock-specific sampling dates
-    day_z ~ normal(mu_day, sigma_day),
-    mu_day <- beta_stk[stk, 4],
-    # unobserved latent condition
-    c(fl_z, lipid_z) ~ multi_normal(c(mu_fl, mu_lipid), Rho, Sigma),
-    mu_fl <- alpha_fl + beta_df * day_z + beta_stk[stk, 1] + beta_yr[yr, 1] ,
-    mu_lipid <- alpha_lipid + beta_dl * day_z + beta_yr[yr, 2] +
-      beta_stk[stk, 2],
-    # survival
-    surv ~ dbinom(1 , p) ,
-    logit(p) <- alpha_s[term_p] +
-      beta_yr[yr, 3] +
-      beta_stk[stk, 3] +
-      beta_ds * day_z +
-      beta_fs * fl_z +
-      beta_ls * lipid_z +
-      beta_cs * cyer_z + 
-      (beta_ds_cs * day_z * cyer_z) + 
-      beta_is * sum(delta_inj[1:inj])
-    ,
-    # adaptive priors
-    transpars> matrix[yr, 3]:beta_yr <-
-      compose_noncentered(sigma_yr , L_Rho_yr , z_yr),
-    matrix[3, yr]:z_yr ~ normal(0, 0.5),
-    transpars> matrix[stk, 4]:beta_stk <-
-      compose_noncentered(sigma_stk , L_Rho_stk , z_stk),
-    matrix[4, stk]:z_stk ~ normal(0, 0.5),
-    # fixed priors
-    c(alpha_fl, alpha_lipid) ~ normal(0, 0.5),
-    c(beta_df, beta_dl) ~ normal(0.2, 0.5),
-    Rho ~ lkj_corr(2),
-    Sigma ~ exponential(1),
-    sigma_day ~ exponential(1),
+# mod1 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_cov2.stan"))
+# m1_stan <- sampling(mod1, data = dat_list, 
+#                     chains = 4, iter = 2000, warmup = 1000,
+#                     control = list(adapt_delta = 0.96))
+# saveRDS(m1_stan, 
+#         here::here("data", "model_outputs", "hier_binomial_cyer_stan.rds"))
 
-    cholesky_factor_corr[3]:L_Rho_yr ~ lkj_corr_cholesky(2),
-    vector[3]:sigma_yr ~ exponential(1),
-    cholesky_factor_corr[4]:L_Rho_stk ~ lkj_corr_cholesky(2),
-    vector[4]:sigma_stk ~ exponential(1),
+m1_stan <- readRDS(
+  here::here("data", "model_outputs", "hier_binomial_cyer_stan.rds"))
 
-    # strong rationale for eg negative effect of exploitation and pos effect of 
-    # interaction; assign weakly informative priors
-    alpha_s[term_p] ~ dnorm(0, 1),
-    c(beta_ds, beta_fs, beta_ls, beta_ds_cs) ~ normal(0.2, 0.5),
-    c(beta_is, beta_cs) ~ normal(-0.2, 0.5),
-    
-    # constraints on ordinal effects of injury
-    vector[4]: delta_inj <<- append_row(0, delta),
-    simplex[3]: delta ~ dirichlet(alpha),
 
-    # compute ordinary correlation matrixes from Cholesky factors
-    gq> matrix[3, 3]:Rho_yr <<- Chol_to_Corr(L_Rho_yr),
-    gq> matrix[4, 4]:Rho_stk <<- Chol_to_Corr(L_Rho_stk)
-  ),
-  data=dat_list, chains = 4, cores = 4, iter = 2000,
-  control = list(adapt_delta = 0.96)
-)
+# check problematic params
+summary_df <- summary(m1_stan)$summary %>% 
+  as.data.frame()
+summary_df$parameter <- rownames(summary_df)
 
-saveRDS(m4, here::here("data", "model_outputs", "hier_binomial_cyer.rds"))
-m4 <- readRDS(here::here("data", "model_outputs", "hier_binomial_cyer.rds"))
+# Filter based on Rhat and n_eff
+subset(summary_df, Rhat > 1.05 | n_eff < 1000)
+
 
 
 # PRIOR PREDICTIONS ------------------------------------------------------------
@@ -176,41 +188,9 @@ bind_rows(preds) %>%
 
 # POSTERIOR PREDICTIONS --------------------------------------------------------
 
-# post <- extract.samples(m4)
-# saveRDS(post, here::here("data", "model_outputs", "hier_binomial_cyer_samps.rds"))
-post <- readRDS(here::here("data", "model_outputs", "hier_binomial_cyer_samps.rds"))
-
-
-post_pred_foo <- function(dat_in) {
-  delta_inj_eff <- cbind(0, post$delta)
-  #as matrix necessary for cases where only first column selected
-  delta_inj2 <- apply(as.matrix(delta_inj_eff[ , 1:dat_in$inj]), 1, sum)
-
-  logodds <- with(
-    post,
-    alpha_s[ , dat_in$term_p] +
-      beta_yr[ , dat_in$yr, 3] +
-      beta_stk[ , dat_in$stk, 3] +
-      beta_ds * dat_in$day_z +
-      beta_fs * dat_in$fl_z +
-      beta_ls * dat_in$lipid_z +
-      beta_cs * dat_in$cyer_z + 
-      (beta_ds_cs * dat_in$day_z * dat_in$cyer_z) +
-      beta_is * delta_inj2
-  )
-  return( inv_logit(logodds) )
-}
-
-
-sim_mat <- matrix(NA, nrow = nrow(det_dat), ncol = dim(post[[1]])[[1]])
-for (i in 1:nrow(det_dat)) {
-  sim_mat[i , ] <- post_pred_foo(det_dat[i, ]) 
-}
-sim_mat_binom <- apply(sim_mat, c(1, 2), function (p) rbinom(1, 1, p))
 
 
 # Define a function to calculate PIT residuals
-# TODO: CORRECT BY CALCULATING THE AVERAGE AMONG ALL
 calc_pit <- function(y, posterior_pred) {
   # Get the proportion of posterior samples that are less than or equal to the observed value
   n_obs <- length(y)
@@ -229,8 +209,14 @@ calc_pit <- function(y, posterior_pred) {
   return(pit_residuals)
 }
 
+
+
+post <- as_draws_matrix(m1_stan)  # or `as_draws_df`, or use `post::as_draws()`
+s_obs_rep_cols <- grep("^s_obs_rep\\[", colnames(post), value = TRUE)
+s_obs_rep_samples <- post[, s_obs_rep_cols]
+
 # Calculate PIT residuals
-pit_residuals <- calc_pit(y = det_dat$term_det, posterior_pred = sim_mat_binom)
+pit_residuals <- calc_pit(y = det_dat$term_det, posterior_pred = s_obs_rep_samples)
 qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
        main = "QQ-plot of PIT Residuals")
 abline(0, 1)
@@ -239,18 +225,39 @@ abline(0, 1)
 png(here::here("figs", "binomial-glm-cyer", "qq_plot.png"), units = "in", 
     res = 250, height = 3.5, width = 3.5)
 qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
-       main = "QQ-plot of PIT Residuals")
+       xlab = "Theoretical Quantiles",
+       ylab = "Sample Quantiles")
 abline(0, 1)
 dev.off()
 
 
+# DETECTION PROBABILITY --------------------------------------------------------
+
+det_p_draws <- as_draws_df(m1_stan) %>%
+  spread_draws(p[i]) %>% 
+  rename(det_group_id_n = i) %>% 
+  left_join(., key, by = "det_group_id_n") %>% 
+  ungroup()
+
+terminal_det_p <- ggplot() +
+  geom_boxplot(data = det_p_draws, aes(x = as.factor(year), y = p)) +
+  geom_point(data = key %>% filter(post == "1"),
+             aes(x = as.factor(year), y = inv_logit(mean_logit_p)), 
+             colour = "red") +
+  labs(y = "Terminal Detection Probability") +
+  facet_wrap(~stock_group) +
+  ggsidekick::theme_sleek() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
 # POSTERIOR INFERENCE  ---------------------------------------------------------
 
-## Calendar year exploitation rate (all other plots are shared w/ 
-# survival_logistic_reg.R)
+post <- extract.samples(m1_stan)
 
-yday_seq <- c(120, 181, 243) 
-day_label <- c("May 1", "July 1", "Sep 1")
+yday_seq <- c(120, 166, 213) 
+day_label <- c("May 1", "June 15", "Aug 1")
 day_seq <- (yday_seq - mean(det_dat$year_day)) / sd(det_dat$year_day)
 cyer_seq <- seq(-1.5, 4.5, length = 40)
 preds <- vector(mode = "list", length = length(day_seq))
@@ -260,7 +267,7 @@ for(i in seq_along(day_seq)) {
     cyer_seq, 
     function (x) {
       inv_logit(
-        post$alpha_s[ , 2] + post$beta_ds * day_seq[i] +
+       post$alpha_s + post$beta_ds * day_seq[i] +
           post$beta_cs * x + 
           (post$beta_ds_cs * day_seq[i] * x)
       )
@@ -282,7 +289,7 @@ for(i in seq_along(day_seq)) {
 
 pred_day_cyer <- bind_rows(preds) %>% 
   mutate(
-    day = factor(day, levels = c("May 1", "July 1", "Sep 1"))
+    day = factor(day, levels = c("May 1", "June 15", "Aug 1"))
   ) %>% 
   group_by(day, cyer) %>% 
   summarize(
@@ -299,7 +306,7 @@ pred_day_cyer <- bind_rows(preds) %>%
   geom_ribbon(
     aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
   ) +
-  labs(y = "Survival Rate Index", x = "Exploitation Rate Index") +
+  labs(y = "Predicted Survival Rate", x = "Exploitation Rate Index") +
   ggsidekick::theme_sleek() +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(limits = c(0, 1.0), expand = c(0, 0)) +
@@ -313,7 +320,7 @@ pred_day_cyer <- bind_rows(preds) %>%
 
 # sigma_stock 
 sigma_stk_mat <- post$sigma_stk 
-colnames(sigma_stk_mat) <- c("fl", "lipid", "survival", "date")
+colnames(sigma_stk_mat) <- c("date", "fl", "lipid", "survival")
 sigma_stk <- sigma_stk_mat %>% 
   as.data.frame() %>%
   pivot_longer(
@@ -362,8 +369,8 @@ sigma_stk_pt <- rbind(sigma_yr, sigma_stk) %>%
 # stock and year rho (correlations among random intercepts)
 mean_rho_stock <- colMeans(post$Rho_stk)
 mean_rho_yr <- colMeans(post$Rho_yr)
-colnames(mean_rho_stock) <- rownames(mean_rho_stock) <- c("fl", "lipid", "surv",
-                                                          "date")
+colnames(mean_rho_stock) <- rownames(mean_rho_stock) <- c("date", "fl", "lipid",
+                                                          "surv")
 colnames(mean_rho_yr) <- rownames(mean_rho_yr) <- c("fl", "lipid", "surv")
 
 cor_plot_list <- purrr::map2(
@@ -416,7 +423,7 @@ cor_plot_list <- purrr::map2(
 ## rho representing correlation between lipid and fork length
 # symmetrical matrix so extract single values
 rho_hist <- ggplot() +
-  geom_histogram(aes(x = post$Rho[ , 2, 1]), bins = 50, fill = "#1b9e77") +
+  geom_histogram(aes(x = post$Rho_sl[ , 2, 1]), bins = 50, fill = "#1b9e77") +
   geom_vline(aes(xintercept = 0), lty = 2 , colour = "black", linewidth = 1.25) +
   ggsidekick::theme_sleek() +
   theme(
@@ -427,11 +434,11 @@ rho_hist <- ggplot() +
 samp_date_seq <- seq(from = -2.9, to = 2.7, length.out = 30)
 
 pred_mu_fl <- purrr::map(
-  samp_date_seq, ~ post$alpha_fl + post$beta_df * .x
+  samp_date_seq, ~ post$alpha_f + post$beta_df * .x
 ) %>% 
   do.call(cbind, .) 
 pred_mu_lipid <- purrr::map(
-  samp_date_seq, ~ post$alpha_lipid + post$beta_dl * .x
+  samp_date_seq, ~ post$alpha_l + post$beta_dl * .x
 ) %>% 
   do.call(cbind, .) 
 colnames(pred_mu_fl) <- colnames(pred_mu_lipid) <- samp_date_seq
@@ -487,8 +494,8 @@ pred_mu_ribbon <- ggplot(pred_mu, aes(x = year_day, y = med)) +
 # sampling day, including indirect effects on size/lipid
 # generate posterior covariance matrix for each draw, combine with pred mu to 
 # sample from mvrnorm, then iterate over exp var
-sigma <- post$Sigma
-rho <- post$Rho
+sigma <- post$Sigma_fl
+rho <- post$Rho_sl
 S <- vector(mode = "list", length = nrow(sigma))
 sim_surv <- sim_surv_d <- sim_fl <- sim_lipid <- matrix(
   NA, 
@@ -508,14 +515,14 @@ for (j in seq_along(samp_date_seq)) {
   # excludes hierarchical intercept; assumes high terminal det prob and low
   # injury and mean harvest
   sim_eta <- as.numeric(
-    post$alpha_s[ , 2] + 
+    post$alpha_s + 
       post$beta_ds * samp_date_seq[j] +
       post$beta_fs * sim_fl[ , j] +
       post$beta_ls * sim_lipid[ , j]
   )
   # as above but sets fl and lipid to zero (i.e. removes them)
   sim_eta_direct <- as.numeric(
-    post$alpha_s[ , 2] + 
+    post$alpha_s + 
       post$beta_ds * samp_date_seq[j]
   )
   sim_surv[ , j] <- boot::inv.logit(sim_eta) # Probability of survival
@@ -568,7 +575,7 @@ pred_day_ribbon <- rbind(pred_day_surv_total, pred_day_surv_direct) %>%
     aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
   ) +
   scale_linetype_manual(values = day_effect_pal) +
-  labs(y = "Predicted Survival Rate Index", x = "Tagging Date") +
+  labs(y = "Predicted Survival Rate", x = "Tagging Date") +
   ggsidekick::theme_sleek() +
   scale_x_continuous(breaks = c(135, 182, 226), 
                      labels = c("May 15", "Jul 1", "Aug 15"), 
@@ -581,11 +588,11 @@ pred_day_ribbon <- rbind(pred_day_surv_total, pred_day_surv_direct) %>%
 
 
 ## direct effects of lipid content
-lipid_seq <- seq(-3, 4, length = 40)
+lipid_seq <- seq(-3, 4.2, length = 40)
 pred_l <- sapply(
   lipid_seq, 
   function (x) {
-    inv_logit(post$alpha_s[ , 2] + post$beta_ls * x)
+    inv_logit(post$alpha_s + post$beta_ls * x)
   }
 )
 pred_lipid_ribbon <- pred_l %>% 
@@ -613,9 +620,9 @@ pred_lipid_ribbon <- pred_l %>%
   geom_ribbon(
     aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
   ) +
-  labs(y = "Survival Rate Index", x = "Lipid Content") +
+  labs(y = "Predicted Survival Rate", x = "Lipid Content (% wet weight)") +
   ggsidekick::theme_sleek() +
-  scale_x_continuous(expand = c(0, 0)) +
+  scale_x_continuous(expand = c(0, 0), breaks = c(5, 10, 15)) +
   scale_y_continuous(limits = c(ymin_val, 1.0), expand = c(0, 0)) +
   theme(
     axis.title.y = element_blank()
@@ -623,11 +630,11 @@ pred_lipid_ribbon <- pred_l %>%
 
 
 ## direct effects of fork length
-fl_seq <- seq(-2.2, 3.3, length = 40)
+fl_seq <- seq(-2, 3.4, length = 40)
 pred_fl <- sapply(
   fl_seq, 
   function (x) {
-    inv_logit(post$alpha_s[ , 2] + post$beta_fs * x)
+    inv_logit(post$alpha_s + post$beta_fs * x)
   }
 )
 pred_fl_ribbon <- pred_fl %>% 
@@ -655,7 +662,7 @@ pred_fl_ribbon <- pred_fl %>%
   geom_ribbon(
     aes(ymin = lo, ymax = up), fill = "#7570b3", alpha = 0.3
   ) +
-  labs(y = "Survival Rate Index", x = "Fork Length") +
+  labs(y = "Predicted Survival Rate", x = "Fork Length (cm)") +
   ggsidekick::theme_sleek() +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(limits = c(ymin_val, 1.0), expand = c(0, 0)) +
@@ -684,7 +691,7 @@ for (i in 1:(ncol(post$delta) + 1)) {
       delta_inj <- apply(as.matrix(post$delta[ , 1:(i - 1)]), 1, sum) 
     }
     pred_inj[ , i] <- inv_logit(
-      post$alpha_s[ , 2] + post$beta_is * delta_inj
+      post$alpha_s + post$beta_is * delta_inj
       )
   }
 
@@ -707,7 +714,7 @@ injury_point <- pred_injury_dat %>%
   ggplot() +
   geom_pointrange(aes(x = score, y = med, ymin = lo, ymax = up),
                   shape = 21, fill = "#7570b3") +
-  labs(x = "Injury Score", y = "Survival Rate Index") +
+  labs(x = "Injury Score", y = "Predicted Survival Rate") +
   ggsidekick::theme_sleek() 
 
 
@@ -719,35 +726,44 @@ diff_hist <- data.frame(
                  bins = 50, fill = "#7570b3") +
   geom_vline(aes(xintercept = 0), lty = 2 , colour = "black", linewidth = 1) +
   ggsidekick::theme_sleek() +
-  labs(x = "Difference in Survival Rate Index\nBetween Max/Min Scores") +
+  labs(x = "Difference in Survival Rate\nBetween Min/Max Scores") +
   theme(
     axis.title.y = element_blank()
   ) 
 
 
 # stock, including indirect effects on date/size/lipid
-# TODO: add alternative with stock-specific CYER
 # mean date by stock
-pred_mu_date <- post$beta_stk[ , , 4]
+pred_mu_date <- post$alpha_stk[ , , 1]
 
 stk_seq <- unique(dat_list$stk) %>% sort()
 
-sigma <- post$Sigma
-rho <- post$Rho
+# calculate mean cyer by stk
+cyer_seq <- det_dat %>% 
+  arrange(stk) %>% 
+  group_by(stk) %>% 
+  summarize(
+    mean_cyer = mean(cyer_z)
+  ) %>% 
+  pull(mean_cyer)
+
+
+sigma <- post$Sigma_fl
+rho <- post$Rho_sl
 S <- vector(mode = "list", length = nrow(sigma))
 pred_mu_fl <- pred_mu_lipid <- matrix(
   NA, nrow = nrow(pred_mu_date), ncol = ncol(pred_mu_date)
 )
-sim_surv <- sim_surv_d <- sim_fl <- sim_lipid <- matrix(
+sim_surv <- sim_surv_d <- sim_surv_cyer <- sim_fl <- sim_lipid <- matrix(
   NA, 
   nrow = nrow(sigma), 
   ncol = length(stk_seq)
 )
 for (j in seq_along(stk_seq)) {
-  pred_mu_fl[ , j] <- post$alpha_fl + post$beta_df * pred_mu_date[ , j] + 
-    post$beta_stk[ , j, 1]
-  pred_mu_lipid[ , j] <- post$alpha_lipid + post$beta_dl * pred_mu_date[ , j] + 
-    post$beta_stk[ , j, 2]
+  pred_mu_fl[ , j] <- post$alpha_f + post$beta_df * pred_mu_date[ , j] + 
+    post$alpha_stk[ , j, 1]
+  pred_mu_lipid[ , j] <- post$alpha_l + post$beta_dl * pred_mu_date[ , j] + 
+    post$alpha_stk[ , j, 2]
   
   for (i in 1:nrow(sigma)) {
     S <- diag(sigma[i,]) %*% rho[i,,] %*% diag(sigma[i,])
@@ -761,18 +777,30 @@ for (j in seq_along(stk_seq)) {
   # excludes hierarchical intercept; assumes high terminal det prob and low
   # injury
   sim_eta <- as.numeric(
-    post$alpha_s[ , 2] + 
+    post$alpha_s + 
       post$beta_ds * pred_mu_date[ , j] +
       post$beta_fs * sim_fl[ , j] +
       post$beta_ls * sim_lipid[ , j] +
-      post$beta_stk[ , j, 3]
+      post$alpha_stk[ , j, 4]
   )
   # as above but sets fl and lipid to zero (i.e. removes them)
   sim_eta_direct <- as.numeric(
-    post$alpha_s[ , 2] + post$beta_stk[ , j, 3]
+    post$alpha_s + post$alpha_stk[ , j, 4] 
   )
-  sim_surv[ , j] <- boot::inv.logit(sim_eta) # Probability of survival
-  sim_surv_d[ , j] <- boot::inv.logit(sim_eta_direct) # Probability of survival
+  # as above but includes all variables including cyer
+  sim_eta_cyer <- as.numeric(
+    post$alpha_s + 
+      post$beta_ds * pred_mu_date[ , j] +
+      post$beta_fs * sim_fl[ , j] +
+      post$beta_ls * sim_lipid[ , j] +
+      post$alpha_stk[ , j, 4] +
+      post$beta_cs * cyer_seq[j] + 
+      (post$beta_ds_cs * pred_mu_date[ , j] * cyer_seq[j])
+  )
+  
+  sim_surv[ , j] <- boot::inv.logit(sim_eta) 
+  sim_surv_d[ , j] <- boot::inv.logit(sim_eta_direct) 
+  sim_surv_cyer[ , j] <- boot::inv.logit(sim_eta_cyer) 
 }
 
 stk_key <- det_dat %>% 
@@ -798,11 +826,22 @@ pred_stk_surv_direct <- sim_surv_d %>%
   mutate(
     effect = "direct"
   )
+pred_stk_surv_cyer <- sim_surv_cyer %>% 
+  as.data.frame() %>% 
+  set_names(stk_seq) %>% 
+  pivot_longer(
+    cols = everything(), names_to = "stk", values_to = "est"
+  ) %>% 
+  mutate(
+    effect = "total + ER"
+  )
 
-alpha_pal <- c(0.2, 1)
-names(alpha_pal) <- c("direct", "total")
+alpha_pal <- c("white", "#7570b3", "black")
+names(alpha_pal) <- c("direct", "total", "total + ER")
 
-pred_stk_comb <- rbind(pred_stk_surv_total, pred_stk_surv_direct) %>% 
+pred_stk_comb <- rbind(
+  pred_stk_surv_total, pred_stk_surv_direct, pred_stk_surv_cyer
+  ) %>% 
   group_by(stk, effect) %>%
   summarize(
     med = median(est),
@@ -816,11 +855,11 @@ pred_stk_comb <- rbind(pred_stk_surv_total, pred_stk_surv_direct) %>%
   ) %>% 
   ggplot() +
   geom_pointrange(aes(x = stock_group, y = med, ymin = lo, ymax = up, 
-                      alpha = effect),
+                      fill = effect),
                   position = position_dodge(width = 0.4),
-                  shape = 21, fill = "#7570b3") +
-  scale_alpha_manual(values = alpha_pal, name = "Effect") +
-  labs(y = "Survival Rate Index") +
+                  shape = 21) +
+  scale_fill_manual(values = alpha_pal, name = "Effect") +
+  labs(y = "Predicted Survival Rate") +
   ggsidekick::theme_sleek() +
   theme(
     axis.title.x = element_blank(),
@@ -829,6 +868,11 @@ pred_stk_comb <- rbind(pred_stk_surv_total, pred_stk_surv_direct) %>%
 
 
 ## export figs
+png(here::here("figs", "binomial-glm-cyer", "det_prob.png"), units = "in", 
+    res = 250, height = 4.5, width = 6.5)
+terminal_det_p
+dev.off()
+
 png(here::here("figs", "binomial-glm-cyer", "surv_cyer.png"), units = "in", 
     res = 250, height = 6.5, width = 3.5)
 pred_day_cyer
@@ -865,7 +909,7 @@ gridExtra::grid.arrange(
   gridExtra::arrangeGrob(
     pp, 
     left = textGrob(
-      "Survival Rate Index", rot = 90, 
+      "Survival Rate", rot = 90, 
       gp = gpar(fontsize = 11))
   )
 )
