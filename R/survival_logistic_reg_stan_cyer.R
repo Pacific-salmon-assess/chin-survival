@@ -62,6 +62,7 @@ key <- det_dat1 %>%
     det_group_id_n = seq(1, nrow(.), by = 1)
   )
 
+
 # scale continuous covariates
 det_dat <- det_dat1 %>% 
   left_join(
