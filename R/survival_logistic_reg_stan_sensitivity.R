@@ -182,8 +182,9 @@ post_list <- readRDS(
   here::here("data", "model_outputs", "hier_binomial_sens_list_samps.rds")
 )
 original_post <- readRDS(
-  here::here("data", "model_outputs", "hier_binomial_cyer_samps.rds")
-  )
+  here::here("data", "model_outputs", "hier_binomial_cyer_stan.rds")
+  ) %>% 
+  extract.samples()
 
 post_list_full <- list(original_post, post_list[[1]], post_list[[2]])
 
@@ -200,27 +201,36 @@ for(i in seq_along(par_list)) {
     par_names,
     function (x) {
       dum <- post_list_full[[i]][[x]]
-      # for matrix parameters pivot longer
-      if (ncol(dum) > 1) {
-        colnames(dum) <- paste(x, seq(1, ncol(dum), by = 1), sep = "_")
-        out <- dum %>% 
-          as.data.frame() %>%
-          pivot_longer(
-            cols = everything(), names_to = "parameter", values_to = "est"
-          ) %>% 
-          group_by(parameter) %>% 
-          summarize(
-            med = median(est),
-            lo = rethinking::HPDI(est, prob = 0.9)[1],
-            up = rethinking::HPDI(est, prob = 0.9)[2]
-          ) 
-      } else {
-        data.frame(
+      dims <- dim(dum)
+      ndims <- if (is.null(dims)) 1 else length(dims)
+      
+      if (ndims == 1) {
+        # Scalar or vector
+        out <- data.frame(
           parameter = x,
           med = median(dum),
           lo = rethinking::HPDI(dum, prob = 0.9)[1],
           up = rethinking::HPDI(dum, prob = 0.9)[2]
         )
+        
+      } else if (ndims == 2) {
+        # Matrix: iterations × parameter columns
+        colnames(dum) <- paste(x, seq_len(ncol(dum)), sep = "_")
+        out <- as.data.frame(dum) %>%
+          pivot_longer(
+            cols = everything(), names_to = "parameter", values_to = "est"
+          ) %>%
+          group_by(parameter) %>%
+          summarize(
+            med = median(est),
+            lo = rethinking::HPDI(est, prob = 0.9)[1],
+            up = rethinking::HPDI(est, prob = 0.9)[2],
+            .groups = "drop"
+          )
+        
+      } else {
+        warning(paste("Unsupported shape for parameter:", x))
+        out <- data.frame(parameter = x, med = NA, lo = NA, up = NA)
       }
     }
   ) %>% 
@@ -230,6 +240,7 @@ for(i in seq_along(par_list)) {
     )
 }
 
+
 all_pars <- par_list %>% 
   bind_rows() %>% 
   mutate(
@@ -237,33 +248,17 @@ all_pars <- par_list %>%
                      levels =  c("standard", "maturity", "tag effect")),
     parameter = factor(
       parameter, 
-      levels = c("alpha_s_1", "alpha_s_2", "beta_ds",  "beta_fs", "beta_ls",
+      levels = c("alpha_s", "beta_ds",  "beta_fs", "beta_ls",
                  "beta_cs", "beta_ds_cs", "beta_is"),
-      labels = c("Low Det. Prob.", "High Det. Prob.", "Date", "Fork Length", 
+      labels = c("Mean Survival", "Date", "Fork Length", 
                  "Lipid", "Exploitation", "Date:Exploitation", "Injury")
       )
   ) 
 
 
-
-png(here::here("figs", "sens", "int_ests.png"), 
-    height = 3, width = 4.5, units = "in", res = 200)
-ggplot(all_pars %>% filter(grepl("Prob.", parameter))) +
-  geom_pointrange(
-    aes(x = dataset, y = med, ymin = lo, ymax = up, fill = dataset),
-    shape = 21
-  ) +
-  facet_wrap(~parameter, ncol = 2, scales = "free") +
-  labs(x = "Dataset", y = "Intercept Estimate") +
-  ggsidekick::theme_sleek() +
-  theme(legend.position = "top",
-        legend.title = element_blank())
-dev.off()
-
-
-png(here::here("figs", "sens", "slope_ests.png"), 
+png(here::here("figs", "sens", "jll_par_ests.png"), 
     height = 7, width = 4.5, units = "in", res = 200)
-ggplot(all_pars %>% filter(!grepl("Prob.", parameter))) +
+ggplot(all_pars) +
   geom_pointrange(
     aes(x = dataset, y = med, ymin = lo, ymax = up, fill = dataset),
     shape = 21

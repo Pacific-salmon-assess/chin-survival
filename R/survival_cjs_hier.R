@@ -588,9 +588,9 @@ dev.off()
 # extract phi matrix and swap last col with beta estimates (i.e. combined p and 
 # phi) except for fix p models 
 # stocks
-phi_mat <- map(
+phi_mat <- purrr::map(
   dat_tbl_trim$cjs_hier, 
-  function(x) {
+  function (x) {
   phi_adj <- extract(x)[["phi_yr"]]
   # replace array corresponding to last stage-specific survival est, w/ beta
   phi_adj[ , , dim(phi_adj)[3]] <- extract(x)[["beta_yr"]]
@@ -649,7 +649,7 @@ dat_tbl_trim$cum_survival <- cum_surv_list
 
 
 ## calculate average among years
-phi_mat_mean <- map(
+phi_mat_mean <- purrr::map(
   dat_tbl_trim$cjs_hier,
   function(x) {
     alpha <- extract(x)[["alpha_phi"]]
@@ -827,10 +827,6 @@ pdf(here::here("figs", "cjs", "estimated_sigma_beta.pdf"),
 sigma_plot_list
 dev.off()
 
-pdf(here::here("figs", "cjs", "sigma_year_posterior_prior_comp.pdf"), 
-    height = 4.5, width = 6)
-sigma_plot_list2
-dev.off()
 
 
 # posterior estimates of det probability for Upper Col
@@ -1187,7 +1183,7 @@ term_surv_dat_scaled <- term_surv_dat %>%
 
 
 p_dist <- ggplot(term_surv_dat_scaled) +
-  geom_pointrange(aes(x = stock_group, y = med, ymin = lo, ymax = up)) +
+  geom_pointrange(aes(x = stock_group, y = median, ymin = low, ymax = up)) +
   labs(y = "Cumulative Terminal\nSurvival Rate per 100 km") +
   ggsidekick::theme_sleek() +
   theme(axis.title.x = element_blank())

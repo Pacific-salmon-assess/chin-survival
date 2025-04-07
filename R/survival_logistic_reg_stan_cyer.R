@@ -253,12 +253,13 @@ terminal_det_p <- ggplot() +
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
 
+
 # POSTERIOR INFERENCE  ---------------------------------------------------------
 
 post <- extract.samples(m1_stan)
 
-yday_seq <- c(120, 166, 213) 
-day_label <- c("May 1", "June 15", "Aug 1")
+yday_seq <- c(135, 182, 227) 
+day_label <- c("May 15", "Jul 1", "Aug 15")
 day_seq <- (yday_seq - mean(det_dat$year_day)) / sd(det_dat$year_day)
 cyer_seq <- seq(-1.5, 4.5, length = 40)
 preds <- vector(mode = "list", length = length(day_seq))
@@ -290,7 +291,7 @@ for(i in seq_along(day_seq)) {
 
 pred_day_cyer <- bind_rows(preds) %>% 
   mutate(
-    day = factor(day, levels = c("May 1", "June 15", "Aug 1"))
+    day = factor(day, levels = c("May 15", "Jul 1", "Aug 15"))
   ) %>% 
   group_by(day, cyer) %>% 
   summarize(
@@ -733,7 +734,8 @@ diff_hist <- data.frame(
   ) 
 
 
-# stock, including indirect effects on date/size/lipid
+# stock, including indirect effects on date/size/lipid, and indirect exploitation
+# rate 
 # mean date by stock
 pred_mu_date <- post$alpha_stk[ , , 1]
 
@@ -840,7 +842,7 @@ pred_stk_surv_cyer <- sim_surv_cyer %>%
 alpha_pal <- c("white", "#7570b3", "black")
 names(alpha_pal) <- c("direct", "total", "total + ER")
 
-pred_stk_comb <- rbind(
+pred_stk_dat <- rbind(
   pred_stk_surv_total, pred_stk_surv_direct, pred_stk_surv_cyer
   ) %>% 
   group_by(stk, effect) %>%
@@ -853,8 +855,13 @@ pred_stk_comb <- rbind(
   mutate(
     stock_group = fct_recode(stock_group, "Fraser Sum. 0.3" = "Fraser Sum. 4.1",
                              "Fraser Spr. 1.2" = "Fraser Spr. Yr.")
-  ) %>% 
-  ggplot() +
+  )
+
+pred_stk_dat %>% 
+  group_by(effect) %>% 
+  summarize(sd(med) / mean(med))
+
+pred_stk_comb <- ggplot(pred_stk_dat) +
   geom_pointrange(aes(x = stock_group, y = med, ymin = lo, ymax = up, 
                       fill = effect),
                   position = position_dodge(width = 0.4),
@@ -875,7 +882,7 @@ terminal_det_p
 dev.off()
 
 png(here::here("figs", "binomial-glm-cyer", "surv_cyer.png"), units = "in", 
-    res = 250, height = 6.5, width = 3.5)
+    res = 250, height = 5.25, width = 2.5)
 pred_day_cyer
 dev.off()
 
@@ -905,12 +912,12 @@ pred_mu_ribbon
 dev.off()
 
 png(here::here("figs", "binomial-glm-cyer", "surv_pred.png"), units = "in", 
-    res = 250, height = 6.5, width = 3.5)
+    res = 250, height = 5.25, width = 2.5)
 gridExtra::grid.arrange(
   gridExtra::arrangeGrob(
     pp, 
     left = textGrob(
-      "Survival Rate", rot = 90, 
+      "Predicted Survival Rate", rot = 90, 
       gp = gpar(fontsize = 11))
   )
 )
