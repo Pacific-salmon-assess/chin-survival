@@ -426,7 +426,7 @@ stage_spec_surv <- ggplot(med_seg_surv %>% filter(!par == "beta")) +
     legend.position = "top"
   )
 
-png(here::here("figs", "sens", "phi_ests.png"), 
+png(here::here("figs", "sens", "phi_ests_sens.png"), 
     height = 5, width = 7.5, units = "in", res = 200)
 stage_spec_surv
 dev.off()

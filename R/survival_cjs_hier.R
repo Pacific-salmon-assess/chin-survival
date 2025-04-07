@@ -1183,7 +1183,7 @@ term_surv_dat_scaled <- term_surv_dat %>%
 
 
 p_dist <- ggplot(term_surv_dat_scaled) +
-  geom_pointrange(aes(x = stock_group, y = median, ymin = low, ymax = up)) +
+  geom_pointrange(aes(x = stock_group, y = median, ymin = lo, ymax = up)) +
   labs(y = "Cumulative Terminal\nSurvival Rate per 100 km") +
   ggsidekick::theme_sleek() +
   theme(axis.title.x = element_blank())
