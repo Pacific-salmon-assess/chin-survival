@@ -171,3 +171,43 @@ sum(ps_surv < ps_mean_surv - 0.1 |
       ps_surv > ps_mean_surv + 0.1) / n_iters
 sum(fr_surv < fr_mean_surv - 0.1 |
       fr_surv > fr_mean_surv + 0.1) / n_iters
+
+
+
+
+## Sockeye Two: test for differences between two areas in short term survival
+
+hg_mean_surv <- 0.25
+qcs_mean_surv <- c(0.3, 0.35, 0.4)
+hg_n <- 250
+qcs_n <- 110
+yr_sig <- 0.15
+n_iters <- 500
+
+future::plan(future::multisession, workers = 3)
+
+p_list <- furrr::future_map(qcs_mean_surv, function (x) {
+  
+  p_val <- rep(NA, n_iters)
+  
+  for (j in seq_len(n_iters)) {
+    dum_dat <- data.frame(
+      area = c(rep("qcs", times = qcs_n), rep("hg", times = hg_n)),
+      surv = c(rbinom(qcs_n, 1, x),
+               rbinom(hg_n, 1, hg_mean_surv))
+    )
+    
+    fit <- glm(
+      surv ~ area,
+      data = dum_dat,
+      family = binomial
+    )  
+    p_val[j] <- coef(summary(fit))[2, 4]  
+  }
+  
+  sum(p_val <= 0.05) / n_iters
+},
+.options = furrr::furrr_options(seed = 123)
+)
+
+p_list
