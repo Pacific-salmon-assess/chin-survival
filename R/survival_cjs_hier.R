@@ -41,9 +41,20 @@ dat_tbl_trim$stock_group <- fct_relevel(
   "Cali", "Low Col.", "Up Col.", "Fraser", "South Puget"
 )
 
+
+# Import duration and distance estimates for scaling survival
+array_dist <- read.csv(
+  here::here("data", "mean_array_locs_measured.csv")
+) %>% 
+  select(
+    stock_group, array_num, dist
+  )
+
+
 ## Import survival segment key for labelling plots 
-seg_key <- read.csv(here::here("data", 
-                               "surv_segment_key_2023.csv")) %>%
+seg_key <- read.csv(
+  here::here("data", "surv_segment_key_2023.csv")
+) %>%
   mutate(segment = array_num - 1,
          segment_name = ifelse(
            stock_group == "Up Col." & segment == 6,
@@ -53,12 +64,10 @@ seg_key <- read.csv(here::here("data",
          array_num_key = paste(segment, segment + 1, sep = "_")) %>% 
   dplyr::select(stock_group, segment, segment_name, array_num, array_num_key,
                 max_array_num, terminal) %>% 
-  distinct() 
-
-
-# Import duration and distance estimates for scaling survival
-array_dat <- readRDS(here::here("data", "distance_duration_array.rds"))
-array_dat$iter <- as.numeric(as.factor(array_dat$iteration))
+  distinct() %>% 
+  left_join(
+    ., array_dist, by = c("stock_group", "array_num")
+  ) 
 
 
 # Average survival by segment and year -----------------------------------------
@@ -1051,7 +1060,13 @@ mean_surv_dat <- dat_tbl_trim$cum_survival_mean %>%
              "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia",
              "Puget\nSound", "Lower\nCol.", "Bonneville", "Above\nBonneville",
              "In\nRiver", "Downstream\nMission", "Upstream\nMission"
-           ))
+           )),
+         stock_group = factor(
+           stock_group,
+           levels = c(
+             "Cali", "Low Col.", "Up Col.", "Fraser", "South Puget"
+           )
+         )
   ) %>% 
   select(-c(iter, est)) %>% 
   distinct() 
@@ -1077,7 +1092,7 @@ surv_plot_mean <- ggplot(data = mean_surv_dat) +
   labs(x = "Segment Name", y = "Cumulative Survival")
 
 
-# as above but remove beta estimates and subset to high res stocks
+# as above but remove beta estimates 
 surv_plot_mean_trim <- mean_surv_dat %>% 
   filter(
     par == "phi"
@@ -1096,7 +1111,36 @@ surv_plot_mean_trim <- mean_surv_dat %>%
   guides(fill = guide_legend(override.aes = list(shape = 21))) +
   facet_wrap(~stock_group, scales = "free_x", ncol = 2) +
   labs(x = "Segment Name", y = "Cumulative Survival") +
-  ylim(c(0.45, 1)) 
+  ylim(c(0.5, 1)) 
+
+
+size_pal <- c(0.4, 1)
+names(size_pal) <- c("no", "yes")
+
+surv_plot_mean_trim_dist <- mean_surv_dat %>% 
+  filter(
+    par == "phi",
+    !(segment == "5" & stock_group == "Up Col.")
+  ) %>% 
+  group_by(stock_group) %>% 
+  mutate(
+    cum_dist = cumsum(dist)
+  ) %>% 
+  ggplot(.) +
+  geom_pointrange(
+    aes(x = cum_dist, y = median, ymin = low, ymax = up, fill = stock_group,
+        size = terminal),
+    shape = 21
+  ) +
+  ggsidekick::theme_sleek() +
+  scale_size_manual(values = size_pal) +
+  scale_fill_viridis_d() +
+  theme(legend.text=element_text(size = 9),
+        legend.title = element_blank(),
+        axis.text.x = element_text(size = rel(.8))) +
+  guides(size = "none") +
+  labs(x = "Migration Distance", y = "Cumulative Survival") +
+  ylim(c(0.5, 1)) 
 
 
 pdf(here::here("figs", "cjs", "cum_surv_ind_hier_trials.pdf"), 
@@ -1118,6 +1162,12 @@ png(here::here("figs", "cjs", "cum_surv_mean_hier_clean_nobeta.png"),
     height = 5, width = 7.5, units = "in", res = 200)
 surv_plot_mean_trim
 dev.off()
+
+png(here::here("figs", "cjs", "cum_surv_mean_hier_clean_nobeta_dist.png"), 
+    height = 5, width = 7.5, units = "in", res = 200)
+surv_plot_mean_trim_dist
+dev.off()
+
 
 
 # plot terminal survival rate (absolute and scaled by migration distance) of 
