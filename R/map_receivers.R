@@ -32,7 +32,7 @@ base_map <- ggplot() +
 
 # path to high res shapefiles for bc coast only
 if (Sys.info()['sysname'] == "Windows") {
-  coast_path <- "G:/My Drive/spatial/coastline_shapefiles/High_res_coastline"
+  coast_path <- "C:/Users/FRESHWATERC/OneDrive - DFO-MPO/General - Applied Salmon Ecology/Spatial Data/High_res_coastline"
 } else {
   coast_path <- "/Users/cam/Google Drive/spatial/coastline_shapefiles/High_res_coastline"
 }
@@ -124,16 +124,18 @@ multi_year_map <- ggplot() +
              fill = "blue", alpha = 0.5,
              inherit.aes = FALSE, shape = 21) +
   facet_wrap(~field_season) +
+  scale_x_continuous(labels = ~ .x) +
+  scale_y_continuous(labels = ~ .x) +
   theme(
     legend.position = "none",
     panel.background = element_rect(colour="black", fill="grey30"),
     panel.border = element_rect(color = "black", fill = NA, linewidth = 1)
   )
 
-inset_world <- map_data("worldHires", region = c("usa", "canada", "mexico"))
-
-ggplot(data = inset_world) +
-  geom_polygon(aes(x = long, y = lat, group = group),
+inset_world_dat <- map_data("world", region = c("usa", "canada", "mexico"))
+inset_world <- ggplot() +
+  geom_polygon(data = inset_world_dat, aes(x = long, y = lat, group = group),
+               fill = "grey30"
                ) +
   coord_map("lambert", 
             lat0 = 35, lat1 = 65,
@@ -141,7 +143,7 @@ ggplot(data = inset_world) +
             ylim = c(35, 65)) +
   theme_void() +
   geom_rect(aes(xmin = -127.7, xmax = -122, ymin = 46, ymax = 51),
-            color = "red", fill = NA, linewidth = 1) +
+            color = "red", fill = NA, linewidth = 0.75) +
   theme(
     legend.position = "none",
     panel.background = element_rect(colour="black", fill="white"),
@@ -149,11 +151,10 @@ ggplot(data = inset_world) +
   ) 
  
 png(here::here("figs", "maps", "multi-year-map.png"),
-    height = 5, width = 6.5, units = "in", res = 200)
+    height = 5, width = 6.25, units = "in", res = 200)
 ggdraw() + 
   draw_plot(multi_year_map) +
-  
-  # draw_plot(deploy_map, x = 0.64, y = 0.1, width = 0.29, height = 0.29) 
+  draw_plot(inset_world, x = 0.66, y = 0.15, width = 0.24, height = 0.28) 
 dev.off()
 
 

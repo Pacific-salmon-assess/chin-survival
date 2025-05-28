@@ -1118,6 +1118,9 @@ size_pal <- c(0.4, 1)
 names(size_pal) <- c("no", "yes")
 
 surv_plot_mean_trim_dist <- mean_surv_dat %>% 
+  left_join(
+    ., array_dist, by = c("stock_group", "array_num")
+  ) %>%
   filter(
     par == "phi",
     !(segment == "5" & stock_group == "Up Col.")
@@ -1132,8 +1135,13 @@ surv_plot_mean_trim_dist <- mean_surv_dat %>%
         size = terminal),
     shape = 21
   ) +
+  geom_line(
+    aes(x = cum_dist, y = median, colour = stock_group),
+    alpha = 1
+  ) +
   ggsidekick::theme_sleek() +
   scale_size_manual(values = size_pal) +
+  scale_colour_viridis_d() +
   scale_fill_viridis_d() +
   theme(legend.text=element_text(size = 9),
         legend.title = element_blank(),

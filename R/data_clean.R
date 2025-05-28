@@ -141,7 +141,7 @@ det_dat1 <- dat_tbl %>%
             chin2 %>% 
               mutate(month = lubridate::month(date)) %>% 
               select(vemco_code = acoustic_year, month, year, acoustic_type, 
-                     stage_1, stage_2, lat, lon, year_day, 
+                     known_stage, stage_1, stage_2, lat, lon, year_day, 
                      fl, wt, lipid, adj_inj, ctc_indicator, focal_er,
                      comment),
             by = "vemco_code") %>%
@@ -191,7 +191,8 @@ dat_tbl_trim <- dat_tbl %>%
         left_join(
           ., 
           det_dat1 %>%
-            select(vemco_code, agg = stock_group, lipid, stage_1, stage_2)
+            select(vemco_code, agg = stock_group, lipid,
+                   known_stage, stage_1, stage_2)
         )
     }),
     wide_array_dat = purrr::map(wide_array_dat, function (x) {
