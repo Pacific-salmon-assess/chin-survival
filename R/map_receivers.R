@@ -12,8 +12,7 @@ library(patchwork)
 library(ggspatial)
 
 
-# w_can <- map_data("worldHires", region = c("usa", "canada")) %>%
-#   filter(long < -110) 
+
 coast_plotting <- readRDS(here::here("data",
                                      "coast_major_river_sf_plotting.RDS"))
 
@@ -65,29 +64,24 @@ deploy_map <- ggplot() +
               aes(x = lon, y = lat),
               fill = "red", inherit.aes = FALSE, shape = 21, alpha = 0.6,
               width = 0.025) +
-  theme_void() +
   theme(
     strip.background = element_rect(colour="white", fill="white"),
     legend.position = "none",
-    axis.text = element_blank(),
     panel.border = element_rect(color = "black", fill = NA, linewidth = 1)
-  )
-  # scale_x_continuous(breaks = c(-126, -125.6, -125.2, -124.8)) 
-# export for use in Rmd
-# saveRDS(deploy_map, here::here("figs", "deploy_map.rds"))
+  ) 
 
-# inset map (defunct after combining with receiver locations)
-# deploy_inset <- base_map +
-#   coord_sf(expand = FALSE, ylim = c(45, 51)) +
-#   geom_rect(aes(xmin = -126.2, xmax = -124.75, ymin = 48.25, ymax = 49.2), 
-#             color = "red", fill = NA, linewidth = 1.2)
-# 
-# png(here::here("figs", "maps", "deploy_map.png"), height = 5, width = 5,
-#     units = "in", res = 250)
-# ggdraw() + 
-#   draw_plot(deploy_map) +
-#   draw_plot(deploy_inset, x = 0.68, y = 0.175, width = 0.3, height = 0.3) 
-# dev.off()
+# inset map
+deploy_inset <- base_map +
+  coord_sf(expand = FALSE, ylim = c(45, 51)) +
+  geom_rect(aes(xmin = -126.2, xmax = -124.75, ymin = 48.25, ymax = 49.2),
+            color = "red", fill = NA, linewidth = 1)
+
+png(here::here("figs", "maps", "deploy_map.png"), height = 4.25, width = 5,
+    units = "in", res = 250)
+ggdraw() +
+  draw_plot(deploy_map) +
+  draw_plot(deploy_inset, x = 0.79, y = 0.16, width = 0.2, height = 0.2)
+dev.off()
 
 
 ## RECEIVER LOCATIONS _---------------------------------------------------------
@@ -119,7 +113,7 @@ rect_data <- data.frame(xmin = -126.05, xmax = -125.2, ymin = 48.45, ymax = 49)
 multi_year_map <- ggplot() +
   geom_sf(data = coast_plotting, color = "black", fill = "white") +
   labs(x = "", y = "") +
-  theme_void() +
+  ggsidekick::theme_sleek() +
   geom_rect(data = rect_data,
             aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
             inherit.aes = FALSE,  
@@ -132,16 +126,34 @@ multi_year_map <- ggplot() +
   facet_wrap(~field_season) +
   theme(
     legend.position = "none",
-    panel.background = element_rect(colour="black", fill="darkgrey"),
-    axis.text = element_blank(),
+    panel.background = element_rect(colour="black", fill="grey30"),
     panel.border = element_rect(color = "black", fill = NA, linewidth = 1)
   )
 
+inset_world <- map_data("worldHires", region = c("usa", "canada", "mexico"))
+
+ggplot(data = inset_world) +
+  geom_polygon(aes(x = long, y = lat, group = group),
+               ) +
+  coord_map("lambert", 
+            lat0 = 35, lat1 = 65,
+            xlim = c(-170, -110), 
+            ylim = c(35, 65)) +
+  theme_void() +
+  geom_rect(aes(xmin = -127.7, xmax = -122, ymin = 46, ymax = 51),
+            color = "red", fill = NA, linewidth = 1) +
+  theme(
+    legend.position = "none",
+    panel.background = element_rect(colour="black", fill="white"),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1)
+  ) 
+ 
 png(here::here("figs", "maps", "multi-year-map.png"),
     height = 5, width = 6.5, units = "in", res = 200)
 ggdraw() + 
   draw_plot(multi_year_map) +
-  draw_plot(deploy_map, x = 0.64, y = 0.1, width = 0.29, height = 0.29) 
+  
+  # draw_plot(deploy_map, x = 0.64, y = 0.1, width = 0.29, height = 0.29) 
 dev.off()
 
 
@@ -280,10 +292,8 @@ seg_list <- purrr::map(
 )
 
 array_map2 <- cowplot::plot_grid(
-  seg_list[[3]], seg_list[[6]], #seg_list[[7]], seg_list[[8]],
-  #seg_list[[1]], 
-  seg_list[[2]], #seg_list[[4]], 
-  seg_list[[5]], 
+  seg_list[[3]], seg_list[[6]], 
+  seg_list[[2]], seg_list[[5]], 
   ncol = 2
   )
 array_map <- cowplot::plot_grid(
