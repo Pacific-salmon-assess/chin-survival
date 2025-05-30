@@ -135,6 +135,10 @@ summary_df$parameter <- rownames(summary_df)
 # Filter based on Rhat and n_eff
 subset(summary_df, Rhat > 1.05 | n_eff < 1000)
 
+summary_df %>% 
+  filter(grepl("beta", parameter))
+
+
 
 # DETECTION PROBABILITY --------------------------------------------------------
 
@@ -165,7 +169,7 @@ post <- extract.samples(m1_stan)
 yday_seq <- c(135, 182, 227) 
 day_label <- c("May 15", "Jul 1", "Aug 15")
 day_seq <- (yday_seq - mean(det_dat$year_day)) / sd(det_dat$year_day)
-cyer_seq <- seq(-1.5, 4.5, length = 40)
+cyer_seq <- seq(min(det_dat$cyer_z), max(det_dat$cyer_z), length = 40)
 preds <- vector(mode = "list", length = length(day_seq))
 
 for(i in seq_along(day_seq)) {
@@ -193,7 +197,7 @@ for(i in seq_along(day_seq)) {
     )
 }
 
-pred_day_cyer <- bind_rows(preds) %>% 
+pred_day_cyer_dat <- bind_rows(preds) %>% 
   mutate(
     day = factor(day, levels = c("May 15", "Jul 1", "Aug 15"))
   ) %>% 
@@ -202,9 +206,10 @@ pred_day_cyer <- bind_rows(preds) %>%
     med = median(est),
     lo = rethinking::HPDI(est, prob = 0.9)[1],
     up = rethinking::HPDI(est, prob = 0.9)[2]
-  ) %>% 
-  ggplot(
-    ., aes(x = cyer, y = med)
+  )
+
+pred_day_cyer <- ggplot(
+  pred_day_cyer_dat, aes(x = cyer, y = med)
   ) +
   geom_line(
     colour = "#7570b3"
@@ -624,18 +629,23 @@ injury_point <- pred_injury_dat %>%
   ggsidekick::theme_sleek() 
 
 
-diff_hist <- data.frame(
-  diff = pred_inj[ , 1] - pred_inj[ , 4]
-) %>% 
-  ggplot() +
-  geom_histogram(aes(x = diff), 
+diff_dat <- data.frame(
+  diff = pred_inj[ , 4] - pred_inj[ , 1]
+) 
+diff_hist <- ggplot() +
+  geom_histogram(data = diff_dat, aes(x = diff), 
                  bins = 50, fill = "#7570b3") +
   geom_vline(aes(xintercept = 0), lty = 2 , colour = "black", linewidth = 1) +
   ggsidekick::theme_sleek() +
-  labs(x = "Difference in Survival Rate\nBetween Min/Max Scores") +
+  labs(x = "Difference in Survival Rate\nBetween Max/Min Injury Scores") +
   theme(
     axis.title.y = element_blank()
   ) 
+
+n_neg <- diff_dat %>% 
+  filter(diff < 0) %>% 
+  nrow() 
+n_neg / nrow(diff_dat) #82%
 
 
 # stock, including indirect effects on date/size/lipid, and indirect exploitation

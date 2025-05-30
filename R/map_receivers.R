@@ -124,37 +124,60 @@ multi_year_map <- ggplot() +
              fill = "blue", alpha = 0.5,
              inherit.aes = FALSE, shape = 21) +
   facet_wrap(~field_season) +
-  scale_x_continuous(labels = ~ .x) +
-  scale_y_continuous(labels = ~ .x) +
+  scale_x_continuous(breaks = c(-127, -125, -123)) +
   theme(
     legend.position = "none",
     panel.background = element_rect(colour="black", fill="grey30"),
     panel.border = element_rect(color = "black", fill = NA, linewidth = 1)
   )
 
-inset_world_dat <- map_data("world", region = c("usa", "canada", "mexico"))
+
+world_sf <- rnaturalearth::ne_countries(scale = "medium", 
+                                        returnclass = "sf") %>%
+  filter(admin %in% c("United States of America", "Canada", "Mexico"))
+
+# define your Lambert Conformal Conic projection
+lambert_crs <- "+proj=lcc +lat_1=20 +lat_2=75 +lon_0=-135 +datum=WGS84 +units=m +no_defs"
+
+# transform to Lambert
+world_lambert <- st_transform(world_sf, crs = lambert_crs)
+rect_ll <- st_as_sfc(
+  st_bbox(c(xmin=-127.7, xmax=-122, ymin=46, ymax=51), crs = st_crs(4326))
+)
+rect_lambert <- st_transform(rect_ll, crs = lambert_crs)
+
+# (optional) if you only want to plot the region around your map, crop first
+bbox_ll <- st_bbox(c(xmin=-145, xmax=-120, ymin=20, ymax=75), crs = st_crs(4326))
+world_clip <- st_crop(world_lambert, bbox_ll %>% st_transform(lambert_crs))
+
 inset_world <- ggplot() +
-  geom_polygon(data = inset_world_dat, aes(x = long, y = lat, group = group),
-               fill = "grey30"
-               ) +
-  coord_map("lambert", 
-            lat0 = 35, lat1 = 65,
-            xlim = c(-170, -110), 
-            ylim = c(35, 65)) +
-  theme_void() +
-  geom_rect(aes(xmin = -127.7, xmax = -122, ymin = 46, ymax = 51),
-            color = "red", fill = NA, linewidth = 0.75) +
+  geom_sf(data = world_clip, fill = "grey30", color = NA) +
+  geom_sf(data = rect_lambert, fill = NA, color = "blue", linewidth = 0.75) +
+  theme_bw() +
   theme(
     legend.position = "none",
-    panel.background = element_rect(colour="black", fill="white"),
-    panel.border = element_rect(color = "black", fill = NA, linewidth = 1)
-  ) 
+    panel.background = element_rect(colour = "black", fill = "white"),
+    panel.border = element_rect(color = "black", fill = NA, size = 1)
+  ) +
+  scale_y_continuous(breaks = seq(30, 70, by = 10), expand = c(0, 0)) +
+  scale_x_continuous(breaks = c(-140, -130, -120), expand = c(0, 0)) 
+  
+
+x0 <- 0.67;   y0 <- 0.25
+w0 <- 0.025;   h0 <- 0.045
+w1 <- 0.25;   h1 <- 0.62
+x1 <- x0 - (w1 - w0) / 2
+y1 <- y0 - (h1 - h0) / 2
  
 png(here::here("figs", "maps", "multi-year-map.png"),
-    height = 5, width = 6.25, units = "in", res = 200)
+    height = 5, width = 6.5, units = "in", res = 200)
 ggdraw() + 
   draw_plot(multi_year_map) +
-  draw_plot(inset_world, x = 0.66, y = 0.15, width = 0.24, height = 0.28) 
+  draw_plot(inset_world, 
+            x = x1 + 0.1,
+            y = y1,
+            width = w1,
+            height = h1) 
 dev.off()
 
 
