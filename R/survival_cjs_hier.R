@@ -5,8 +5,7 @@
 # migrating through study area)
 # Information on preliminary model structures in example-models/BPA/Ch07
 # Excludes immature individuals and severe injuries
-# Linkages between condition, hook location and survival are currently in
-# survival logistic
+
 
 library(tidyverse)
 library(rstan)
@@ -591,6 +590,155 @@ pp_plot_list
 dev.off()
 
 
+
+## Prior-Posterior Comparisons -------------------------------------------------
+
+# average survival
+alpha_phi_prior_df <- data.frame(est = rnorm(4000, 0.8, 1), parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum1 <- extract(x)[["alpha_phi"]]  
+    dum <- data.frame("est" = as.numeric(dum1))
+    
+    p <- ggplot() +
+      geom_density(data = dum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = alpha_phi_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      ggsidekick::theme_sleek() +
+      labs(x = "Gamma_Phi Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("gamma_phi_", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
+
+# average stage specific survival
+alpha_phi_t_prior_df <- data.frame(est = rnorm(4000, 0, 0.5), parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum <- extract(x)[["alpha_t_phi"]] %>% 
+      as.data.frame() %>%
+      pivot_longer(everything(), names_to = "segment", values_to = "est", 
+                   names_prefix = "V")
+    
+    p <- ggplot() +
+      geom_density(data = dum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = alpha_phi_t_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      facet_wrap(~segment) + 
+      ggsidekick::theme_sleek() +
+      labs(x = "Gamma Phi T Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("gamma_phi_t_", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
+# average detection prob
+alpha_p_prior_df <- data.frame(est = rnorm(4000, 0.5, 1.2), parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum1 <- extract(x)[["alpha_p"]]  
+    dum <- data.frame("est" = as.numeric(dum1))
+    
+    p <- ggplot() +
+      geom_density(data = dum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = alpha_phi_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      ggsidekick::theme_sleek() +
+      labs(x = "Gamma p Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("gamma_p_", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
+
+# stage and year specific detection prob
+alpha_p_yr_prior_df <- data.frame(est = rnorm(4000, 0, 0.5), parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum <- extract(x)[["alpha_yr_p"]] %>% 
+      as.data.frame() %>%
+      pivot_longer(everything(), names_to = "segment", values_to = "est", 
+                   names_prefix = "V")
+    
+    yr_p_mat <- extract(x)[["alpha_yr_p"]] 
+    p_sum <- yr_p_mat %>% 
+      as.data.frame.table() %>% 
+      rename(year = Var2, segment = Var3) %>% 
+      mutate(est = Freq,
+             year = as.numeric(as.factor(year)) + 2018,
+             array_num = as.numeric(as.factor(segment)))
+    
+    p <- ggplot() +
+      geom_density(data = p_sum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = alpha_p_yr_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      facet_wrap(~segment) + 
+      ggsidekick::theme_sleek() +
+      labs(x = "Gamma p_jt Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("gamma_p_jt_", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
+
+# among year variability in survival
+sigma_yr_prior_df <- data.frame(est = rexp(4000, rate = 2), parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum <- extract(x)[["sigma_alpha_yr_phi"]] %>% 
+      as.data.frame() %>%
+      pivot_longer(everything(), names_to = "segment", values_to = "est", 
+                   names_prefix = "V")
+    
+    p <- ggplot() +
+      geom_density(data = dum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = sigma_yr_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      facet_wrap(~segment) + 
+      ggsidekick::theme_sleek() +
+      labs(x = "Sigma Year Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("sigma_year_", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
+
 ## Post-hoc calculations -------------------------------------------------------
 
 
@@ -723,7 +871,6 @@ saveRDS(dat_tbl_trim,
         here::here("data", "model_outputs", "hier_cjs_posterior_tbl.RDS"))
 
 
-
 ## Parameter estimates ---------------------------------------------------------
 
 dat_tbl_trim <- readRDS(
@@ -795,36 +942,6 @@ sigma_plot_list <- purrr::map2(
       labs(x = "Migration Stage", y = "Sigma Estimate", title = y)
   }
 )
-
-# prior-posterior predictions for sigma
-prior_df <- data.frame(est = rexp(4000, rate = 1), parameter = "Prior")
-
-purrr::map2(
-  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
-  function(x , y) {
-    dum <- extract(x)[["sigma_alpha_yr_phi"]] %>% 
-      as.data.frame() %>%
-      pivot_longer(everything(), names_to = "segment", values_to = "est", 
-                   names_prefix = "V")
-    
-    p <- ggplot() +
-      geom_density(data = dum, aes(x = est), 
-                   fill = "red", colour = "red", alpha = 0.4) +
-      geom_density(data = prior_df, aes(x = est), 
-                   fill = "blue", colour = "blue", alpha = 0.4) +
-      facet_wrap(~segment) + 
-      ggsidekick::theme_sleek() +
-      labs(x = "Sigma Year Estimate", y = "Kernel Density", title = y) 
-    
-    file_name <- paste("sigma_year_posterior_prior_comp_", y, ".png", sep = "")
-      
-    png(here::here("figs", "cjs", file_name), 
-        height = 4.5, width = 6, units = "in", res = 250)
-    print(p)
-    dev.off()
-  }
-)
-
 
 pdf(here::here("figs", "cjs", "estimated_rho.pdf"), 
     height = 4.5, width = 6)

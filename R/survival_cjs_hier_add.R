@@ -2,8 +2,7 @@
 ## June 20, 2020
 ## Same as survival_cjs_hier.R, but uses simpler CJS models without interaction
 # between year and stage
-# NOTE: posterior predictions similar to but slightly worse than version
-# with interactions
+
 
 library(tidyverse)
 library(rstan)
@@ -38,9 +37,20 @@ dat_tbl_trim$stock_group <- fct_relevel(
   "Cali", "Low Col.", "Up Col.", "Fraser", "South Puget"
 )
 
+
+# Import duration and distance estimates for scaling survival
+array_dist <- read.csv(
+  here::here("data", "mean_array_locs_measured.csv")
+) %>% 
+  select(
+    stock_group, array_num, dist
+  )
+
+
 ## Import survival segment key for labelling plots 
-seg_key <- read.csv(here::here("data", 
-                               "surv_segment_key_2023.csv")) %>%
+seg_key <- read.csv(
+  here::here("data", "surv_segment_key_2023.csv")
+) %>%
   mutate(segment = array_num - 1,
          segment_name = ifelse(
            stock_group == "Up Col." & segment == 6,
@@ -50,12 +60,99 @@ seg_key <- read.csv(here::here("data",
          array_num_key = paste(segment, segment + 1, sep = "_")) %>% 
   dplyr::select(stock_group, segment, segment_name, array_num, array_num_key,
                 max_array_num, terminal) %>% 
-  distinct() 
+  distinct() %>% 
+  left_join(
+    ., array_dist, by = c("stock_group", "array_num")
+  ) 
 
 
-# Import duration and distance estimates for scaling survival
-array_dat <- readRDS(here::here("data", "distance_duration_array.rds"))
-array_dat$iter <- as.numeric(as.factor(array_dat$iteration))
+# Average survival by segment and year -----------------------------------------
+
+mean_det <- purrr::map2(
+  dat_tbl_trim$stock_group,
+  dat_tbl_trim$wide_array_dat, 
+  ~ .y %>% 
+    group_by(year) %>%
+    summarise(
+      n = n(),
+      across(-c(vemco_code, n), function(x) {sum(x) / n})
+    ) %>% 
+    ungroup() %>% 
+    pivot_longer(
+      cols = -c(year, n),
+      names_to = "array_num",
+      values_to = "ppn_detected"
+    ) %>% 
+    mutate(
+      stock_group = .x,
+      array_num = as.numeric(array_num)
+    )
+) %>%
+  bind_rows() %>% 
+  left_join(
+    .,
+    seg_key %>% 
+      select(stock_group, array_num, segment_name) %>% 
+      distinct(),
+    by = c("array_num", "stock_group")
+  ) 
+
+mean_det_pt <- ggplot(mean_det) +
+  geom_point(
+    aes(x = fct_reorder(segment_name, array_num), y = ppn_detected, 
+        fill = as.factor(year)),
+    position = position_dodge(width = 0.5),
+    shape = 21
+  ) +
+  scale_fill_discrete(name = "Year") +
+  facet_wrap(~stock_group, scales = "free_x") +
+  ggsidekick::theme_sleek() +
+  labs(y = "Proportion Tags Detected") +
+  theme(
+    legend.position = "top",
+    axis.title.x = element_blank()
+  )
+
+png(here::here("figs", "average_detections.png"), 
+    height = 6, width = 9, units = "in", res = 250)
+mean_det_pt
+dev.off()
+
+#export for Rmd
+saveRDS(mean_det_pt, here::here("figs", "average_detections.rds" ))
+
+
+
+# check fraser
+left_join(dat_tbl_trim$bio_dat[[2]] %>% 
+            select(vemco_code, agg),
+          dat_tbl_trim$wide_array_dat[[2]]) %>% 
+  group_by(year, agg) %>%
+  summarise(
+    n = n(),
+    across(-c(vemco_code, n), function(x) {sum(x) / n})
+  ) %>% 
+  pivot_longer(
+    cols = -c(year, agg, n),
+    names_to = "array_num",
+    values_to = "ppn_detected"
+  )  %>% 
+  ggplot(.) +
+  geom_point(
+    aes(x = array_num, y = ppn_detected, 
+        fill = as.factor(year)),
+    position = position_dodge(width = 0.5),
+    shape = 21
+  ) +
+  scale_fill_discrete(name = "Year") +
+  facet_wrap(~stock_group, scales = "free_x") +
+  ggsidekick::theme_sleek() +
+  labs(y = "Proportion Tags Detected") +
+  theme(
+    legend.position = "top",
+    axis.title.x = element_blank()
+  ) +
+  facet_wrap(~agg)
 
 
 # Fit model --------------------------------------------------------------------
@@ -119,7 +216,7 @@ hier_mod_sims_stk <- stan_model(
 )
 
 
-## REAL FIT --------------------------------------------------------------------
+## FIT --------------------------------------------------------------------
 
 # MCMC settings
 n_chains = 4
@@ -154,10 +251,13 @@ cjs_hier_sims <- pmap(
         list(
           alpha_phi = rnorm(1, 0, 0.5),
           # note z transformed so inverted compared to beta_phi or beta_p
-          alpha_yr_phi_z = rnorm(x$nyear, 0, 0.5),
+          alpha_yr_phi_z = matrix(
+            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
+            nrow = (x$n_occasions - 1)
+          ),
           alpha_stk_phi_z = rnorm(x$nstock, 0, 0.5),
           alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
-          sigma_alpha_yr_phi = rexp(1, 2),
+          sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
           sigma_alpha_stk_phi = rexp(1, 2),
           alpha_p = rnorm(1, 0, 0.5),
           alpha_yr_p = matrix(
@@ -172,74 +272,16 @@ cjs_hier_sims <- pmap(
       pars <- pars_in
       
       # matrix of inits with same dims as estimated parameter matrices
-      inits <- lapply(1:n_chains, function (i) {
-        list(
-          alpha_phi = rnorm(1, 0, 0.5),
-          alpha_yr_phi_z = rnorm(x$nyear, 0, 0.5),
-          alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
-          sigma_alpha_yr_phi = rexp(1, 2),
-          alpha_p = rnorm(1, 0, 0.5),
-          alpha_yr_p = matrix(rnorm(x$nyear * (x$n_occasions), 0, 0.5),
-                              nrow = x$nyear)
-        )
-      })
-    }
-    
-    sampling(
-      mod, data = x, pars = pars,
-      init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
-      open_progress = FALSE,
-      control = list(adapt_delta = 0.96)
-    )
-  })
-
-
-dd <- pmap(
-  list(x = dat_tbl_trim$dat_in[2], stock_group = dat_tbl_trim$stock_group[2],
-       bio_dat = dat_tbl_trim$bio_dat[2]),
-  .f = function(x, stock_group, bio_dat) {
-    
-    if (stock_group == "Fraser") {
-      mod <- hier_mod_sims_stk
-      x$nstock <- bio_dat$agg %>% unique() %>% length()
-      x$stock <- bio_dat$agg %>%
-        as.factor() %>%
-        droplevels() %>%
-        as.numeric()
-      
-      pars <- c(pars_in,
-                # stock specific pars and quants
-                "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
-                "alpha_stk_phi_z")
-      
       inits <- lapply(1:n_chains, function (i) {
         list(
           alpha_phi = rnorm(1, 0, 0.5),
           # note z transformed so inverted compared to beta_phi or beta_p
-          alpha_yr_phi_z = rnorm(x$nyear, 0, 0.5),
-          alpha_stk_phi_z = rnorm(x$nstock, 0, 0.5),
+          alpha_yr_phi_z = matrix(
+            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
+            nrow = (x$n_occasions - 1)
+          ),
           alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
-          sigma_alpha_yr_phi = rexp(1, 2),
-          sigma_alpha_stk_phi = rexp(1, 2),
-          alpha_p = rnorm(1, 0, 0.5),
-          alpha_yr_p = matrix(
-            rnorm(x$nyear * (x$n_occasions), 0, 0.5), nrow = x$nyear
-          )
-        )
-      })
-      
-    } else{
-      mod <- hier_mod_sims
-      
-      pars <- pars_in
-      
-      # matrix of inits with same dims as estimated parameter matrices
-      inits <- lapply(1:n_chains, function (i) {
-        list(
-          alpha_phi = rnorm(1, 0, 0.5),
-          alpha_yr_phi_z = rnorm(x$nyear, 0, 0.5),
-          alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
-          sigma_alpha_yr_phi = rexp(1, 2),
+          sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
           alpha_p = rnorm(1, 0, 0.5),
           alpha_yr_p = matrix(rnorm(x$nyear * (x$n_occasions), 0, 0.5),
                               nrow = x$nyear)
@@ -268,6 +310,8 @@ dat_tbl_trim$cjs_hier <- cjs_hier_sims
 
 
 
+
+
 ## Model checks ----------------------------------------------------------------
 
 # neff 
@@ -282,8 +326,6 @@ purrr::map(dat_tbl_trim$cjs_hier, function (x) {
   tt <- bayesplot::rhat(x)
   tt[which(tt > 1.05)]
 })
-
-
 
 
 # posterior predictions check
@@ -349,6 +391,169 @@ pdf(here::here("figs", "diagnostics", "posterior_checks_hier_add.pdf"),
     height = 5, width = 8)
 pp_plot_list
 dev.off()
+
+
+
+
+## Prior-Posterior Comparisons -------------------------------------------------
+
+# average survival
+alpha_phi_prior_df <- data.frame(est = rnorm(4000, 0.8, 1), parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum1 <- extract(x)[["alpha_phi"]]  
+    dum <- data.frame("est" = as.numeric(dum1))
+    
+    p <- ggplot() +
+      geom_density(data = dum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = alpha_phi_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      ggsidekick::theme_sleek() +
+      labs(x = "Gamma_Phi Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("gamma_phi_", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
+
+# average stage specific survival
+alpha_phi_t_prior_df <- data.frame(est = rnorm(4000, 0, 0.5), parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum <- extract(x)[["alpha_t_phi"]] %>% 
+      as.data.frame() %>%
+      pivot_longer(everything(), names_to = "segment", values_to = "est", 
+                   names_prefix = "V")
+    
+    p <- ggplot() +
+      geom_density(data = dum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = alpha_phi_t_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      facet_wrap(~segment) + 
+      ggsidekick::theme_sleek() +
+      labs(x = "Gamma Phi T Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("gamma_phi_t_", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
+# average detection prob
+alpha_p_prior_df <- data.frame(est = rnorm(4000, 0.5, 1.2), parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum1 <- extract(x)[["alpha_p"]]  
+    dum <- data.frame("est" = as.numeric(dum1))
+    
+    p <- ggplot() +
+      geom_density(data = dum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = alpha_phi_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      ggsidekick::theme_sleek() +
+      labs(x = "Gamma p Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("gamma_p_", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
+
+# stage and year specific detection prob
+alpha_p_yr_prior_df <- data.frame(est = rnorm(4000, 0, 0.5), parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum <- extract(x)[["alpha_yr_p"]] %>% 
+      as.data.frame() %>%
+      pivot_longer(everything(), names_to = "segment", values_to = "est", 
+                   names_prefix = "V")
+    
+    yr_p_mat <- extract(x)[["alpha_yr_p"]] 
+    p_sum <- yr_p_mat %>% 
+      as.data.frame.table() %>% 
+      rename(year = Var2, segment = Var3) %>% 
+      mutate(est = Freq,
+             year = as.numeric(as.factor(year)) + 2018,
+             array_num = as.numeric(as.factor(segment)))
+    
+    p <- ggplot() +
+      geom_density(data = p_sum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = alpha_p_yr_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      facet_wrap(~segment) + 
+      ggsidekick::theme_sleek() +
+      labs(x = "Gamma p_jt Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("gamma_p_jt_", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
+
+# among year variability in survival
+sigma_yr_prior_df <- data.frame(est = rexp(4000, rate = 2), parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum <- extract(x)[["sigma_alpha_yr_phi"]] %>% 
+      as.data.frame() %>%
+      pivot_longer(everything(), names_to = "segment", values_to = "est", 
+                   names_prefix = "V")
+    
+    p <- ggplot() +
+      geom_density(data = dum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = sigma_yr_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      facet_wrap(~segment) + 
+      ggsidekick::theme_sleek() +
+      labs(x = "Sigma Year Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("sigma_year_", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
+
+
+
+
+
+
+
+
+
+
+
+## CLEAN UP ##
 
 
 
