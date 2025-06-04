@@ -7,6 +7,7 @@
 library(tidyverse)
 library(rstan)
 library(shinystan)
+library(loo)
 
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
@@ -65,94 +66,6 @@ seg_key <- read.csv(
     ., array_dist, by = c("stock_group", "array_num")
   ) 
 
-
-# Average survival by segment and year -----------------------------------------
-
-mean_det <- purrr::map2(
-  dat_tbl_trim$stock_group,
-  dat_tbl_trim$wide_array_dat, 
-  ~ .y %>% 
-    group_by(year) %>%
-    summarise(
-      n = n(),
-      across(-c(vemco_code, n), function(x) {sum(x) / n})
-    ) %>% 
-    ungroup() %>% 
-    pivot_longer(
-      cols = -c(year, n),
-      names_to = "array_num",
-      values_to = "ppn_detected"
-    ) %>% 
-    mutate(
-      stock_group = .x,
-      array_num = as.numeric(array_num)
-    )
-) %>%
-  bind_rows() %>% 
-  left_join(
-    .,
-    seg_key %>% 
-      select(stock_group, array_num, segment_name) %>% 
-      distinct(),
-    by = c("array_num", "stock_group")
-  ) 
-
-mean_det_pt <- ggplot(mean_det) +
-  geom_point(
-    aes(x = fct_reorder(segment_name, array_num), y = ppn_detected, 
-        fill = as.factor(year)),
-    position = position_dodge(width = 0.5),
-    shape = 21
-  ) +
-  scale_fill_discrete(name = "Year") +
-  facet_wrap(~stock_group, scales = "free_x") +
-  ggsidekick::theme_sleek() +
-  labs(y = "Proportion Tags Detected") +
-  theme(
-    legend.position = "top",
-    axis.title.x = element_blank()
-  )
-
-png(here::here("figs", "average_detections.png"), 
-    height = 6, width = 9, units = "in", res = 250)
-mean_det_pt
-dev.off()
-
-#export for Rmd
-saveRDS(mean_det_pt, here::here("figs", "average_detections.rds" ))
-
-
-
-# check fraser
-left_join(dat_tbl_trim$bio_dat[[2]] %>% 
-            select(vemco_code, agg),
-          dat_tbl_trim$wide_array_dat[[2]]) %>% 
-  group_by(year, agg) %>%
-  summarise(
-    n = n(),
-    across(-c(vemco_code, n), function(x) {sum(x) / n})
-  ) %>% 
-  pivot_longer(
-    cols = -c(year, agg, n),
-    names_to = "array_num",
-    values_to = "ppn_detected"
-  )  %>% 
-  ggplot(.) +
-  geom_point(
-    aes(x = array_num, y = ppn_detected, 
-        fill = as.factor(year)),
-    position = position_dodge(width = 0.5),
-    shape = 21
-  ) +
-  scale_fill_discrete(name = "Year") +
-  facet_wrap(~stock_group, scales = "free_x") +
-  ggsidekick::theme_sleek() +
-  labs(y = "Proportion Tags Detected") +
-  theme(
-    legend.position = "top",
-    axis.title.x = element_blank()
-  ) +
-  facet_wrap(~agg)
 
 
 # Fit model --------------------------------------------------------------------
@@ -226,7 +139,7 @@ pars_in <- c(
   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
   "alpha_p", "alpha_yr_p",
   # transformed pars or estimated quantities
-  "alpha_yr_phi", "phi_yr", "p_yr", "beta_yr", "y_hat"
+  "alpha_yr_phi", "phi_yr", "p_yr", "beta_yr", "y_hat", "log_lik"
 )
 
 cjs_hier_sims <- pmap(
@@ -251,13 +164,10 @@ cjs_hier_sims <- pmap(
         list(
           alpha_phi = rnorm(1, 0, 0.5),
           # note z transformed so inverted compared to beta_phi or beta_p
-          alpha_yr_phi_z = matrix(
-            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
-            nrow = (x$n_occasions - 1)
-          ),
+          alpha_yr_phi_z = rnorm(x$nyear, 0, 0.5),
           alpha_stk_phi_z = rnorm(x$nstock, 0, 0.5),
           alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
-          sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
+          sigma_alpha_yr_phi = rexp(1, 2),
           sigma_alpha_stk_phi = rexp(1, 2),
           alpha_p = rnorm(1, 0, 0.5),
           alpha_yr_p = matrix(
@@ -276,12 +186,9 @@ cjs_hier_sims <- pmap(
         list(
           alpha_phi = rnorm(1, 0, 0.5),
           # note z transformed so inverted compared to beta_phi or beta_p
-          alpha_yr_phi_z = matrix(
-            rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
-            nrow = (x$n_occasions - 1)
-          ),
+          alpha_yr_phi_z = rnorm(x$nyear, 0, 0.5),
           alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
-          sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
+          sigma_alpha_yr_phi = rexp(1, 2),
           alpha_p = rnorm(1, 0, 0.5),
           alpha_yr_p = matrix(rnorm(x$nyear * (x$n_occasions), 0, 0.5),
                               nrow = x$nyear)
@@ -293,7 +200,7 @@ cjs_hier_sims <- pmap(
       mod, data = x, pars = pars,
       init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
       open_progress = FALSE,
-      control = list(adapt_delta = 0.96)
+      control = list(adapt_delta = 0.94)
     )
   })
 
@@ -308,9 +215,22 @@ cjs_hier_sims <- readRDS(
 # add to tibble
 dat_tbl_trim$cjs_hier <- cjs_hier_sims
 
+# extract and save looic for comparison
+waic_list <- purrr::map(
+  cjs_hier_sims,
+  function (x) {
+    log_lik_array <- extract_log_lik(x, parameter_name = "log_lik")  
+    waic(log_lik_array)
+  })
+saveRDS(waic_list,
+        here::here("data", "model_outputs", "hier_cjs_add_waic.RDS"))
 
 
-
+# loo_list <- purrr::map(
+#   cjs_hier_sims,
+#   function (x) {
+#     loo(x, parameter_name = "log_lik")
+#   })
 
 ## Model checks ----------------------------------------------------------------
 
@@ -415,7 +335,7 @@ purrr::map2(
     
     file_name <- paste("gamma_phi_", y, ".png", sep = "")
     
-    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+    png(here::here("figs", "cjs", "posterior_prior_comp_add", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
     print(p)
     dev.off()
@@ -444,7 +364,7 @@ purrr::map2(
     
     file_name <- paste("gamma_phi_t_", y, ".png", sep = "")
     
-    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+    png(here::here("figs", "cjs", "posterior_prior_comp_add", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
     print(p)
     dev.off()
@@ -469,7 +389,7 @@ purrr::map2(
     
     file_name <- paste("gamma_p_", y, ".png", sep = "")
     
-    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+    png(here::here("figs", "cjs", "posterior_prior_comp_add", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
     print(p)
     dev.off()
@@ -506,7 +426,7 @@ purrr::map2(
     
     file_name <- paste("gamma_p_jt_", y, ".png", sep = "")
     
-    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+    png(here::here("figs", "cjs", "posterior_prior_comp_add", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
     print(p)
     dev.off()
@@ -535,7 +455,7 @@ purrr::map2(
     
     file_name <- paste("sigma_year_", y, ".png", sep = "")
     
-    png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
+    png(here::here("figs", "cjs", "posterior_prior_comp_add", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
     print(p)
     dev.off()
@@ -684,3 +604,92 @@ summ[which(grepl("alpha_stk_phi", row.names(summ))), ]
 summ[which(grepl("sigma_alpha_yr_phi", row.names(summ))), ]
 sigma_alpha_yr_phi
      
+
+
+# Average survival by segment and year -----------------------------------------
+
+mean_det <- purrr::map2(
+  dat_tbl_trim$stock_group,
+  dat_tbl_trim$wide_array_dat, 
+  ~ .y %>% 
+    group_by(year) %>%
+    summarise(
+      n = n(),
+      across(-c(vemco_code, n), function(x) {sum(x) / n})
+    ) %>% 
+    ungroup() %>% 
+    pivot_longer(
+      cols = -c(year, n),
+      names_to = "array_num",
+      values_to = "ppn_detected"
+    ) %>% 
+    mutate(
+      stock_group = .x,
+      array_num = as.numeric(array_num)
+    )
+) %>%
+  bind_rows() %>% 
+  left_join(
+    .,
+    seg_key %>% 
+      select(stock_group, array_num, segment_name) %>% 
+      distinct(),
+    by = c("array_num", "stock_group")
+  ) 
+
+mean_det_pt <- ggplot(mean_det) +
+  geom_point(
+    aes(x = fct_reorder(segment_name, array_num), y = ppn_detected, 
+        fill = as.factor(year)),
+    position = position_dodge(width = 0.5),
+    shape = 21
+  ) +
+  scale_fill_discrete(name = "Year") +
+  facet_wrap(~stock_group, scales = "free_x") +
+  ggsidekick::theme_sleek() +
+  labs(y = "Proportion Tags Detected") +
+  theme(
+    legend.position = "top",
+    axis.title.x = element_blank()
+  )
+
+png(here::here("figs", "average_detections.png"), 
+    height = 6, width = 9, units = "in", res = 250)
+mean_det_pt
+dev.off()
+
+#export for Rmd
+saveRDS(mean_det_pt, here::here("figs", "average_detections.rds" ))
+
+
+
+# check fraser
+left_join(dat_tbl_trim$bio_dat[[2]] %>% 
+            select(vemco_code, agg),
+          dat_tbl_trim$wide_array_dat[[2]]) %>% 
+  group_by(year, agg) %>%
+  summarise(
+    n = n(),
+    across(-c(vemco_code, n), function(x) {sum(x) / n})
+  ) %>% 
+  pivot_longer(
+    cols = -c(year, agg, n),
+    names_to = "array_num",
+    values_to = "ppn_detected"
+  )  %>% 
+  ggplot(.) +
+  geom_point(
+    aes(x = array_num, y = ppn_detected, 
+        fill = as.factor(year)),
+    position = position_dodge(width = 0.5),
+    shape = 21
+  ) +
+  scale_fill_discrete(name = "Year") +
+  facet_wrap(~stock_group, scales = "free_x") +
+  ggsidekick::theme_sleek() +
+  labs(y = "Proportion Tags Detected") +
+  theme(
+    legend.position = "top",
+    axis.title.x = element_blank()
+  ) +
+  facet_wrap(~agg)

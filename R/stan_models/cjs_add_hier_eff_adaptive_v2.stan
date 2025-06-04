@@ -158,4 +158,19 @@ generated quantities {
       y_hat[i, t] = bernoulli_rng(mu_obs[i, t]);
     }
   }
+
+  // log-likelihood for each individual to calculate looic
+  vector[nind] log_lik;
+  
+  for (i in 1:nind) {
+    log_lik[i] = 0;
+
+    if (first[i] > 0) {
+      for (t in (first[i] + 1):last[i]) {
+        log_lik[i] += bernoulli_lpmf(1 | phi[i, t - 1]);
+        log_lik[i] += bernoulli_lpmf(y[i, t] | p[i, t]);
+      }
+      log_lik[i] += bernoulli_lpmf(1 | chi[i, last[i]]);
+    }
+  }
 }
