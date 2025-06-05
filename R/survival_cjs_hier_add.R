@@ -225,12 +225,12 @@ waic_list <- purrr::map(
 saveRDS(waic_list,
         here::here("data", "model_outputs", "hier_cjs_add_waic.RDS"))
 
+loo_list <- purrr::map(
+  cjs_hier_sims, ~ loo(.x)
+)
+saveRDS(loo_list,
+        here::here("data", "model_outputs", "hier_cjs_add_looic.RDS"))
 
-# loo_list <- purrr::map(
-#   cjs_hier_sims,
-#   function (x) {
-#     loo(x, parameter_name = "log_lik")
-#   })
 
 ## Model checks ----------------------------------------------------------------
 

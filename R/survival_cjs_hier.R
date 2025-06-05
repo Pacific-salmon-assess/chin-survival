@@ -286,10 +286,6 @@ pars_in <- c(
   "Rho_yr", "alpha_yr_phi", "phi_yr", "p_yr", "beta_yr", "y_hat", "log_lik"
 )
 
-x = dat_tbl_trim$dat_in[[2]]
-stock_group = dat_tbl_trim$stock_group[[2]]
-bio_dat = dat_tbl_trim$bio_dat[[2]]
-
 cjs_hier_sims <- pmap(
   list(x = dat_tbl_trim$dat_in, stock_group = dat_tbl_trim$stock_group,
        bio_dat = dat_tbl_trim$bio_dat),
@@ -405,28 +401,22 @@ cjs_hier_sims <- readRDS(
 dat_tbl_trim$cjs_hier <- cjs_hier_sims
 
 
-# extract and save looic for comparison
-waic_list <- purrr::map(
-  cjs_hier_sims,
-  function (x) {
-    log_lik_array <- extract_log_lik(x, parameter_name = "log_lik")  
-    waic(log_lik_array)
-  })
-
-
-waic_list_add <- readRDS(
-  here::here("data", "model_outputs", "hier_cjs_add_waic.RDS")
+# extract and compare looic 
+loo_list <- purrr::map(
+  cjs_hier_sims, ~ loo(.x)
+)
+loo_list_add <- readRDS(
+  here::here("data", "model_outputs", "hier_cjs_add_looic.RDS")
   )
 
-purrr::map(waic_list, function(x) {
-      x$estimates
-    })
-purrr::map(waic_list_add, function(x) {
-      x$estimates
-    })
-dd <- loo(cjs_hier_sims[[2]])
-
-
+purrr::map2(
+  loo_list, loo_list_add, function (x, y) {
+    c(
+      x$estimates[3,1],
+      y$estimates[3,1]
+      )
+  }
+)
 
 ## Model checks ----------------------------------------------------------------
 
