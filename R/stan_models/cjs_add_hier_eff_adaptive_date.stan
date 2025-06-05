@@ -1,6 +1,8 @@
 // This models is derived from section 12.3 of "Stan Modeling Language
 // User's Guide and Reference Manual"
 // Based on cjs_add.stan from example-models repo, but includes time-varying p and further adjusted to include t steps for p (as in Stan manual), not t-1 (BPA book)
+// Same as v3, but year and stage effects are separate/additive so correlation
+// Adds in continuous individual covariate for tagging
 
 functions {
   int first_capture(int[] y_i) {
@@ -45,8 +47,7 @@ data {
   int<lower=0,upper=1> y[nind, n_occasions];    // Capture-history
   int<lower=1> nyear;               // Number of years
   int<lower=1,upper=nyear> year[nind];     // Year
-  int<lower=1> nstock;               // Number of stocks
-  int<lower=1,upper=nstock> stock[nind];     // Stock
+  vector[nind] tag_date_z;  
 }
 
 transformed data {
@@ -63,23 +64,18 @@ transformed data {
 parameters {
   real alpha_phi;                            // Mean phi
   vector[n_occ_minus_1] alpha_t_phi;        // Time effect phi
-  vector[nstock] alpha_stk_phi_z;        // Stock effect phi
-  real<lower=0> sigma_alpha_stk_phi;    // SD among stocks
-  matrix[n_occ_minus_1, nyear] alpha_yr_phi_z;    // Year/time random int for phi; note z so inverted before transformation
-  vector<lower=0>[n_occ_minus_1] sigma_alpha_yr_phi;   // SD among years
-  cholesky_factor_corr[n_occ_minus_1] L_Rho_yr;    // for covariance among year-stage intercepts
+  vector[nyear] alpha_yr_phi_z;       // Year/time random int for phi
+  real<lower=0> sigma_alpha_yr_phi;   // SD among years
+  real beta_date_phi;                 // tagging date effects on phi
   real alpha_p;                              // Mean det prob
   matrix[nyear, n_occasions] alpha_yr_p;        // Year/time intercepts for p
 }
 
 transformed parameters {
   // Construct non-centered adaptive priors for hierarchical effects
-  matrix[nyear, n_occ_minus_1] alpha_yr_phi;
-  alpha_yr_phi = (diag_pre_multiply(sigma_alpha_yr_phi, L_Rho_yr) * alpha_yr_phi_z)';
-
-  vector[nstock] alpha_stk_phi; 
-  alpha_stk_phi = alpha_stk_phi_z * sigma_alpha_stk_phi;
-
+  vector[nyear] alpha_yr_phi; 
+  alpha_yr_phi = alpha_yr_phi_z * sigma_alpha_yr_phi;
+  
   matrix<lower=0,upper=1>[nind, n_occ_minus_1] phi;
   matrix<lower=0,upper=1>[nind, n_occasions] p;
   matrix<lower=0,upper=1>[nind, n_occasions] chi;
@@ -96,7 +92,7 @@ transformed parameters {
       p[i, t] = inv_logit(alpha_p + alpha_yr_p[year[i], t]);
     }
     for (t in first[i]:n_occ_minus_1) {
-      phi[i, t] = inv_logit(alpha_phi + alpha_stk_phi[stock[i]] + alpha_yr_phi[year[i], t] + alpha_t_phi[t]);
+      phi[i, t] = inv_logit(alpha_phi + alpha_yr_phi[year[i]] + alpha_t_phi[t] + (beta_date_phi * tag_date_z[i]));
     }
   }
 
@@ -107,13 +103,11 @@ model {
   // Priors
   to_vector(alpha_yr_p) ~ normal(0, 1);
   to_vector(alpha_yr_phi_z) ~ normal(0, 0.5);
-  to_vector(alpha_stk_phi_z) ~ normal(0, 0.5);
   alpha_phi ~ normal(0.8, 1);
   alpha_p ~ normal(0.25, 1); 
   alpha_t_phi ~ normal(0, 1);
-  sigma_alpha_stk_phi ~ exponential(2);
+  beta_date_phi ~ normal(0.25, 0.5);    // weakly informative positive prior
   sigma_alpha_yr_phi ~ exponential(2);
-  L_Rho_yr ~ lkj_corr_cholesky(2);
 
   // Likelihood
   for (i in 1:nind) {
@@ -129,11 +123,9 @@ model {
 }
 
 generated quantities {
-  matrix<lower=0,upper=1>[nyear, n_occ_minus_1] phi_yr;
+  vector<lower=0,upper=1>[nyear] phi_yr;
   matrix<lower=0,upper=1>[nyear, n_occasions] p_yr;
-  matrix[n_occ_minus_1, n_occ_minus_1] Rho_yr;
   vector[nyear] beta_yr; 
-  matrix<lower=0,upper=1>[nstock, n_occ_minus_1] phi_stk;
 
   // matrices to store obs
   int<lower=0,upper=1> y_hat[nind, n_occasions];
@@ -143,25 +135,15 @@ generated quantities {
 
   // posterior estimates of year_specific phi
   for (yy in 1:nyear) {
-    for (t in 1:n_occ_minus_1) {
-      phi_yr[yy, t] = inv_logit(alpha_phi + alpha_yr_phi[yy, t] + alpha_t_phi[t]);
-    }
+    phi_yr[yy] = inv_logit(alpha_phi + alpha_yr_phi[yy]);
     p_yr[yy, 1] = 1;
     for (t in 2:n_occasions) {
       p_yr[yy, t] = inv_logit(alpha_p + alpha_yr_p[yy, t]);
     }
-    beta_yr[yy] = phi_yr[yy, n_occ_minus_1] * p_yr[yy, n_occasions];
-  }
-  Rho_yr = multiply_lower_tri_self_transpose(L_Rho_yr);
-
-  // posterior estimates of stock-specific phi
-  for (ss in 1:nstock) {
-    for (t in 1:n_occ_minus_1) {
-      phi_stk[ss, t] = inv_logit(alpha_phi + alpha_stk_phi[ss] + alpha_t_phi[t]);
-    }
+    beta_yr[yy] = phi_yr[yy] * p_yr[yy, n_occasions];
   }
 
-  // posterior predictions of observations (NOTE ignores among stock variability for now)
+  // posterior predictions of observations
   for (i in 1:nind) {
     y_hat[i, 1] = 1;
     mu_obs[i, 1] = 1;
@@ -170,11 +152,11 @@ generated quantities {
 
     for (t in 2:n_occasions) {
       // state process
-      mu_state[i, t] = phi_yr[year[i], t - 1] * z[i, t - 1];
+      mu_state[i, t] = phi[i, t - 1] * z[i, t - 1];
       z[i, t] = bernoulli_rng(mu_state[i, t]);
       
       // obs process
-      mu_obs[i, t] = p_yr[year[i], t] * z[i, t];
+      mu_obs[i, t] = p[i, t] * z[i, t];
       y_hat[i, t] = bernoulli_rng(mu_obs[i, t]);
     }
   }

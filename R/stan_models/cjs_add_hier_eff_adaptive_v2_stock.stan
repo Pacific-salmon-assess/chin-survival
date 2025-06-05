@@ -104,12 +104,12 @@ transformed parameters {
 
 model {
   // Priors
-  to_vector(alpha_yr_p) ~ normal(0, 0.5);
+  to_vector(alpha_yr_p) ~ normal(0, 1);
   to_vector(alpha_yr_phi_z) ~ normal(0, 0.5);
   to_vector(alpha_stk_phi_z) ~ normal(0, 0.5);
   alpha_phi ~ normal(0.8, 1);
-  alpha_p ~ normal(0.5, 1.2); 
-  alpha_t_phi ~ normal(0, 0.5);
+  alpha_p ~ normal(0.25, 1); 
+  alpha_t_phi ~ normal(0, 1);
   sigma_alpha_stk_phi ~ exponential(2);
   sigma_alpha_yr_phi ~ exponential(2);
 

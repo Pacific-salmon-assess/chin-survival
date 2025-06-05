@@ -22,18 +22,18 @@ indicator_key <- read.csv(
     ctc_indicator = ifelse(ctc_indicator == "SRH/ELK", "SRH", ctc_indicator)
   )
 
-# TODO: currently excludes terminal harvest; should this be included?
+# TODO: update with final CTC estimates
 cyer_dat <- readRDS(here::here("data", "harvest", "cleaned_cyer_dat.rds")) %>% 
   rename(ctc_indicator = stock) %>% 
   filter(year > 2018)
 
-left_join(cyer_dat, 
-          indicator_key %>% 
-            select(agg_name, ctc_indicator) %>% 
-            distinct(),
-          by = "ctc_indicator") %>% 
-  ggplot(.) + 
-  geom_boxplot(aes(x = agg_name, y = focal_er, fill = clip))
+# left_join(cyer_dat, 
+#           indicator_key %>% 
+#             select(agg_name, ctc_indicator) %>% 
+#             distinct(),
+#           by = "ctc_indicator") %>% 
+#   ggplot(.) + 
+#   geom_boxplot(aes(x = agg_name, y = focal_er, fill = clip))
 
 
 stage_dat <- readRDS(
@@ -176,7 +176,6 @@ saveRDS(det_dat1, here::here("data", "surv_log_reg_data.rds"))
 
 
 ## CJS Model Data
-
 chin_no_severe <- chin2 %>% 
   filter(!adj_inj == "3")
 
@@ -188,6 +187,7 @@ dat_tbl_trim <- dat_tbl %>%
       x %>%
         filter(vemco_code %in% chin_no_severe$acoustic_year) %>%
         select(-c(agg, lipid)) %>% 
+        mutate(tag_date_z = scale(year_day) %>% as.numeric()) %>% 
         left_join(
           ., 
           det_dat1 %>%

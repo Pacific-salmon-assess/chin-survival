@@ -408,15 +408,29 @@ loo_list <- purrr::map(
 loo_list_add <- readRDS(
   here::here("data", "model_outputs", "hier_cjs_add_looic.RDS")
   )
+loo_list_date <- readRDS(
+  here::here("data", "model_outputs", "hier_cjs_date_looic.RDS")
+)
 
-purrr::map2(
-  loo_list, loo_list_add, function (x, y) {
+purrr::pmap(
+  list(loo_list, loo_list_add, loo_list_date), function (x, y, z) {
     c(
       x$estimates[3,1],
-      y$estimates[3,1]
+      y$estimates[3,1],
+      z$estimates[3,1]
       )
   }
 )
+
+purrr::pmap(
+  list(loo_list, loo_list2), function (x, y) {
+    c(
+      x$estimates[3,1],
+      y$estimates[3,1]
+    )
+  }
+)
+
 
 ## Model checks ----------------------------------------------------------------
 
@@ -550,7 +564,7 @@ purrr::map2(
 
 
 # average stage specific survival
-alpha_phi_t_prior_df <- data.frame(est = rnorm(4000, 0, 0.5), parameter = "Prior")
+alpha_phi_t_prior_df <- data.frame(est = rnorm(4000, 0, 1), parameter = "Prior")
 purrr::map2(
   dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
   function(x , y) {
@@ -568,7 +582,7 @@ purrr::map2(
       ggsidekick::theme_sleek() +
       labs(x = "Gamma Phi T Estimate", y = "Kernel Density", title = y) 
     
-    file_name <- paste("gamma_phi_t_", y, ".png", sep = "")
+    file_name <- paste("gamma_phi_t_2", y, ".png", sep = "")
     
     png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)

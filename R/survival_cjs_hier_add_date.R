@@ -1,7 +1,7 @@
 ### CJS survival models
-## June 20, 2020
+## June 5, 2025
 ## Same as survival_cjs_hier.R, but uses simpler CJS models without interaction
-# between year and stage
+# between year and stage as well as covariate for tagging date
 
 
 library(tidyverse)
@@ -28,10 +28,16 @@ dat_tbl_trim$bio_dat <- purrr::map(
     filter(vemco_code %in% mature_tags)
 )
 
-dat_tbl_trim$wide_array_dat <- purrr::map(
-  dat_tbl_trim$wide_array_dat,
+dat_tbl_trim$wide_array_dat <- purrr::map2(
+  dat_tbl_trim$wide_array_dat, dat_tbl_trim$bio_dat,
   ~ .x %>% 
-    filter(vemco_code %in% mature_tags)
+    filter(vemco_code %in% mature_tags) %>% 
+    left_join(
+      ., 
+      # add z-scored tagging date
+      .y %>% 
+        select(vemco_code, tag_date_z), 
+      by = "vemco_code")
 )
 dat_tbl_trim$stock_group <- fct_relevel(
   as.factor(dat_tbl_trim$stock_group),
@@ -70,11 +76,6 @@ seg_key <- read.csv(
 
 # Fit model --------------------------------------------------------------------
 
-## Fixed temporal effects model (survival and probability vary among stages) 
-# with each aggregate modeled independently (due to unique migration rates)
-# Interaction between year and stage for p because array structure varies, but
-# preliminary model comparisons suggest additive (year + stage) has better post
-# preds
 
 # Function to convert wide DF to list input for Stan models
 prep_cjs_dat <- function(dat, grouping_vars = NULL) {
@@ -83,7 +84,10 @@ prep_cjs_dat <- function(dat, grouping_vars = NULL) {
   n_occasions <- ncol(y)
   nind <- nrow(y)
   
-  out_list <- list(y = y, n_occasions = n_occasions, nind = nind)
+  tag_date_z <- dat$tag_date_z
+  
+  out_list <- list(y = y, n_occasions = n_occasions, nind = nind, 
+                   tag_date_z = tag_date_z)
   
   # add grouping variables and fixed p values as needed
   if (!is.null(grouping_vars)) {
@@ -110,7 +114,7 @@ dat_tbl_trim$grouping_vars <- purrr::map(
   function(x) {
     dd <- colnames(x)
     # remove columns that include vemco code or array numbers
-    dd[!(grepl("^([0-9]+)$", dd) | dd == "vemco_code")]
+    dd[!(grepl("^([0-9]+)$", dd) | dd == "vemco_code" | dd == "tag_date_z")]
   })
 dat_tbl_trim$dat_in <- pmap(
   list(dat = dat_tbl_trim$wide_array_dat,  
@@ -119,13 +123,12 @@ dat_tbl_trim$dat_in <- pmap(
 ) 
 
 
-
 # Call Stan from R and fit to each aggregate separately 
 hier_mod_sims <- stan_model(
-  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_v2.stan")
+  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_date.stan")
 )
 hier_mod_sims_stk <- stan_model(
-  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_v2_stock.stan")
+  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_date_stock.stan")
 )
 
 
@@ -137,10 +140,14 @@ n_iter = 2000
 n_warmup = n_iter / 2
 pars_in <- c(
   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
-  "alpha_p", "alpha_yr_p",
+  "beta_date_phi", "alpha_p", "alpha_yr_p", 
   # transformed pars or estimated quantities
   "alpha_yr_phi", "phi_yr", "p_yr", "beta_yr", "y_hat", "log_lik"
 )
+
+x = dat_tbl_trim$dat_in[[2]]
+stock_group = dat_tbl_trim$stock_group[[2]]
+bio_dat = dat_tbl_trim$bio_dat[[2]]
 
 cjs_hier_sims <- pmap(
   list(x = dat_tbl_trim$dat_in, stock_group = dat_tbl_trim$stock_group,
@@ -169,6 +176,7 @@ cjs_hier_sims <- pmap(
           alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
           sigma_alpha_yr_phi = rexp(1, 2),
           sigma_alpha_stk_phi = rexp(1, 2),
+          beta_date_phi = rnorm(1, 0, 0.5),
           alpha_p = rnorm(1, 0, 0.5),
           alpha_yr_p = matrix(
             rnorm(x$nyear * (x$n_occasions), 0, 0.5), nrow = x$nyear
@@ -189,6 +197,7 @@ cjs_hier_sims <- pmap(
           alpha_yr_phi_z = rnorm(x$nyear, 0, 0.5),
           alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
           sigma_alpha_yr_phi = rexp(1, 2),
+          beta_date_phi = rnorm(1, 0, 0.5),
           alpha_p = rnorm(1, 0, 0.5),
           alpha_yr_p = matrix(rnorm(x$nyear * (x$n_occasions), 0, 0.5),
                               nrow = x$nyear)
@@ -206,11 +215,13 @@ cjs_hier_sims <- pmap(
 
 
 saveRDS(cjs_hier_sims,
-        here::here("data", "model_outputs", "hier_cjs_fit_tbl_add.RDS"))
+        here::here("data", "model_outputs", "hier_cjs_fit_tbl_add_date.RDS"))
 
 cjs_hier_sims <- readRDS(
-  here::here("data", "model_outputs", "hier_cjs_fit_tbl_add.RDS")
+  here::here("data", "model_outputs", "hier_cjs_fit_tbl_add_date.RDS")
 ) 
+
+
 
 # add to tibble
 dat_tbl_trim$cjs_hier <- cjs_hier_sims
@@ -223,13 +234,13 @@ waic_list <- purrr::map(
     waic(log_lik_array)
   })
 saveRDS(waic_list,
-        here::here("data", "model_outputs", "hier_cjs_add_waic.RDS"))
+        here::here("data", "model_outputs", "hier_cjs_date_waic.RDS"))
 
 loo_list <- purrr::map(
   cjs_hier_sims, ~ loo(.x)
 )
 saveRDS(loo_list,
-        here::here("data", "model_outputs", "hier_cjs_add_looic.RDS"))
+        here::here("data", "model_outputs", "hier_cjs_date_looic.RDS"))
 
 
 ## Model checks ----------------------------------------------------------------
@@ -306,7 +317,7 @@ pp_plot_list <- map2(pp_list, dat_tbl_trim$stock_group, function (xx, title) {
     ggsidekick::theme_sleek()
 })
 
-pdf(here::here("figs", "diagnostics", "posterior_checks_hier_add.pdf"),
+pdf(here::here("figs", "diagnostics", "posterior_checks_hier_add_date.pdf"),
     height = 5, width = 8)
 pp_plot_list
 dev.off()
@@ -332,7 +343,33 @@ purrr::map2(
     
     file_name <- paste("gamma_phi_", y, ".png", sep = "")
     
-    png(here::here("figs", "cjs", "posterior_prior_comp_add", file_name), 
+    png(here::here("figs", "cjs_date", "posterior_prior_comp_date", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
+# date effects
+date_phi_prior_df <- data.frame(est = rnorm(4000, 0.25, 0.5), 
+                                parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    dum1 <- extract(x)[["beta_date_phi"]]  
+    dum <- data.frame("est" = as.numeric(dum1))
+    
+    p <- ggplot() +
+      geom_density(data = dum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = date_phi_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      ggsidekick::theme_sleek() +
+      labs(x = "Gamma_Phi_Date Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("gamma_phi_date", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs_date", "posterior_prior_comp_date", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
     print(p)
     dev.off()
@@ -361,7 +398,7 @@ purrr::map2(
     
     file_name <- paste("gamma_phi_t_", y, ".png", sep = "")
     
-    png(here::here("figs", "cjs", "posterior_prior_comp_add", file_name), 
+    png(here::here("figs", "cjs_date", "posterior_prior_comp_date", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
     print(p)
     dev.off()
@@ -386,7 +423,7 @@ purrr::map2(
     
     file_name <- paste("gamma_p_", y, ".png", sep = "")
     
-    png(here::here("figs", "cjs", "posterior_prior_comp_add", file_name), 
+    png(here::here("figs", "cjs_date", "posterior_prior_comp_date", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
     print(p)
     dev.off()
@@ -423,7 +460,7 @@ purrr::map2(
     
     file_name <- paste("gamma_p_jt_", y, ".png", sep = "")
     
-    png(here::here("figs", "cjs", "posterior_prior_comp_add", file_name), 
+    png(here::here("figs", "cjs_date", "posterior_prior_comp_date", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
     print(p)
     dev.off()
@@ -452,7 +489,7 @@ purrr::map2(
     
     file_name <- paste("sigma_year_", y, ".png", sep = "")
     
-    png(here::here("figs", "cjs", "posterior_prior_comp_add", file_name), 
+    png(here::here("figs", "cjs_date", "posterior_prior_comp_date", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
     print(p)
     dev.off()
@@ -586,9 +623,34 @@ cum_surv_list_mean <- pmap(
 dat_tbl_trim$phi_mat_mean <- phi_mat_mean
 dat_tbl_trim$cum_survival_mean <- cum_surv_list_mean
 
+# export
+saveRDS(dat_tbl_trim,
+        here::here("data", "model_outputs", "hier_cjs_date_posterior_tbl.RDS"))
 
 
 ## Parameter estimates ---------------------------------------------------------
+
+dat_tbl_trim <- readRDS(
+  here::here("data", "model_outputs", "hier_cjs_date_posterior_tbl.RDS")
+)
+
+
+# posterior estimates of det probability for Upper Col
+p_mat_uc <- extract(dat_tbl_trim$cjs_hier[[5]])[["p_yr"]]
+hist(p_mat_uc[ , 1:5, 5], main = "Lower River p") 
+hist(p_mat_uc[ , 1:5, 6], main = "Bonneville p") 
+hist(p_mat_uc[ , 1:5, 7], main = "Upriver p") 
+
+# posterior estimates of det probability for Low Col
+p_mat_lc <- extract(dat_tbl_trim$cjs_hier[[3]])[["p_yr"]]
+hist(p_mat_lc[ , 1:5, 5], main = "Lower River p") 
+hist(p_mat_lc[ , 1:5, 6], main = "Bonneville p")
+
+# posterior estimates of det probability for Fraser
+p_mat_f <- extract(dat_tbl_trim$cjs_hier[[2]])[["p_yr"]]
+hist(p_mat_f[ , 1:5, 5], main = "Below Mission p") 
+hist(p_mat_f[ , 1:5, 6], main = "Above Mission p")
+
 
 # estimates of stage specific mean survival rates
 med_seg_surv <- purrr::map2(
@@ -629,13 +691,14 @@ stage_spec_surv <- ggplot(med_seg_surv %>% filter(!par == "beta")) +
   labs(x = "Migration Segment", y = "Stage-Specific Survival Rate") +
   ggsidekick::theme_sleek() 
 
-png(here::here("figs", "cjs", "phi_ests.png"), 
+png(here::here("figs", "cjs_date", "phi_ests.png"), 
     height = 5, width = 7.5, units = "in", res = 200)
 stage_spec_surv
 dev.off()
 
 
-# year-specific phi estimates
+# year-specific phi estimates 
+# TODO: REPLACE WITH SINGLE YEARLY ESTIMATE IN UPDATED MODELS
 yr_phi_dat <- purrr::map2(
   dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group,
   function(x, y) {
@@ -677,7 +740,7 @@ yr_phi_dat <- purrr::map2(
     stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group))
   )
 
-png(here::here("figs", "cjs", "estimated_yearly_phi.png"), 
+png(here::here("figs", "cjs_date", "estimated_yearly_phi.png"), 
     height = 5.5, width = 7.5, units = "in", res = 250)
 ggplot(yr_phi_dat) +
   geom_pointrange(
@@ -692,219 +755,263 @@ ggplot(yr_phi_dat) +
 dev.off()
 
 
-## Calculate cumulative survival for Fraser by stock ---------------------------
-
-# stock name key
-stk_key <- data.frame(stock = dat_tbl_trim$bio_dat[[2]]$agg) %>%
+# year- and stage-specific detection parameter estimates
+yr_p_dat <- purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group,
+  function(x, y) {
+    yr_p_mat <- extract(x)[["p_yr"]] 
+    p_sum <- yr_p_mat %>% 
+      as.data.frame.table() %>% 
+      rename(year = Var2, segment = Var3) %>% 
+      mutate(est = Freq,
+             year = as.numeric(as.factor(year)) + 2018,
+             array_num = as.numeric(as.factor(segment))) %>% 
+      group_by(
+        array_num, year
+      ) %>% 
+      reframe(
+        med = median(est),
+        lo = rethinking::HPDI(est, prob = 0.9)[1],
+        up = rethinking::HPDI(est, prob = 0.9)[2],
+        stock_group = y
+      ) %>% 
+      left_join(., seg_key, by = c("stock_group", "array_num")) %>% 
+      mutate(
+        segment_name = fct_reorder(as.factor(segment_name), segment)
+      )
+  }
+) %>% 
+  bind_rows() %>%
+  filter(!segment_name == "Release") %>% 
   mutate(
-    agg_n = as.factor(stock) %>% 
-      droplevels() %>% 
-      as.numeric()
-  ) %>% 
-  distinct() %>% 
-  arrange(agg_n)
-
-phi_stk <- extract(dd[[1]])[["phi_stk"]]
-
-# calculate cumulative product for each stk and iteration then convert to DF
-dims <- list(iter = seq(1, dim(phi_stk)[1], by = 1),
-             segment = seq(1, dim(phi_stk)[3], by = 1))
-
-dumm <- expand.grid(iter = dims$iter,
-                    segment = 0, 
-                    Freq = 1, 
-                    agg_n = stk_key$agg_n)
-
-# calculate the cumulative product across segments for each group and 
-# iteration, then convert to a dataframe
-cumprod_list <- vector(length(stk_key$agg_n), mode = "list") 
-for (i in seq_along(stk_key$agg_n)) {
-  cumprod_mat <- t(apply(phi_stk[ , i, ], 1, cumprod))
-  dimnames(cumprod_mat) = dims[1:2]
-  cumprod_list[[i]] <- cumprod_mat %>% 
-    as.table() %>% 
-    as.data.frame() %>% 
-    mutate(agg_n = stk_key$agg_n[i])
-}
-
-stk_cumprod_plot <- cumprod_list %>% 
-  bind_rows() %>% 
-  rbind(dumm, .) %>%
-  mutate(segment = as.integer(as.character(segment)),
-         stock_group = "Fraser") %>%
-  rename(est = Freq) %>% 
-  #add segment key
-  left_join(., seg_key, by = c("stock_group", "segment")) %>% 
-  left_join(., stk_key, by = "agg_n") %>% 
-  mutate(segment_name = fct_reorder(as.factor(segment_name), segment),
-         hab = case_when(
-           segment == max(segment) ~ "river",
-           TRUE ~ "marine"
-         )) %>% 
-  group_by(segment, segment_name, stock) %>% 
-  summarize(median = median(est),
-            low = quantile(est, 0.05),
-            up = quantile(est, 0.95)) %>% 
-  ungroup() %>% 
-  mutate(agg_name_f = NA) %>% 
-  ggplot(.) +
-  geom_pointrange(aes(x = fct_reorder(segment_name, segment), 
-                      y = median, ymin = low, ymax = up, fill = stock),
-                  shape = 21, position = position_dodge(width = 0.5)) +
-  ggsidekick::theme_sleek() +
-  theme(axis.title.x = element_blank(), 
-        axis.title.y = element_blank(),
-        legend.text=element_text(size = 9),
-        legend.title = element_blank(),
-        axis.text.x = element_text(size = rel(.8)),
-        legend.position = "top") +
-  lims(y = c(0, 1))  
-
-png(here::here("figs", "cjs", "fraser_stock_surv.png"), 
-    height = 4.5, width = 5.5, units = "in", res = 200)
-stk_cumprod_plot
-dev.off()
-
-
-stk_effect <- extract(dd[[1]])[["alpha_stk_phi"]]
-colnames(stk_effect) <- stk_key$stock
-
-library(ggridges)
-
-png(here::here("figs", "cjs", "fraser_stk_effect.png"), 
-    height = 4.5, width = 5.5, units = "in", res = 200)
-stk_effect %>% 
-  as.data.frame() %>% 
-  pivot_longer(
-    cols = everything(),
-    names_to = "stk",
-    values_to = "est"
-  ) %>% 
-  group_by(
-    stk
-  ) %>% 
-  summarize(
-    med = median(est),
-    lo = rethinking::HPDI(est, prob = 0.9)[1],
-    up = rethinking::HPDI(est, prob = 0.9)[2]
-  ) %>% 
-  mutate(
-    stk = factor(
-      stk, 
-      levels = c("Fraser Spr. Yr.", "Fraser Sum. Yr.", "Fraser Sum. 4.1", 
-                 "Fraser Fall")),
-    stk = fct_recode(stk, 
-                     "Spring 1.x" = "Fraser Spr. Yr.",
-                     "Summer 1.3" = "Fraser Sum. Yr.", 
-                     "Summer 0.3" = "Fraser Sum. 4.1", 
-                     "Fall 0.3" = "Fraser Fall")
-  ) %>% 
-  ggplot(.) +
-  geom_pointrange(aes(x = stk, y = med, ymin = lo, ymax = up, fill = stk),
-                  shape = 21) +
-  scale_fill_brewer(palette = "YlGnBu") +
-  labs(x = "Fraser River Stock Group", y = "Stock-Specific Survival Effect") +
-  geom_hline(yintercept = 0, lty = 2) +
-  ggsidekick::theme_sleek() +
-  theme(legend.title = element_blank(),
-        legend.position = "none")
-dev.off()
-
-
-summ <- rstan::summary(dd[[1]])[[1]]
-rbind(summ[which(grepl("alpha_phi", row.names(summ))), ],
-      summ[which(grepl("alpha_t_phi", row.names(summ))), ]
-)
-summ[which(grepl("alpha_stk_phi", row.names(summ))), ]
-summ[which(grepl("sigma_alpha_yr_phi", row.names(summ))), ]
-sigma_alpha_yr_phi
-     
-
-
-# Average survival by segment and year -----------------------------------------
-
-mean_det <- purrr::map2(
-  dat_tbl_trim$stock_group,
-  dat_tbl_trim$wide_array_dat, 
-  ~ .y %>% 
-    group_by(year) %>%
-    summarise(
-      n = n(),
-      across(-c(vemco_code, n), function(x) {sum(x) / n})
-    ) %>% 
-    ungroup() %>% 
-    pivot_longer(
-      cols = -c(year, n),
-      names_to = "array_num",
-      values_to = "ppn_detected"
-    ) %>% 
-    mutate(
-      stock_group = .x,
-      array_num = as.numeric(array_num)
-    )
-) %>%
-  bind_rows() %>% 
-  left_join(
-    .,
-    seg_key %>% 
-      select(stock_group, array_num, segment_name) %>% 
-      distinct(),
-    by = c("array_num", "stock_group")
-  ) 
-
-mean_det_pt <- ggplot(mean_det) +
-  geom_point(
-    aes(x = fct_reorder(segment_name, array_num), y = ppn_detected, 
-        fill = as.factor(year)),
-    position = position_dodge(width = 0.5),
-    shape = 21
-  ) +
-  scale_fill_discrete(name = "Year") +
-  facet_wrap(~stock_group, scales = "free_x") +
-  ggsidekick::theme_sleek() +
-  labs(y = "Proportion Tags Detected") +
-  theme(
-    legend.position = "top",
-    axis.title.x = element_blank()
+    year = as.factor(year),
+    segment_name = factor(
+      segment_name,
+      levels = c(
+        "Release", "WCVI/\nSalish\nSea", "Marine", "NW\nWA", "SW\nWA",
+        "Central\nCA",
+        "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia",
+        "Puget\nSound", "Lower\nCol.", "Bonneville", "Above\nBonneville",
+        "In\nRiver", "Downstream\nMission", "Upstream\nMission"
+      )),
+    stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group))
   )
 
-png(here::here("figs", "average_detections.png"), 
-    height = 6, width = 9, units = "in", res = 250)
-mean_det_pt
+
+png(here::here("figs", "cjs_date", "estimated_yearly_p.png"), 
+    height = 4.5, width = 9, units = "in", res = 250)
+ggplot(yr_p_dat) +
+  geom_pointrange(
+    aes(x = segment_name, y = med, ymin = lo, ymax = up, fill = year),
+    shape = 21,
+    position = position_dodge(width = 0.3)
+  ) +
+  facet_wrap(~stock_group, scales = "free_x", ncol = 2) +
+  scale_fill_brewer(palette = "PuOr", name = "") +
+  ggsidekick::theme_sleek() +
+  labs(x = "Segment Name", y = "Detection Probability") 
 dev.off()
 
-#export for Rmd
-saveRDS(mean_det_pt, here::here("figs", "average_detections.rds" ))
 
+## Visualize posterior ---------------------------------------------------------
 
+source(here::here("R", "functions", "plot_survival.R"))
 
-# check fraser
-left_join(dat_tbl_trim$bio_dat[[2]] %>% 
-            select(vemco_code, agg),
-          dat_tbl_trim$wide_array_dat[[2]]) %>% 
-  group_by(year, agg) %>%
-  summarise(
-    n = n(),
-    across(-c(vemco_code, n), function(x) {sum(x) / n})
+# import data
+dat_tbl_trim <- readRDS(
+  here::here("data", "model_outputs", "hier_cjs_posterior_tbl.RDS")
+)
+
+surv_plot_trials <- purrr::map(dat_tbl_trim$cum_survival, function (x) {
+  x %>% 
+    mutate(agg_name_f = as.factor(stock_group),
+           segment_name = fct_reorder(as.factor(segment_name), segment)) %>% 
+    plot_surv(., show_mcmc = T) +
+    facet_wrap(~group)
+})
+surv_plot_clean  <- purrr::map(dat_tbl_trim$cum_survival, function (x) {
+  x %>% 
+    mutate(agg_name_f = as.factor(stock_group),
+           segment_name = fct_reorder(as.factor(segment_name), segment)) %>%
+    plot_surv(., show_mcmc = F) +
+    facet_wrap(~group)
+})
+
+mean_surv_dat <- dat_tbl_trim$cum_survival_mean %>% 
+  bind_rows() %>% 
+  mutate(agg_name_f = NA,
+         # segment_name_f = as.factor(segment_name)
+         segment_name = factor(
+           segment_name,
+           levels = c(
+             "Release", "WCVI/\nSalish\nSea", "Marine", "NW\nWA", "SW\nWA",
+             "Central\nCA",
+             "Outside\nShelf", "Juan\nde Fuca", "Strait\nof Georgia",
+             "Puget\nSound", "Lower\nCol.", "Bonneville", "Above\nBonneville",
+             "In\nRiver", "Downstream\nMission", "Upstream\nMission"
+           )),
+         stock_group = factor(
+           stock_group,
+           levels = c(
+             "Cali", "Low Col.", "Up Col.", "Fraser", "South Puget"
+           )
+         )
   ) %>% 
-  pivot_longer(
-    cols = -c(year, agg, n),
-    names_to = "array_num",
-    values_to = "ppn_detected"
-  )  %>% 
+  select(-c(iter, est)) %>% 
+  distinct() 
+
+fill_pal <- c("white", "black")
+names(fill_pal) <- c("no", "yes")
+shape_pal <- c(21, 24)
+names(shape_pal) <- c("phi", "beta")
+
+surv_plot_mean <- ggplot(data = mean_surv_dat) +
+  geom_pointrange(
+    aes(x = fct_reorder(segment_name, segment), 
+        y = median, ymin = low, ymax = up, fill = terminal, shape = par)
+  ) +
+  ggsidekick::theme_sleek() +
+  scale_shape_manual(values = shape_pal, name = "Parameter") +
+  scale_fill_manual(values = fill_pal, label = c("Marine", "Terminal"),
+                    name = "Terminal") +
+  theme(legend.text=element_text(size = 9),
+        axis.text.x = element_text(size = rel(.8))) +
+  guides(fill = guide_legend(override.aes = list(shape = 21))) +
+  facet_wrap(~stock_group, scales = "free_x", ncol = 2) +
+  labs(x = "Segment Name", y = "Cumulative Survival")
+
+
+# as above but remove beta estimates 
+surv_plot_mean_trim <- mean_surv_dat %>% 
+  filter(
+    par == "phi"
+  ) %>% 
   ggplot(.) +
-  geom_point(
-    aes(x = array_num, y = ppn_detected, 
-        fill = as.factor(year)),
-    position = position_dodge(width = 0.5),
+  geom_pointrange(
+    aes(x = fct_reorder(segment_name, segment), 
+        y = median, ymin = low, ymax = up, fill = terminal),
     shape = 21
   ) +
-  scale_fill_discrete(name = "Year") +
-  facet_wrap(~stock_group, scales = "free_x") +
   ggsidekick::theme_sleek() +
-  labs(y = "Proportion Tags Detected") +
-  theme(
-    legend.position = "top",
-    axis.title.x = element_blank()
+  scale_fill_manual(values = fill_pal, label = c("Non-terminal", "Terminal")) +
+  theme(legend.text=element_text(size = 9),
+        legend.title = element_blank(),
+        axis.text.x = element_text(size = rel(.8))) +
+  guides(fill = guide_legend(override.aes = list(shape = 21))) +
+  facet_wrap(~stock_group, scales = "free_x", ncol = 2) +
+  labs(x = "Segment Name", y = "Cumulative Survival") +
+  ylim(c(0.5, 1)) 
+
+
+size_pal <- c(0.4, 1)
+names(size_pal) <- c("no", "yes")
+color_pal <- c(
+  "#2b83ba", "#d7191c", "#fdae61", "#ffffbf", "#abdda4"
+  )
+names(color_pal) <- levels(mean_surv_dat$stock_group)
+  
+surv_plot_mean_trim_dist <- mean_surv_dat %>% 
+  filter(
+    par == "phi",
+    !(segment == "5" & stock_group == "Up Col.")
+  ) %>% 
+  group_by(stock_group) %>% 
+  mutate(
+    cum_dist = cumsum(dist)
+  ) %>% 
+  ggplot(.) +
+  geom_pointrange(
+    aes(x = cum_dist, y = median, ymin = low, ymax = up, fill = stock_group,
+        size = terminal),
+    shape = 21
   ) +
-  facet_wrap(~agg)
+  geom_line(
+    aes(x = cum_dist, y = median, colour = stock_group),
+    alpha = 1
+  ) +
+  ggsidekick::theme_sleek() +
+  scale_size_manual(values = size_pal) +
+  scale_colour_manual(values = color_pal) +
+  scale_fill_manual(values = color_pal) +
+  theme(legend.text=element_text(size = 9),
+        legend.title = element_blank(),
+        axis.text.x = element_text(size = rel(.8))) +
+  guides(size = "none") +
+  labs(x = "Migration Distance", y = "Cumulative Survival") +
+  ylim(c(0.5, 1)) 
+
+
+pdf(here::here("figs", "cjs_date", "cum_surv_ind_hier_trials.pdf"), 
+    height = 6, width = 7.5)
+surv_plot_trials
+dev.off()
+
+pdf(here::here("figs", "cjs_date", "cum_surv_ind_hier_clean.pdf"), 
+    height = 6, width = 7.5)
+surv_plot_clean
+dev.off()
+
+png(here::here("figs", "cjs_date", "cum_surv_mean_hier_clean.png"), 
+    height = 5, width =7.5, units = "in", res = 200)
+surv_plot_mean
+dev.off()
+
+png(here::here("figs", "cjs_date", "cum_surv_mean_hier_clean_nobeta.png"), 
+    height = 5, width = 7.5, units = "in", res = 200)
+surv_plot_mean_trim
+dev.off()
+
+png(here::here("figs", "cjs_date", "cum_surv_mean_hier_clean_nobeta_dist.png"), 
+    height = 5, width = 7.5, units = "in", res = 200)
+surv_plot_mean_trim_dist
+dev.off()
+
+
+# 
+# # plot terminal survival rate (absolute and scaled by migration distance) of 
+# # high detection probability stocks 
+# term_surv_dat <- dat_tbl_trim$cum_survival_mean %>% 
+#   bind_rows() %>% 
+#   filter(
+#     stock_group == "Fraser" & segment_name == "Downstream\nMission" |
+#       # stock_group == "Up Col." & segment_name == "Bonneville" |
+#       stock_group == "Up Col." & segment_name == "Lower\nCol." |
+#       stock_group == "Low Col." & segment_name == "Lower\nCol." |
+#       stock_group == "South Puget" & segment_name == "Puget\nSound" |
+#       stock_group == "Cali" & segment_name == "Central\nCA"
+#   ) %>% 
+#   mutate(
+#     stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group))
+#   )
+# 
+# p_total <- term_surv_dat %>% 
+#   select(stock_group, median, low, up) %>% 
+#   distinct() %>% 
+#   ggplot(.) +
+#   geom_pointrange(aes(x = stock_group, y = median, ymin = low, ymax = up,
+#                       fill = stock_group), shape = 21) +
+#   scale_fill_manual(values = color_pal) +
+#   labs(y = "Cumulative Terminal\nSurvival Rate") +
+#   ggsidekick::theme_sleek() +
+#   theme(axis.title.x = element_blank())
+# 
+# # import terminal migration distance (to avoid in river harvest focus on 
+# # Lower Columbia for both UC and LW)
+# term_dist <- read.csv(here::here("data", "terminal_locations.csv")) %>% 
+#   filter(!location == "bonneville")
+# 
+# term_surv_dat_scaled <- term_surv_dat %>% 
+#   select(iter, est, stock_group) %>%
+#   left_join(., term_dist, by = "stock_group") %>%
+#   mutate(
+#     scaled_surv = est^(1 / (distance_km / 100)),
+#     stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group))
+#   ) %>% 
+#   group_by(
+#     stock_group
+#   ) %>% 
+#   summarize(
+#     median = median(scaled_surv),
+#     low = rethinking::HPDI(scaled_surv, prob = 0.9)[1],
+#     up = rethinking::HPDI(scaled_surv, prob = 0.9)[2]
+#   )

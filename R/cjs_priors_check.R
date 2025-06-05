@@ -17,16 +17,19 @@ set.seed(123)
 # simulate distributions for beta_phi and beta_p, representing stage
 # specific survival parameters in link space; since 3 beta pars
 mu_phi <- rnorm(1000, mean = 0.8, sd = 1)
-hist(boot::inv.logit(mu_phi),  col=rgb(1,0,0,0.4))
-beta_phi <- gamma_phi <- rnorm(1000, mean = 0, sd = 0.5)
-beta_p <- rnorm(1000, mean = 0.5, sd = 1.2)
-beta_p_j <- rnorm(1000, mean = 0, sd = 0.5)
+hist(boot::inv.logit(mu_phi), col=rgb(1,0,0,0.4))
+beta_phi <- rnorm(1000, mean = 0, sd = 1)
+gamma_phi <- rnorm(1000, mean = 0, sd = 0.5)
+beta_p <- rnorm(1000, mean = 0.25, sd = 1)
+beta_p_j <- rnorm(1000, mean = 0, sd = 1)
+beta_p_j2 <- rnorm(1000, mean = 0, sd = 0.5)
 
-# transform into survival and detection probabilities and evalute
+# transform into survival and detection probabilities and evaluate
 total_phi <- mu_phi + beta_phi + gamma_phi
 hist(boot::inv.logit(mu_phi),  col=rgb(0,0,1,0.4))
 hist(boot::inv.logit(total_phi),  col=rgb(1,0,0,0.4), add = T)
-hist(boot::inv.logit(beta_p + beta_p_j), col=rgb(0,0,1,0.4), add = T)
+hist(boot::inv.logit(beta_p ), col=rgb(0,0,1,0.4), )
+hist(boot::inv.logit(beta_p + beta_p_j), col=rgb(1,0,0,0.4), add = T)
 
 
 
