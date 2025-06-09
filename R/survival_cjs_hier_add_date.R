@@ -123,6 +123,11 @@ dat_tbl_trim$dat_in <- pmap(
 ) 
 
 
+# save input data for cjs_priors_check.R
+# dd <-  dat_tbl_trim$dat_in[[2]]
+# saveRDS(dd, here::here("data", "model_outputs", "sample_cjs_dat_date.rds"))
+
+
 # Call Stan from R and fit to each aggregate separately 
 hier_mod_sims <- stan_model(
   here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_date.stan")
@@ -144,10 +149,6 @@ pars_in <- c(
   # transformed pars or estimated quantities
   "alpha_yr_phi", "phi_yr", "p_yr", "beta_yr", "y_hat", "log_lik"
 )
-
-x = dat_tbl_trim$dat_in[[2]]
-stock_group = dat_tbl_trim$stock_group[[2]]
-bio_dat = dat_tbl_trim$bio_dat[[2]]
 
 cjs_hier_sims <- pmap(
   list(x = dat_tbl_trim$dat_in, stock_group = dat_tbl_trim$stock_group,
@@ -212,7 +213,6 @@ cjs_hier_sims <- pmap(
       control = list(adapt_delta = 0.94)
     )
   })
-
 
 saveRDS(cjs_hier_sims,
         here::here("data", "model_outputs", "hier_cjs_fit_tbl_add_date.RDS"))
