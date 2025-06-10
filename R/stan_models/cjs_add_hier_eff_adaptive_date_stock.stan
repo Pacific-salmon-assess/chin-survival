@@ -129,7 +129,7 @@ model {
 }
 
 generated quantities {
-  vector<lower=0,upper=1>[nyear] phi_yr;
+  matrix<lower=0,upper=1>[nyear, n_occ_minus_1] phi_yr;
   matrix<lower=0,upper=1>[nyear, n_occasions] p_yr;
   vector[nyear] beta_yr; 
   matrix<lower=0,upper=1>[nstock, n_occ_minus_1] phi_stk;
@@ -142,12 +142,14 @@ generated quantities {
 
   // posterior estimates of year_specific phi
   for (yy in 1:nyear) {
-    phi_yr[yy] = inv_logit(alpha_phi + alpha_yr_phi[yy]);
+    for (t in 1:n_occ_minus_1) {
+      phi_yr[yy, t] = inv_logit(alpha_phi + alpha_yr_phi[yy] + alpha_t_phi[t]);
+    }
     p_yr[yy, 1] = 1;
     for (t in 2:n_occasions) {
       p_yr[yy, t] = inv_logit(alpha_p + alpha_yr_p[yy, t]);
     }
-    beta_yr[yy] = phi_yr[yy] * p_yr[yy, n_occasions];
+    beta_yr[yy] = phi_yr[yy, n_occ_minus_1] * p_yr[yy, n_occasions];
   }
 
   // posterior estimates of stock-specific phi

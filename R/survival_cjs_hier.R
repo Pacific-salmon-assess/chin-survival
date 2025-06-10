@@ -582,7 +582,7 @@ purrr::map2(
       ggsidekick::theme_sleek() +
       labs(x = "Gamma Phi T Estimate", y = "Kernel Density", title = y) 
     
-    file_name <- paste("gamma_phi_t_2", y, ".png", sep = "")
+    file_name <- paste("gamma_phi_t", y, ".png", sep = "")
     
     png(here::here("figs", "cjs", "posterior_prior_comp", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
@@ -592,7 +592,7 @@ purrr::map2(
 )
 
 # average detection prob
-alpha_p_prior_df <- data.frame(est = rnorm(4000, 0.5, 1.2), parameter = "Prior")
+alpha_p_prior_df <- data.frame(est = rnorm(4000, 0.25, 1), parameter = "Prior")
 purrr::map2(
   dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
   function(x , y) {

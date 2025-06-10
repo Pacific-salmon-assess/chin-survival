@@ -166,11 +166,11 @@ generated quantities {
 
     for (t in 2:n_occasions) {
       // state process
-      mu_state[i, t] = phi_yr[year[i], t - 1] * z[i, t - 1];
+      mu_state[i, t] = phi[i, t - 1] * z[i, t - 1];
       z[i, t] = bernoulli_rng(mu_state[i, t]);
       
       // obs process
-      mu_obs[i, t] = p_yr[year[i], t] * z[i, t];
+      mu_obs[i, t] = p[i, t] * z[i, t];
       y_hat[i, t] = bernoulli_rng(mu_obs[i, t]);
     }
   }
