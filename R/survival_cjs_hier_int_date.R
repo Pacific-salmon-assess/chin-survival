@@ -45,35 +45,6 @@ dat_tbl_trim$stock_group <- fct_relevel(
 )
 
 
-# Import duration and distance estimates for scaling survival
-array_dist <- read.csv(
-  here::here("data", "mean_array_locs_measured.csv")
-) %>% 
-  select(
-    stock_group, array_num, dist
-  )
-
-
-## Import survival segment key for labelling plots 
-seg_key <- read.csv(
-  here::here("data", "surv_segment_key_2023.csv")
-) %>%
-  mutate(segment = array_num - 1,
-         segment_name = ifelse(
-           stock_group == "Up Col." & segment == 6,
-           "Above\nBonneville",
-           str_replace(segment_name, " ", "\n")
-         ),
-         array_num_key = paste(segment, segment + 1, sep = "_")) %>% 
-  dplyr::select(stock_group, segment, segment_name, array_num, array_num_key,
-                max_array_num, terminal) %>% 
-  distinct() %>% 
-  left_join(
-    ., array_dist, by = c("stock_group", "array_num")
-  ) 
-
-
-
 # Fit model --------------------------------------------------------------------
 
 
@@ -121,12 +92,6 @@ dat_tbl_trim$dat_in <- pmap(
        grouping_vars = dat_tbl_trim$grouping_vars),
   .f = prep_cjs_dat
 ) 
-
-
-# save input data for cjs_priors_check.R
-# dd <-  dat_tbl_trim$dat_in[[2]]
-# saveRDS(dd, here::here("data", "model_outputs", "sample_cjs_dat_date.rds"))
-
 
 # Call Stan from R and fit to each aggregate separately 
 hier_mod_sims <- stan_model(
@@ -229,6 +194,47 @@ cjs_hier_sims <- pmap(
     )
   }
   )
+
+# x <- dat_tbl_trim$dat_in[[2]]
+# x$nstock <- dat_tbl_trim$bio_dat[[2]]$agg %>% unique() %>% length()
+# x$stock <- dat_tbl_trim$bio_dat[[2]]$agg %>%
+#   as.factor() %>%
+#   droplevels() %>%
+#   as.numeric()
+# 
+# pars <- c(pars_in,
+#           # stock specific pars and quants
+#           "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
+#           "alpha_stk_phi_z")
+# inits <- lapply(1:1, function (i) {
+#   list(
+#     alpha_phi = rnorm(1, 0, 0.5),
+#     # note z transformed so inverted compared to beta_phi or beta_p
+#     alpha_yr_phi_z = matrix(
+#       rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
+#       nrow = (x$n_occasions - 1)
+#     ),
+#     alpha_stk_phi_z = rnorm(x$nstock, 0, 0.5),
+#     alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
+#     sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
+#     sigma_alpha_stk_phi = rexp(1, 2),
+#     # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
+#     L_Rho_yr = matrix(
+#       runif((x$n_occasions - 1)^2, -0.5, 0.5), nrow = (x$n_occasions - 1)
+#     ),
+#     alpha_p = rnorm(1, 0, 0.5),
+#     alpha_yr_p = matrix(
+#       rnorm(x$nyear * (x$n_occasions), 0, 0.5), nrow = x$nyear
+#     ),
+#     beta_date_phi = rnorm(1, 0, 0.5)
+#   )
+# })
+# dd <- sampling(
+#   hier_mod_sims_stk, data = x, pars = pars,
+#   init = inits, chains = 1, iter = 500,
+#   open_progress = FALSE,
+#   control = list(adapt_delta = 0.94)
+# )
 
 saveRDS(cjs_hier_sims,
         here::here("data", "model_outputs", "hier_cjs_fit_tbl_int_date.RDS"))

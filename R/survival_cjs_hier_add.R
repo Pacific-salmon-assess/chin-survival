@@ -216,15 +216,6 @@ cjs_hier_sims <- readRDS(
 dat_tbl_trim$cjs_hier <- cjs_hier_sims
 
 # extract and save looic for comparison
-waic_list <- purrr::map(
-  cjs_hier_sims,
-  function (x) {
-    log_lik_array <- extract_log_lik(x, parameter_name = "log_lik")  
-    waic(log_lik_array)
-  })
-saveRDS(waic_list,
-        here::here("data", "model_outputs", "hier_cjs_add_waic.RDS"))
-
 loo_list <- purrr::map(
   cjs_hier_sims, ~ loo(.x)
 )

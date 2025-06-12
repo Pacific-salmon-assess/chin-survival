@@ -146,7 +146,7 @@ generated quantities {
   Rho_yr = multiply_lower_tri_self_transpose(L_Rho_yr);
 
   // posterior predictions of observations
-  ffor (i in 1:nind) {
+  for (i in 1:nind) {
     y_hat[i, 1] = 1;
     mu_obs[i, 1] = 1;
     mu_state[i, 1] = 1;

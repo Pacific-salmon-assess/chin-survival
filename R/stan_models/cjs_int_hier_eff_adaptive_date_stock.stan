@@ -47,6 +47,7 @@ data {
   int<lower=1,upper=nyear> year[nind];     // Year
   int<lower=1> nstock;               // Number of stocks
   int<lower=1,upper=nstock> stock[nind];     // Stock
+  vector[nind] tag_date_z;  
 }
 
 transformed data {
@@ -68,6 +69,7 @@ parameters {
   matrix[n_occ_minus_1, nyear] alpha_yr_phi_z;    // Year/time random int for phi; note z so inverted before transformation
   vector<lower=0>[n_occ_minus_1] sigma_alpha_yr_phi;   // SD among years
   cholesky_factor_corr[n_occ_minus_1] L_Rho_yr;    // for covariance among year-stage intercepts
+  real beta_date_phi;                 // tagging date effects on phi
   real alpha_p;                              // Mean det prob
   matrix[nyear, n_occasions] alpha_yr_p;        // Year/time intercepts for p
 }
@@ -96,7 +98,7 @@ transformed parameters {
       p[i, t] = inv_logit(alpha_p + alpha_yr_p[year[i], t]);
     }
     for (t in first[i]:n_occ_minus_1) {
-      phi[i, t] = inv_logit(alpha_phi + alpha_stk_phi[stock[i]] + alpha_yr_phi[year[i], t] + alpha_t_phi[t]);
+      phi[i, t] = inv_logit(alpha_phi + alpha_stk_phi[stock[i]] + alpha_yr_phi[year[i], t] + alpha_t_phi[t] + (beta_date_phi * tag_date_z[i]));
     }
   }
 
@@ -111,6 +113,7 @@ model {
   alpha_phi ~ normal(0.8, 1);
   alpha_p ~ normal(0.25, 1); 
   alpha_t_phi ~ normal(0, 1);
+  beta_date_phi ~ normal(0.25, 0.5);    // weakly informative positive prior
   sigma_alpha_stk_phi ~ exponential(2);
   sigma_alpha_yr_phi ~ exponential(2);
   L_Rho_yr ~ lkj_corr_cholesky(2);

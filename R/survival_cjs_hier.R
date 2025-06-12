@@ -405,28 +405,40 @@ dat_tbl_trim$cjs_hier <- cjs_hier_sims
 loo_list <- purrr::map(
   cjs_hier_sims, ~ loo(.x)
 )
+saveRDS(loo_list,
+        here::here("data", "model_outputs", "hier_cjs_looic.RDS"))
+
 loo_list_add <- readRDS(
   here::here("data", "model_outputs", "hier_cjs_add_looic.RDS")
   )
 loo_list_date <- readRDS(
   here::here("data", "model_outputs", "hier_cjs_date_looic.RDS")
 )
+loo_list_date_int <- readRDS(
+  here::here("data", "model_outputs", "hier_cjs_int_date_looic.RDS")
+)
+
 
 purrr::pmap(
-  list(loo_list, loo_list_add, loo_list_date), function (x, y, z) {
+  list(loo_list, loo_list_add, loo_list_date, loo_list_date_int),
+  function (x, y, z, z2) {
     c(
-      x$estimates[3,1],
-      y$estimates[3,1],
-      z$estimates[3,1]
+      x$estimates[1,1],
+      y$estimates[1,1],
+      z$estimates[1,1],
+      z2$estimates[1,1]
       )
   }
 )
 
 purrr::pmap(
-  list(loo_list, loo_list2), function (x, y) {
+  list(loo_list, loo_list_add, loo_list_date, loo_list_date_int),
+  function (x, y, z, z2) {
     c(
-      x$estimates[3,1],
-      y$estimates[3,1]
+      x$estimates[2, 1],
+      y$estimates[2, 1],
+      z$estimates[2, 1],
+      z2$estimates[2, 1]
     )
   }
 )
