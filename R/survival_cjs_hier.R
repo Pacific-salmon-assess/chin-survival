@@ -485,7 +485,6 @@ for (i in seq_along(par_list)) {
 
 # posterior predictions check
 # compare predicted to observed proportions for each year and stage by aggregate
-# TODO: modify hier stock model to include alpha_stk in posterior preds
 pp_list <- pmap(list(dat_tbl_trim$dat_in, dat_tbl_trim$cjs_hier, 
                      dat_tbl_trim$years), 
      function (dat_in, mod, years) {

@@ -195,47 +195,6 @@ cjs_hier_sims <- pmap(
   }
   )
 
-# x <- dat_tbl_trim$dat_in[[2]]
-# x$nstock <- dat_tbl_trim$bio_dat[[2]]$agg %>% unique() %>% length()
-# x$stock <- dat_tbl_trim$bio_dat[[2]]$agg %>%
-#   as.factor() %>%
-#   droplevels() %>%
-#   as.numeric()
-# 
-# pars <- c(pars_in,
-#           # stock specific pars and quants
-#           "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
-#           "alpha_stk_phi_z")
-# inits <- lapply(1:1, function (i) {
-#   list(
-#     alpha_phi = rnorm(1, 0, 0.5),
-#     # note z transformed so inverted compared to beta_phi or beta_p
-#     alpha_yr_phi_z = matrix(
-#       rnorm(x$nyear * (x$n_occasions - 1), 0, 0.5),
-#       nrow = (x$n_occasions - 1)
-#     ),
-#     alpha_stk_phi_z = rnorm(x$nstock, 0, 0.5),
-#     alpha_t_phi = rnorm(x$n_occasions - 1, 0, 0.5),
-#     sigma_alpha_yr_phi = rexp((x$n_occasions - 1), 2),
-#     sigma_alpha_stk_phi = rexp(1, 2),
-#     # replace with rlkjcorr(XXX, K = 2, eta = 2) from rethinking package
-#     L_Rho_yr = matrix(
-#       runif((x$n_occasions - 1)^2, -0.5, 0.5), nrow = (x$n_occasions - 1)
-#     ),
-#     alpha_p = rnorm(1, 0, 0.5),
-#     alpha_yr_p = matrix(
-#       rnorm(x$nyear * (x$n_occasions), 0, 0.5), nrow = x$nyear
-#     ),
-#     beta_date_phi = rnorm(1, 0, 0.5)
-#   )
-# })
-# dd <- sampling(
-#   hier_mod_sims_stk, data = x, pars = pars,
-#   init = inits, chains = 1, iter = 500,
-#   open_progress = FALSE,
-#   control = list(adapt_delta = 0.94)
-# )
-
 saveRDS(cjs_hier_sims,
         here::here("data", "model_outputs", "hier_cjs_fit_tbl_int_date.RDS"))
 
@@ -249,3 +208,108 @@ loo_list <- purrr::map(
 )
 saveRDS(loo_list,
         here::here("data", "model_outputs", "hier_cjs_int_date_looic.RDS"))
+
+dat_tbl_trim$cjs_hier <- cjs_hier_sims
+
+
+## Model checks ----------------------------------------------------------------
+
+# neff 
+purrr::map(dat_tbl_trim$cjs_hier, function (x) {
+  tt <- summary(x)
+  tt2 <- tt$summary[ , "n_eff"]
+  tt2[which(tt2 < 1000)]
+})
+
+# rhat
+purrr::map(dat_tbl_trim$cjs_hier, function (x) {
+  tt <- bayesplot::rhat(x)
+  tt[which(tt > 1.05)]
+})
+
+
+# chain plots of parameters
+par_list <- list(
+  "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
+  "L_Rho_yr", "alpha_p", "alpha_yr_p"
+)
+file_names <- paste(
+  c( "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
+     "L_Rho_yr", "alpha_p", "alpha_yr_p"),
+  "hier_mcmc_trace_date_int.pdf",
+  sep = "_"
+)
+
+for (i in seq_along(par_list)) {
+  pdf(here::here("figs", "diagnostics", 
+                 file_names[i]),
+      height = 5, width = 8)
+  for (j in seq_along(dat_tbl_trim$cjs_hier)) {
+    print(traceplot(dat_tbl_trim$cjs_hier[[j]], pars = par_list[i]))
+  }
+  dev.off()  
+}
+
+
+# posterior predictions check
+# compare predicted to observed proportions for each year and stage by aggregate
+pp_list <- pmap(
+  list(dat_tbl_trim$dat_in, dat_tbl_trim$cjs_hier, 
+       dat_tbl_trim$years), 
+  function (dat_in, mod, years) {
+    obs_dat <- dat_in$y
+    n_iters_out <- 500 #dim(post_dat)[1]
+    post_dat <- rstan::extract(mod)$y_hat[1:n_iters_out, , ]
+    year_ids <- dat_in$year
+    n_years <- length(unique(year_ids))
+    n_stages <- dim(post_dat)[3]
+    
+    # calculate ppns for each the observed data and each iteration/stage of 
+    # posterior
+    post_ppns_list <- vector(mode = "list", length = n_years * n_iters_out)
+    list_counter <- 1
+    for (g in 1:n_years) {
+      g_year <- which(year_ids == g)
+      #calc obs ppns
+      obs_ppns <- apply(obs_dat[g_year, ], 2, 
+                        function(x) sum(x) / nrow(obs_dat[g_year, ]))
+      
+      for (i in 1:n_iters_out) {
+        dum <- post_dat[i, g_year, ] %>% 
+          # coerce to matrix to ensure that it's functional even with single
+          # obs
+          matrix(ncol = n_stages)
+        post_ppns_vec <- apply(dum, 2, function(x) sum(x) / nrow(dum))
+        post_ppns_list[[list_counter]] <- data.frame(
+          array_num = seq(1, n_stages, 1),
+          year = years[g],
+          post_ppns = post_ppns_vec,
+          obs_ppns = obs_ppns
+        )
+        list_counter <- list_counter + 1
+      }
+    }
+    post_ppns <- post_ppns_list %>% 
+      bind_rows() %>% 
+      mutate(array_num = as.factor(array_num))
+    obs_only <- post_ppns %>% dplyr::select(-post_ppns) %>% distinct()
+    
+    list(pos = post_ppns, obs = obs_only)
+  }
+)
+
+# box plots showing posterior distribution of proportions relative to observed 
+pp_plot_list <- map2(pp_list, dat_tbl_trim$stock_group, function (xx, title) {
+  ggplot(xx$pos) +
+    geom_boxplot(aes(x = array_num, y = post_ppns)) +
+    geom_point(data = xx$obs, aes(x = array_num, y = obs_ppns), 
+               color = "red") +
+    facet_wrap(~year) +
+    labs(title = title) +
+    ggsidekick::theme_sleek()
+})
+
+pdf(here::here("figs", "diagnostics", "posterior_checks_hier_date_int.pdf"),
+    height = 5, width = 8)
+pp_plot_list
+dev.off()
