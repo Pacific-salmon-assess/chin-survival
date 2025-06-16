@@ -647,8 +647,8 @@ purrr::map2(
              array_num = as.numeric(as.factor(segment)))
     
     p <- ggplot() +
-      geom_density(data = p_sum, aes(x = est), 
-                   fill = "red", colour = "red", alpha = 0.4) +
+      geom_density(data = p_sum, aes(x = est, group = as.factor(year)), 
+                   fill = "red", colour = "red", alpha = 0.2) +
       geom_density(data = alpha_p_yr_prior_df, aes(x = est), 
                    fill = "blue", colour = "blue", alpha = 0.4) +
       facet_wrap(~segment) + 
