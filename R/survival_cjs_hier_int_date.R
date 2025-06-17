@@ -380,15 +380,15 @@ purrr::map2(
                    names_prefix = "V")
     
     p <- ggplot() +
-      geom_density(data = dum, aes(x = est, group = as.factor(year)), 
-                   fill = "red", colour = "red", alpha = 0.2) +
+      geom_density(data = dum, aes(x = est), 
+                   fill = "red", colour = "red", alpha = 0.4) +
       geom_density(data = alpha_phi_t_prior_df, aes(x = est), 
                    fill = "blue", colour = "blue", alpha = 0.4) +
       facet_wrap(~segment) + 
       ggsidekick::theme_sleek() +
       labs(x = "Gamma Phi T Estimate", y = "Kernel Density", title = y) 
     
-    file_name <- paste("gamma_phi_t", y, ".png", sep = "")
+    file_name <- paste("gamma_phi_t_", y, ".png", sep = "")
     
     png(here::here("figs", "cjs", "posterior_prior_comp_int_date", file_name), 
         height = 4.5, width = 6, units = "in", res = 250)
@@ -396,6 +396,39 @@ purrr::map2(
     dev.off()
   }
 )
+
+
+# year-specific phi
+alpha_phi_yr_prior_df <- data.frame(est = rnorm(4000, 0, 0.5), parameter = "Prior")
+purrr::map2(
+  dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
+  function(x , y) {
+    yr_phi_mat <- extract(x)[["alpha_yr_phi"]] 
+    phi_sum <- yr_phi_mat %>% 
+      as.data.frame.table() %>%
+      rename(year = Var2, segment = Var3) %>% 
+      mutate(est = Freq,
+             year = as.numeric(as.factor(year)) + 2018,
+             array_num = as.numeric(as.factor(segment)))
+    
+    p <- ggplot() +
+      geom_density(data = phi_sum, aes(x = est, group = as.factor(year)), 
+                   fill = "red", colour = "red", alpha = 0.2) +
+      geom_density(data = alpha_phi_yr_prior_df, aes(x = est), 
+                   fill = "blue", colour = "blue", alpha = 0.4) +
+      facet_wrap(~segment) + 
+      ggsidekick::theme_sleek() +
+      labs(x = "Gamma p_jt Estimate", y = "Kernel Density", title = y) 
+    
+    file_name <- paste("gamma_phi_jt_", y, ".png", sep = "")
+    
+    png(here::here("figs", "cjs", "posterior_prior_comp_int_date", file_name), 
+        height = 4.5, width = 6, units = "in", res = 250)
+    print(p)
+    dev.off()
+  }
+)
+
 
 # average detection prob
 alpha_p_prior_df <- data.frame(est = rnorm(4000, 0.25, 1), parameter = "Prior")
@@ -424,7 +457,7 @@ purrr::map2(
 
 
 # stage and year specific detection prob
-alpha_p_yr_prior_df <- data.frame(est = rnorm(4000, 0, 0.5), parameter = "Prior")
+alpha_p_yr_prior_df <- data.frame(est = rnorm(4000, 0, 1), parameter = "Prior")
 purrr::map2(
   dat_tbl_trim$cjs_hier, dat_tbl_trim$stock_group, 
   function(x , y) {
@@ -751,6 +784,11 @@ surv_diff2 <- dat_tbl_trim$phi_mat_mean[[5]][, 3] -
   dat_tbl_trim$phi_mat_mean[[5]][, 4] 
 median(surv_diff2)
 length(surv_diff2[surv_diff2 < 0]) / length(surv_diff2)
+# calculate difference between 5 and 4 for Up Col
+surv_diff3 <- dat_tbl_trim$phi_mat_mean[[5]][, 5] - 
+  dat_tbl_trim$phi_mat_mean[[5]][, 4] 
+median(surv_diff3)
+length(surv_diff3[surv_diff3 < 0]) / length(surv_diff3)
 
 dd <- dat_tbl_trim$phi_mat_mean[[2]][, 1] - 
   dat_tbl_trim$phi_mat_mean[[2]][, 2] 
@@ -813,7 +851,6 @@ ggplot(yr_phi_dat) +
   ggsidekick::theme_sleek() +
   labs(x = "Segment Name", y = "Stage-Specific Survival Rate") 
 dev.off()
-
 
 
 # year- and stage-specific detection parameter estimates
