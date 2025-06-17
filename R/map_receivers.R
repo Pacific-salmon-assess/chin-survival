@@ -209,9 +209,10 @@ rec <- rec_all  %>%
         longitude > -122.5 ~ "fraser_2",
       (region == "fraser" | (region == "river" & latitude > 49)) & 
         (longitude < -122.5 & longitude > -123) ~ "fraser_1",
-      (region %in% c("river", "columbia", "swwa_or") | marine == "no") & 
-        (longitude > -124.15 & longitude < -121.94 & 
-           latitude < 46.3 & latitude > 45) ~ "lower_col",
+      (longitude > -124.05 & longitude < -121.94 & 
+         latitude < 46.3 & latitude > 45) ~ "lower_col",
+      (longitude > -124.15 & longitude < -123.65 & 
+         latitude < 46.3 & latitude > 45) ~ "swwa_or",
       region == "puget" & latitude < 47.3 ~ "in_river",
       region == "river" ~ "in_river", #fish caught in terminal locations 
       marine == "no" ~ "in_river",
