@@ -926,11 +926,16 @@ gamma_date_dat <- purrr::map2(
 ) %>% 
   bind_rows() %>%
   mutate(
-    stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group))
+    stock_group = factor(
+      stock_group,
+      levels = c(
+        "Cali", "Low Col.", "Up Col.", "Fraser", "South Puget"
+      )
+      )
   )
 
-png(here::here("figs", "cjs", "estimated_yearly_p.png"), 
-    height = 4.5, width = 9, units = "in", res = 250)
+png(here::here("figs", "cjs", "date_beta_phi.png"), 
+    height = 3.5, width = 5, units = "in", res = 250)
 ggplot(gamma_date_dat) +
   geom_pointrange(
     aes(x = stock_group, y = med, ymin = lo, ymax = up, fill = stock_group),
