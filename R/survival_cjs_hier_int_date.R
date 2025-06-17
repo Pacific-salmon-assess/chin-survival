@@ -741,6 +741,22 @@ png(here::here("figs", "cjs", "phi_ests.png"),
 stage_spec_surv
 dev.off()
 
+# calculate difference between 2 and 3 for Up Col
+surv_diff <- dat_tbl_trim$phi_mat_mean[[5]][, 3] - 
+  dat_tbl_trim$phi_mat_mean[[5]][, 2] 
+median(surv_diff)
+length(surv_diff[surv_diff < 0]) / length(surv_diff)
+# calculate difference between 3 and 4 for Up Col
+surv_diff2 <- dat_tbl_trim$phi_mat_mean[[5]][, 3] - 
+  dat_tbl_trim$phi_mat_mean[[5]][, 4] 
+median(surv_diff2)
+length(surv_diff2[surv_diff2 < 0]) / length(surv_diff2)
+
+dd <- dat_tbl_trim$phi_mat_mean[[2]][, 1] - 
+  dat_tbl_trim$phi_mat_mean[[2]][, 2] 
+median(dd)
+length(dd[dd < 0]) / length(dd)
+
 
 # year-specific phi estimates
 yr_phi_dat <- purrr::map2(
@@ -933,7 +949,8 @@ mean_surv_dat <- dat_tbl_trim$cum_survival_mean %>%
            levels = c(
              "Cali", "Low Col.", "Up Col.", "Fraser", "South Puget"
            )
-         )
+         ),
+         par = ifelse(par == "beta", "digamma", par)
   ) %>% 
   select(-c(iter, est)) %>% 
   distinct() 
@@ -941,7 +958,7 @@ mean_surv_dat <- dat_tbl_trim$cum_survival_mean %>%
 fill_pal <- c("white", "black")
 names(fill_pal) <- c("no", "yes")
 shape_pal <- c(21, 24)
-names(shape_pal) <- c("phi", "beta")
+names(shape_pal) <- c("phi", "digamma")
 
 surv_plot_mean <- ggplot(data = mean_surv_dat) +
   geom_pointrange(
@@ -1005,8 +1022,8 @@ surv_plot_mean_trim_dist <- mean_surv_dat %>%
   ) +
   ggsidekick::theme_sleek() +
   scale_size_manual(values = size_pal) +
-  scale_colour_viridis_d() +
-  scale_fill_viridis_d() +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_colour_brewer(palette = "Dark2") +
   theme(legend.text=element_text(size = 9),
         legend.title = element_blank(),
         axis.text.x = element_text(size = rel(.8))) +
@@ -1070,6 +1087,12 @@ p_total <- term_surv_dat %>%
   labs(y = "Cumulative Terminal\nSurvival Rate") +
   ggsidekick::theme_sleek() +
   theme(axis.title.x = element_blank())
+
+term_surv_dat %>% 
+  group_by(stock_group) %>% 
+  summarize(
+    median(est)
+  )
 
 # import terminal migration distance (to avoid in river harvest focus on 
 # Lower Columbia for both UC and LW)
@@ -1261,3 +1284,103 @@ ggplot() +
   ggsidekick::theme_sleek() +
   labs(x = "Sigma Year Estimate", y = "Kernel Density") 
 dev.off()
+
+
+
+## CALCULATE POSTERIOR MEANS OF TERMINAL DET -----------------------------------
+
+# posterior estimates of det probability for Upper Col
+p_mat_uc <- extract(dat_tbl_trim$cjs_hier[[5]])[["p_yr"]]
+hist(p_mat_uc[ , 1:5, 5], main = "Lower River p") 
+hist(p_mat_uc[ , 1:5, 6], main = "Bonneville p") 
+hist(p_mat_uc[ , 1:5, 7], main = "Upriver p") 
+
+# posterior estimates of det probability for Low Col
+p_mat_lc <- extract(dat_tbl_trim$cjs_hier[[3]])[["p_yr"]]
+phi_mat_lc <- extract(dat_tbl_trim$cjs_hier[[3]])[["phi_yr"]]
+
+p5 <- p_mat_lc[ , 1, 5]
+p6 <- p_mat_lc[ , 1, 6]
+phi5 <- phi_mat_lc[ , 1, 5]
+p_final <- p5 + ((1 - p5) * phi5 * p6)
+
+# calculate posterior detection probability for all stocks except Columbia 
+# (more detection arrays)
+p_final_list <- purrr::map(
+  dat_tbl_trim$cjs_hier[1:4],
+  function (x) {
+    p_mat <- extract(x)[["p_yr"]]
+    phi_mat <- extract(x)[["phi_yr"]]
+    
+    if (ncol(p_mat) == ncol(phi_mat)) {
+      p_final <- matrix(NA, ncol = ncol(p_mat), nrow = nrow(p_mat))
+      for (i in 1:ncol(p_mat)) {
+        p5 <- p_mat[ , i, 5]
+        p6 <- p_mat[ , i, 6]
+        phi5 <- phi_mat[ , i, 5]
+        p_final[ , i] <- p5 + ((1 - p5) * phi5 * p6)
+      }
+    }
+    return(p_final)
+  }
+)
+
+
+# calculate upper columbia separately since has more terminal areas
+p_mat_uc <- extract(dat_tbl_trim$cjs_hier[[5]])[["p_yr"]]
+phi_mat_uc <- extract(dat_tbl_trim$cjs_hier[[5]])[["phi_yr"]]
+
+p_final_uc <- matrix(NA, ncol = ncol(p_mat_uc), nrow = nrow(p_mat_uc))
+for (i in 1:ncol(p_mat_uc)) {
+  p5 <- p_mat_uc[ , i, 5]
+  p6 <- p_mat_uc[ , i, 6]
+  p7 <- p_mat_uc[ , i, 7]
+  phi5 <- phi_mat_uc[ , i, 5]
+  phi6 <- phi_mat_uc[ , i, 6]
+  p_final_uc[ , i] <-  p5 + 
+    (1 - p5) * phi5 * p6 + 
+    (1 - p5) * phi5 * (1 - p6) * phi6 * p7 - 
+    (1 - p5) * phi5 * p6 * phi6 * p7
+}
+
+# make column names years
+p_final_list2 <- lapply(
+  append(p_final_list, list(p_final_uc)),
+  function(mat) {
+    # dim by column number to account for 0 Cali detections in last year
+    colnames(mat) <- seq(2019, 2019 + ncol(mat) - 1, by = 1)
+    return(mat)
+  }
+)
+
+# add to tbl
+post_det_p_tbl <- tibble(
+  stock_group = dat_tbl_trim$stock_group,
+  final_p_mat = p_final_list2
+) %>% 
+  mutate(
+    p_out = purrr::map(
+      final_p_mat, 
+      ~ .x %>% 
+        rethinking::logit() %>% 
+        as.data.frame() %>% 
+        pivot_longer(cols = everything(), names_to = "year", values_to = "logit_p")
+    )
+  )
+
+posterior_dat_out <- post_det_p_tbl %>% 
+  select(
+    stock_group, p_out
+  ) %>% 
+  unnest(cols = c(p_out)) %>% 
+  group_by(stock_group, year) %>% 
+  summarize(
+    mean_logit_p = mean(logit_p),
+    sd_logit_p = sd(logit_p)
+  ) %>% 
+  ungroup()
+
+saveRDS(
+  posterior_dat_out,
+  here::here("data", "posterior_p.rds")
+)
