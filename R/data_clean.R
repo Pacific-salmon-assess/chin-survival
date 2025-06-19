@@ -6,7 +6,7 @@ library(tidyverse)
 
 dat_tbl <- readRDS(here::here("data", "det_history_tbl.RDS"))
 
-chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS")) %>% 
+chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS")) %>%
   filter(
     !charter == "msf",
     !is.na(acoustic),
@@ -23,17 +23,17 @@ indicator_key <- read.csv(
   )
 
 # TODO: update with final CTC estimates
+cyer_dat_no_ps <- readRDS(
+  here::here("data", "harvest", "cleaned_cyer_dat_no_puget.rds")
+  ) %>% 
+  rename(ctc_indicator = stock, focal_er_no_ps = focal_er) %>% 
+  filter(year > 2018)
 cyer_dat <- readRDS(here::here("data", "harvest", "cleaned_cyer_dat.rds")) %>% 
   rename(ctc_indicator = stock) %>% 
-  filter(year > 2018)
-
-# left_join(cyer_dat, 
-#           indicator_key %>% 
-#             select(agg_name, ctc_indicator) %>% 
-#             distinct(),
-#           by = "ctc_indicator") %>% 
-#   ggplot(.) + 
-#   geom_boxplot(aes(x = agg_name, y = focal_er, fill = clip))
+  filter(year > 2018) %>% 
+  left_join(., cyer_dat_no_ps, 
+            by = c("year", "ctc_indicator", "indicator", "clip")) %>% 
+  glimpse()
 
 
 stage_dat <- readRDS(
@@ -142,8 +142,8 @@ det_dat1 <- dat_tbl %>%
               mutate(month = lubridate::month(date)) %>% 
               select(vemco_code = acoustic_year, month, year, acoustic_type, 
                      known_stage, stage_1, stage_2, lat, lon, year_day, 
-                     fl, wt, lipid, adj_inj, ctc_indicator, focal_er,
-                     comment),
+                     fl, wt, lipid, adj_inj, ctc_indicator,
+                     focal_er, focal_er_no_ps, comment),
             by = "vemco_code") %>%
   mutate(
     # redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes"),

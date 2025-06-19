@@ -120,6 +120,17 @@ cwt_dat_long2 %>%
   arrange(mean_er) %>% 
   print(n = Inf)
 
+cwt_dat_long2 %>% 
+  filter(strata %in% c("isbm_puget_n", "isbm_puget_s"), 
+         year > 2018,
+         mark == "unmarked") %>% 
+  group_by(indicator, year) %>% 
+  summarize(total_er = sum(percent_run)) %>% 
+  group_by(indicator) %>% 
+  summarize(mean_er = mean(total_er)) %>% 
+  arrange(mean_er) %>% 
+  print(n = Inf)
+
 
 #combine stray and escapement, then use to calculate total exploitation
 cyer_dat <- cwt_dat_long2 %>% 
@@ -144,6 +155,7 @@ ggplot(cyer_dat) +
 cwt_dat_out <- cwt_dat_long2 %>% 
   filter(grepl("isbm", strata) | grepl("aabm_wcvi", strata),
          !grepl("isbm_nbc", strata),
+         !grepl("isbm_puget", strata),
          # remove incomplete 2023 years and replace with average
          !year == "2023"
          ) %>% 
@@ -169,6 +181,41 @@ recent_avg <- cwt_dat_out %>%
   ) %>% 
   select(colnames(cwt_dat_out))
   
+
+saveRDS(rbind(cwt_dat_out, recent_avg),
+        here::here("data", "harvest", "cleaned_cyer_dat_no_puget.rds"))
+
+
+
+# as above but includes puget
+cwt_dat_out <- cwt_dat_long2 %>% 
+  filter(grepl("isbm", strata) | grepl("aabm_wcvi", strata),
+         !grepl("isbm_nbc", strata),
+         # remove incomplete 2023 years and replace with average
+         !year == "2023"
+  ) %>% 
+  group_by(year, indicator) %>% 
+  summarize(
+    focal_er = sum(scaled_percent)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    clip = ifelse(grepl("unmarked", indicator), "N", "Y"),
+    stock = str_split(indicator, "_")  %>%
+      purrr::map(., head, n = 1) %>%
+      unlist() 
+  )
+# use recevent average as proxy for 2023
+recent_avg <- cwt_dat_out %>% 
+  filter(year > 2018 & year < 2023) %>% 
+  group_by(indicator, clip, stock,) %>% 
+  summarize(focal_er = mean(focal_er)) %>% 
+  ungroup() %>% 
+  mutate(
+    year = 2023
+  ) %>% 
+  select(colnames(cwt_dat_out))
+
 
 saveRDS(rbind(cwt_dat_out, recent_avg),
         here::here("data", "harvest", "cleaned_cyer_dat.rds"))
