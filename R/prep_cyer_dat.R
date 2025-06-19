@@ -72,37 +72,30 @@ cwt_dat <- purrr::map2(
 # southern US harvest not available for 2023; calculate mean values 2016-22 for
 # each fishery, add to original dataset for 23 then rescale
 # REPLACED WITH OVERALL AVERAGE BELOW SINCE 23 data only available for few stocks
-# cwt_dat_long <- cwt_dat %>% 
-#   filter(comment == "ok") %>% 
-#   mutate(indicator = paste(indicator, mark, sep = "_")) %>% 
-#   pivot_longer(cols = c(starts_with("aabm"), starts_with("isbm"),
-#                         starts_with("term"), stray, esc),
-#                names_to = "strata", values_to = "percent_run") %>% 
-#   mutate(
-#     year = as.numeric(year),
-#     southern_us = ifelse(
-#       (grepl("falcon", strata) | grepl("_sus_", strata) | 
-#          grepl("puget", strata) | grepl("wac", strata)),
-#       TRUE,
-#       FALSE
-#     )
-#   ) 
-# calculate mean southern US exploitation rate to use since 2022 values 
+cwt_dat_long <- cwt_dat %>%
+  filter(comment == "ok") %>%
+  mutate(indicator = paste(indicator, mark, sep = "_")) %>%
+  pivot_longer(cols = c(starts_with("aabm"), starts_with("isbm"),
+                        starts_with("term"), stray, esc),
+               names_to = "strata", values_to = "percent_run") %>%
+  mutate(
+    year = as.numeric(year),
+    southern_us = ifelse(
+      (grepl("falcon", strata) | grepl("_sus_", strata) |
+         grepl("puget", strata) | grepl("wac", strata)),
+      TRUE,
+      FALSE
+    )
+  )
+# calculate mean southern US exploitation rate to use since 2022 values
 # unavailable
-# mean_sus <- cwt_dat_long %>% 
-#   filter(year > 2015 & year < 2023) %>% 
-#   group_by(strata, indicator) %>% 
+# mean_sus <- cwt_dat_long %>%
+#   filter(year > 2015 & year < 2023) %>%
+#   group_by(strata, indicator) %>%
 #   summarize(mean_percent_run = mean(percent_run))
 
 
 cwt_dat_long2 <- cwt_dat_long %>% 
-  # left_join(cwt_dat_long, mean_sus, 
-  #                          by = c("indicator", "strata")) %>% 
-  # mutate(
-  #   percent_run = ifelse(year == "2023" & southern_us == TRUE,
-  #                        mean_percent_run,
-  #                        percent_run)
-  # ) %>% 
   group_by(
     indicator, year
   ) %>% 
@@ -113,6 +106,19 @@ cwt_dat_long2 <- cwt_dat_long %>%
   mutate(
     scaled_percent = percent_run / total_percent
   )
+
+
+# look at relative impact of WCVI fisheries on different indicators
+cwt_dat_long2 %>% 
+  filter(strata %in% c("aabm_wcvi_s", "aabm_wcvi_s"), 
+         year > 2018,
+         mark == "unmarked") %>% 
+  group_by(indicator, year) %>% 
+  summarize(total_er = sum(percent_run)) %>% 
+  group_by(indicator) %>% 
+  summarize(mean_er = mean(total_er)) %>% 
+  arrange(mean_er) %>% 
+  print(n = Inf)
 
 
 #combine stray and escapement, then use to calculate total exploitation

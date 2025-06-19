@@ -328,7 +328,6 @@ cor_plot_list <- purrr::map2(
 )
 
 
-
 ## Submodel effects 
 
 ## rho representing correlation between lipid and fork length
@@ -423,8 +422,7 @@ for (j in seq_along(samp_date_seq)) {
     sim_fl[i, j] <- mu[1]
     sim_lipid[i, j] <- mu[2]
   }
-  # excludes hierarchical intercept; assumes high terminal det prob and low
-  # injury and mean harvest
+  # excludes hierarchical intercept; assumes low injury and mean harvest
   sim_eta <- as.numeric(
     post$alpha_s + 
       post$beta_ds * samp_date_seq[j] +
@@ -632,6 +630,7 @@ injury_point <- pred_injury_dat %>%
 diff_dat <- data.frame(
   diff = pred_inj[ , 4] - pred_inj[ , 1]
 ) 
+median(diff_dat$diff)
 diff_hist <- ggplot() +
   geom_histogram(data = diff_dat, aes(x = diff), 
                  bins = 50, fill = "#7570b3") +
@@ -645,7 +644,7 @@ diff_hist <- ggplot() +
 n_neg <- diff_dat %>% 
   filter(diff < 0) %>% 
   nrow() 
-n_neg / nrow(diff_dat) #82%
+n_neg / nrow(diff_dat) #80%
 
 
 # stock, including indirect effects on date/size/lipid, and indirect exploitation
@@ -676,6 +675,11 @@ sim_surv <- sim_surv_d <- sim_surv_cyer <- sim_fl <- sim_lipid <- matrix(
   nrow = nrow(sigma), 
   ncol = length(stk_seq)
 )
+# define low cyer for comparison
+low_cyer <- 0.0001
+low_cyer_z <- (low_cyer - mean(det_dat$focal_er)) / sd(det_dat$focal_er)
+
+
 for (j in seq_along(stk_seq)) {
   pred_mu_fl[ , j] <- post$alpha_f + post$beta_df * pred_mu_date[ , j] + 
     post$alpha_stk[ , j, 1]
@@ -691,20 +695,21 @@ for (j in seq_along(stk_seq)) {
     sim_fl[i, j] <- mu[1]
     sim_lipid[i, j] <- mu[2]
   }
-  # excludes hierarchical intercept; assumes high terminal det prob and low
-  # injury
+  # excludes hierarchical intercept; assumes low injury and low harvest rate
   sim_eta <- as.numeric(
     post$alpha_s + 
       post$beta_ds * pred_mu_date[ , j] +
       post$beta_fs * sim_fl[ , j] +
       post$beta_ls * sim_lipid[ , j] +
+      post$beta_cs * low_cyer_z +
       post$alpha_stk[ , j, 4]
   )
   # as above but sets fl and lipid to zero (i.e. removes them)
   sim_eta_direct <- as.numeric(
-    post$alpha_s + post$alpha_stk[ , j, 4] 
+    post$alpha_s + post$alpha_stk[ , j, 4] +
+      post$beta_cs * low_cyer_z
   )
-  # as above but includes all variables including cyer
+  # as above but includes stock-specific cyer
   sim_eta_cyer <- as.numeric(
     post$alpha_s + 
       post$beta_ds * pred_mu_date[ , j] +
@@ -750,14 +755,14 @@ pred_stk_surv_cyer <- sim_surv_cyer %>%
     cols = everything(), names_to = "stk", values_to = "est"
   ) %>% 
   mutate(
-    effect = "total + ER"
+    effect = "total +\nER index"
   )
 
 alpha_pal <- c("white", "#7570b3", "black")
-names(alpha_pal) <- c("direct", "total", "total + ER")
+names(alpha_pal) <- c("direct", "total", "total +\nER index")
 
 pred_stk_dat <- rbind(
-  pred_stk_surv_total, pred_stk_surv_direct, pred_stk_surv_cyer
+  pred_stk_surv_direct, pred_stk_surv_total, pred_stk_surv_cyer
 ) %>% 
   group_by(stk, effect) %>%
   summarize(
@@ -790,43 +795,44 @@ pred_stk_comb <- ggplot(pred_stk_dat) +
 
 
 ## export figs
-png(here::here("figs", "binomial-glm-cyer-uninformative", "det_prob.png"), units = "in", 
+png(here::here("figs", "binomial-glm-cyer-uninformative", "det_prob.png"), 
+    units = "in", 
     res = 250, height = 4.5, width = 6.5)
 terminal_det_p
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "surv_cyer.png"), units = "in", 
-    res = 250, height = 5.25, width = 2.5)
+png(here::here("figs", "binomial-glm-cyer-uninformative", "surv_cyer.png"), 
+    units = "in", res = 250, height = 5.25, width = 2.5)
 pred_day_cyer
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "ri_sigmas.png"), units = "in", 
-    res = 250, height = 3.5, width = 6)
+png(here::here("figs", "binomial-glm-cyer-uninformative", "ri_sigmas.png"), 
+    units = "in", res = 250, height = 3.5, width = 6)
 sigma_stk_pt
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "fl_lipid_corr.png"), units = "in", 
-    res = 250, height = 3, width = 3.5)
+png(here::here("figs", "binomial-glm-cyer-uninformative", "fl_lipid_corr.png"), 
+    units = "in", res = 250, height = 3, width = 3.5)
 rho_hist
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "stock_ri_corr.png"), units = "in", 
-    res = 250, height = 5, width = 5.5)
+png(here::here("figs", "binomial-glm-cyer-uninformative", "stock_ri_corr.png"),
+    units = "in", res = 250, height = 5, width = 5.5)
 cor_plot_list[[1]]
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "yr_ri_corr.png"), units = "in", 
-    res = 250, height = 4.5, width = 5)
+png(here::here("figs", "binomial-glm-cyer-uninformative", "yr_ri_corr.png"), 
+    units = "in", res = 250, height = 4.5, width = 5)
 cor_plot_list[[2]]
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "fl_lipid_pred.png"), units = "in", 
-    res = 250, height = 3.5, width = 6)
+png(here::here("figs", "binomial-glm-cyer-uninformative", "fl_lipid_pred.png"),
+    units = "in", res = 250, height = 3.5, width = 6)
 pred_mu_ribbon
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "surv_pred.png"), units = "in", 
-    res = 250, height = 5.25, width = 2.5)
+png(here::here("figs", "binomial-glm-cyer-uninformative", "surv_pred.png"), 
+    units = "in", res = 250, height = 5.25, width = 2.5)
 gridExtra::grid.arrange(
   gridExtra::arrangeGrob(
     pp, 
@@ -837,18 +843,18 @@ gridExtra::grid.arrange(
 )
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "inj_pred.png"), units = "in", 
-    res = 250, height = 3, width = 3.5)
+png(here::here("figs", "binomial-glm-cyer-uninformative", "inj_pred.png"), 
+    units = "in", res = 250, height = 3, width = 3.5)
 injury_point
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "inj_delta.png"), units = "in", 
-    res = 250, height = 3, width = 3.5)
+png(here::here("figs", "binomial-glm-cyer-uninformative", "inj_delta.png"),
+    units = "in", res = 250, height = 3, width = 3.5)
 diff_hist
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "stock_surv.png"), units = "in", 
-    res = 250, height = 3.5, width = 6)
+png(here::here("figs", "binomial-glm-cyer-uninformative", "stock_surv.png"),
+    units = "in", res = 250, height = 3.5, width = 6)
 pred_stk_comb
 dev.off()
 
