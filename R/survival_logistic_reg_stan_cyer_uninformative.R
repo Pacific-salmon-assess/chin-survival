@@ -117,23 +117,21 @@ dat_list <- list(
 )
 
 
-mod1 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_cov2_uninformative.stan"))
+# mod1 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_cov2_uninformative.stan"))
 # m1_stan <- sampling(mod1, data = dat_list,
 #                     chains = 4, iter = 2000, warmup = 1000,
 #                     control = list(adapt_delta = 0.96))
 # saveRDS(m1_stan,
 #         here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
-
-
-# as above but with alternative CYER index
-dat_list$cyer_z <-  det_dat$cyer2_z
-m1_stan_no_ps <- sampling(mod1, data = dat_list,
-                    chains = 4, iter = 2000, warmup = 1000,
-                    control = list(adapt_delta = 0.96))
-saveRDS(
-  m1_stan_no_ps,
-  here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_no_ps.rds")
-)
+# # as above but with alternative CYER index
+# dat_list$cyer_z <-  det_dat$cyer2_z
+# m1_stan_no_ps <- sampling(mod1, data = dat_list,
+#                     chains = 4, iter = 2000, warmup = 1000,
+#                     control = list(adapt_delta = 0.96))
+# saveRDS(
+#   m1_stan_no_ps,
+#   here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_no_ps.rds")
+# )
 
 
 m1_stan <- readRDS(
@@ -151,6 +149,9 @@ subset(summary_df, Rhat > 1.05 | n_eff < 1000)
 summary_df %>% 
   filter(grepl("beta", parameter))
 
+# similar effects regardless of whether Puget Sound ISBM fisheries included
+loo1 <- loo(m1_stan)
+loo2 <- loo(m1_stan_no_ps)
 
 
 # DETECTION PROBABILITY --------------------------------------------------------
@@ -689,7 +690,7 @@ sim_surv <- sim_surv_d <- sim_surv_cyer <- sim_fl <- sim_lipid <- matrix(
   ncol = length(stk_seq)
 )
 # define low cyer for comparison
-low_cyer <- 0.0001
+low_cyer <- 0
 low_cyer_z <- (low_cyer - mean(det_dat$focal_er)) / sd(det_dat$focal_er)
 
 
@@ -750,17 +751,17 @@ pred_stk_surv_total <- sim_surv %>%
     cols = everything(), names_to = "stk", values_to = "est"
   ) %>% 
   mutate(
-    effect = "total"
+    effect = "absent"
   )
-pred_stk_surv_direct <- sim_surv_d %>% 
-  as.data.frame() %>% 
-  set_names(stk_seq) %>% 
-  pivot_longer(
-    cols = everything(), names_to = "stk", values_to = "est"
-  ) %>% 
-  mutate(
-    effect = "direct"
-  )
+# pred_stk_surv_direct <- sim_surv_d %>% 
+#   as.data.frame() %>% 
+#   set_names(stk_seq) %>% 
+#   pivot_longer(
+#     cols = everything(), names_to = "stk", values_to = "est"
+#   ) %>% 
+#   mutate(
+#     effect = "direct"
+#   )
 pred_stk_surv_cyer <- sim_surv_cyer %>% 
   as.data.frame() %>% 
   set_names(stk_seq) %>% 
@@ -768,14 +769,16 @@ pred_stk_surv_cyer <- sim_surv_cyer %>%
     cols = everything(), names_to = "stk", values_to = "est"
   ) %>% 
   mutate(
-    effect = "total +\nER index"
+    effect = "present"
   )
 
-alpha_pal <- c("white", "#7570b3", "black")
-names(alpha_pal) <- c("direct", "total", "total +\nER index")
+alpha_pal <- c("white", #"#7570b3", 
+               "black")
+names(alpha_pal) <- c("absent", "present")
 
 pred_stk_dat <- rbind(
-  pred_stk_surv_direct, pred_stk_surv_total, pred_stk_surv_cyer
+  #pred_stk_surv_direct, 
+  pred_stk_surv_total, pred_stk_surv_cyer
 ) %>% 
   group_by(stk, effect) %>%
   summarize(
@@ -798,15 +801,47 @@ pred_stk_comb <- ggplot(pred_stk_dat) +
                       fill = effect),
                   position = position_dodge(width = 0.4),
                   shape = 21) +
-  scale_fill_manual(values = alpha_pal, name = "Effect") +
+  scale_fill_manual(values = alpha_pal, name = "Exploitation\nRate Index") +
   labs(y = "Predicted Survival Rate") +
   ggsidekick::theme_sleek() +
   theme(
     axis.title.x = element_blank(),
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
-pred_stk_dat %>% 
-  filter(effect == "total")
+
+
+## calculate difference in survival when adding in ecological covariates
+diff_surv_list <- vector(mode = "list", length = length(stk_seq))
+for (i in seq_along(stk_seq)) {
+  diff_surv_list[[i]] <- data.frame(
+    diff = sim_surv[ , i] - sim_surv_d[ , i],
+    stk = as.character(i)
+  )
+}   
+
+diff_surv_dat <- diff_surv_list %>% 
+  bind_rows() %>% 
+  left_join(., stk_key, by = "stk") 
+
+
+stock_pal <- c(#"#b30000",
+  "#6baed6", "#08306b", "#fec44f", "#ccece6", "#238b45",
+               "#bcbddc", #"#807dba",
+  "#54278f", "#3f007d", "#fde0dd", "#f768a1")
+names(stock_pal) <- levels(stk_key$stock_group)
+
+diff_survival_hist <- ggplot(data = diff_surv_dat) +
+  geom_density(aes(x = diff, fill = stock_group), colour = "black") +
+  geom_vline(aes(xintercept = 0), lty = 2 , colour = "black", linewidth = 1) +
+  ggsidekick::theme_sleek() +
+  scale_fill_manual(values = stock_pal, guide = "none") +
+  labs(x = "Difference in Survival Rate Due to Individual Covariates") +
+  theme(
+    axis.title.y = element_blank()
+  ) +
+  facet_wrap(~stock_group)
+
+
 
 ## export figs
 png(here::here("figs", "binomial-glm-cyer-uninformative", "det_prob.png"), 
@@ -871,4 +906,8 @@ png(here::here("figs", "binomial-glm-cyer-uninformative", "stock_surv.png"),
     units = "in", res = 250, height = 3.5, width = 6)
 pred_stk_comb
 dev.off()
-
+png(here::here("figs", "binomial-glm-cyer-uninformative",
+               "diff_survival_hist.png"),
+    units = "in", res = 250, height = 3.5, width = 6)
+diff_survival_hist
+dev.off()

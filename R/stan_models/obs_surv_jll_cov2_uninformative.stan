@@ -56,8 +56,11 @@ parameters{
 transformed parameters{
     matrix[N_year, 3] alpha_yr;
     matrix[N_stock, 4] alpha_stk;
+    vector[4] delta_inj;
     alpha_stk = (diag_pre_multiply(sigma_stk, L_Rho_stk) * z_stk)';
     alpha_yr = (diag_pre_multiply(sigma_yr, L_Rho_yr) * z_yr)';
+
+    delta_inj = append_row(0, delta);
 
     vector<lower=0, upper = 1>[N_det_id] p;  // detection probability in real space
     for (g in 1:N_det_id) {
@@ -75,7 +78,6 @@ model{
     vector[N] mu_lipid;
     vector[N] logit_phi;
     vector[N] log_phi;
-    vector[4] delta_inj;
     
     Sigma_fl ~ exponential( 2 );
     sigma_day ~ exponential( 2 );
@@ -99,7 +101,6 @@ model{
     to_vector( z_yr ) ~ normal( 0 , 1 );
 
     delta ~ dirichlet(alpha_i);
-    delta_inj = append_row(0, delta);
 
     // detection probability submodel
     logit_p_true_unobs ~ normal(-1.2, 1); // prior for systems with low observation efficiency, most mass < 0.4
@@ -162,5 +163,29 @@ generated quantities{
     
       s_obs_rep[i] = bernoulli_rng(prob_s_obs_1);
       s_true_rep[i] = bernoulli_rng(phi);
+    }
+
+    // loglikelihood for loo
+    vector[N] log_lik;
+
+    for (i in 1:N) {
+      real phi = inv_logit(
+        alpha_s +
+        alpha_stk[stk_n[i], 4] +
+        alpha_yr[yr[i], 3] +
+        beta_ds * day_z[i] +
+        beta_fs * fl_z[i] +
+        beta_ls * lipid_z[i] +
+        beta_cs * cyer_z[i] +
+        (beta_ds_cs * day_z[i] * cyer_z[i]) +
+        beta_is * sum(delta_inj[1:inj[i]])
+      );
+    
+      real p_det = p[det_group_id[i]];
+    
+      if (s_obs[i] == 1)
+        log_lik[i] = log(phi) + log(p_det);
+      else
+        log_lik[i] = log1m(phi * p_det);
     }
 }
