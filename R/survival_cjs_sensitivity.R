@@ -28,8 +28,19 @@ dat_tbl_trim1 <- dat_tbl_trim_in %>%
     bio_dat = purrr::map(
       bio_dat, ~.x %>% filter(vemco_code %in% mature_tags)
     ),
-    wide_array_dat = purrr::map(
-      wide_array_dat, ~.x %>% filter(vemco_code %in% mature_tags)
+    wide_array_dat = purrr::map2(
+      wide_array_dat, bio_dat,
+      ~ .x %>% 
+        filter(vemco_code %in% mature_tags) %>%
+        left_join(
+          ., 
+          # add z-scored tagging date
+          .y %>% 
+            select(vemco_code, year_day), 
+          by = "vemco_code") %>% 
+        mutate(
+          tag_date_z = scale(year_day) %>% as.numeric()
+        )
     ),
     data = "mature_2"
   )
@@ -61,15 +72,25 @@ dat_tbl_trim2 <- dat_tbl_trim_in %>%
     bio_dat = purrr::map(
       bio_dat, ~.x %>% filter(vemco_code %in% five_d_tags)
     ),
-    wide_array_dat = purrr::map(
-      wide_array_dat, ~.x %>% filter(vemco_code %in% five_d_tags)
+    wide_array_dat = purrr::map2(
+      wide_array_dat, bio_dat,
+      ~ .x %>% 
+        filter(vemco_code %in% five_d_tags) %>%
+      left_join(
+        ., 
+        # add z-scored tagging date
+        .y  %>% 
+          select(vemco_code, year_day), 
+        by = "vemco_code") %>% 
+        mutate(
+          tag_date_z = scale(year_day) %>% as.numeric()
+        )
     ),
     data = "five_day"
   )
 
 
 dat_tbl_trim <- rbind(dat_tbl_trim1, dat_tbl_trim2)
-
 
 dat_tbl_trim$stock_group <- fct_relevel(
   as.factor(dat_tbl_trim$stock_group),
@@ -107,7 +128,10 @@ prep_cjs_dat <- function(dat, grouping_vars = NULL) {
   n_occasions <- ncol(y)
   nind <- nrow(y)
   
-  out_list <- list(y = y, n_occasions = n_occasions, nind = nind)
+  tag_date_z <- dat$tag_date_z
+  
+  out_list <- list(y = y, n_occasions = n_occasions, nind = nind, 
+                   tag_date_z = tag_date_z)
   
   # add grouping variables and fixed p values as needed
   if (!is.null(grouping_vars)) {
@@ -134,7 +158,7 @@ dat_tbl_trim$grouping_vars <- purrr::map(
   function(x) {
     dd <- colnames(x)
     # remove columns that include vemco code or array numbers
-    dd[!(grepl("^([0-9]+)$", dd) | dd == "vemco_code")]
+    dd[!(grepl("^([0-9]+)$", dd) | dd == "vemco_code" | dd == "tag_date_z")]
   })
 dat_tbl_trim$dat_in <- pmap(
   list(dat = dat_tbl_trim$wide_array_dat,  
@@ -142,13 +166,12 @@ dat_tbl_trim$dat_in <- pmap(
   .f = prep_cjs_dat
 ) 
 
-
 # Call Stan from R and fit to each aggregate separately 
 hier_mod_sims <- stan_model(
-  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_v3.stan")
+  here::here("R", "stan_models", "cjs_int_hier_eff_adaptive_date.stan")
 )
 hier_mod_sims_stk <- stan_model(
-  here::here("R", "stan_models", "cjs_add_hier_eff_adaptive_v3_stock.stan")
+  here::here("R", "stan_models", "cjs_int_hier_eff_adaptive_date_stock.stan")
 )
 
 
@@ -160,17 +183,16 @@ n_iter = 2000
 n_warmup = n_iter / 2
 pars_in <- c(
   "alpha_phi", "alpha_t_phi", "alpha_yr_phi_z", "sigma_alpha_yr_phi",
-  "L_Rho_yr", "alpha_p", "alpha_yr_p",
+  "beta_date_phi", "L_Rho_yr", "alpha_p", "alpha_yr_p",
   # transformed pars or estimated quantities
-  "Rho_yr", "alpha_yr_phi", "phi_yr", "p_yr", "beta_yr", "y_hat"
+  "Rho_yr", "alpha_yr_phi", "phi_yr", "p_yr", "beta_yr", "y_hat", "log_lik"
 )
-
 
 cjs_hier_sims <- pmap(
   list(x = dat_tbl_trim$dat_in, stock_group = dat_tbl_trim$stock_group,
        bio_dat = dat_tbl_trim$bio_dat),
   .f = function(x, stock_group, bio_dat) {
-
+    
     if (stock_group == "Fraser") {
       mod <- hier_mod_sims_stk
       x$nstock <- bio_dat$agg %>% unique() %>% length()
@@ -178,12 +200,12 @@ cjs_hier_sims <- pmap(
         as.factor() %>%
         droplevels() %>%
         as.numeric()
-
+      
       pars <- c(pars_in,
                 # stock specific pars and quants
                 "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
                 "alpha_stk_phi_z")
-
+      
       inits <- lapply(1:n_chains, function (i) {
         list(
           alpha_phi = rnorm(1, 0, 0.5),
@@ -203,15 +225,16 @@ cjs_hier_sims <- pmap(
           alpha_p = rnorm(1, 0, 0.5),
           alpha_yr_p = matrix(
             rnorm(x$nyear * (x$n_occasions), 0, 0.5), nrow = x$nyear
-          )
+          ),
+          beta_date_phi = rnorm(1, 0, 0.5)
         )
       })
-
+      
     } else{
       mod <- hier_mod_sims
-
+      
       pars <- pars_in
-
+      
       # matrix of inits with same dims as estimated parameter matrices
       inits <- lapply(1:n_chains, function (i) {
         list(
@@ -230,18 +253,20 @@ cjs_hier_sims <- pmap(
           ),
           alpha_p = rnorm(1, 0, 0.5),
           alpha_yr_p = matrix(rnorm(x$nyear * (x$n_occasions), 0, 0.5),
-                              nrow = x$nyear)
+                              nrow = x$nyear),
+          beta_date_phi = rnorm(1, 0, 0.5)
         )
       })
     }
-
+    
     sampling(
       mod, data = x, pars = pars,
       init = inits, chains = n_chains, iter = n_iter, warmup = n_warmup,
       open_progress = FALSE,
       control = list(adapt_delta = 0.96)
     )
-  })
+  }
+)
 
 saveRDS(cjs_hier_sims,
         here::here("data", "model_outputs", "hier_cjs_fit_tbl_sens.RDS"))
@@ -249,6 +274,8 @@ saveRDS(cjs_hier_sims,
 cjs_hier_sims <- readRDS(
   here::here("data", "model_outputs", "hier_cjs_fit_tbl_sens.RDS")
   )
+
+dat_tbl_trim$cjs_hier <- cjs_hier_sims
 
 
 ## CHECKS ----------------------------------------------------------------------
@@ -270,12 +297,13 @@ purrr::map(cjs_hier_sims, function (x) {
 
 ## Post-hoc calculations -------------------------------------------------------
 
+
 # extract phi matrix and swap last col with beta estimates (i.e. combined p and 
 # phi) except for fix p models 
 # stocks
-phi_mat <- map(
-  cjs_hier_sims, 
-  function(x) {
+phi_mat <- purrr::map(
+  dat_tbl_trim$cjs_hier, 
+  function (x) {
     phi_adj <- extract(x)[["phi_yr"]]
     # replace array corresponding to last stage-specific survival est, w/ beta
     phi_adj[ , , dim(phi_adj)[3]] <- extract(x)[["beta_yr"]]
@@ -283,10 +311,59 @@ phi_mat <- map(
   })
 
 
+# calculate cumulative survival across segments
+cum_surv_list <- pmap(
+  list(phi_mat, dat_tbl_trim$stock_group, dat_tbl_trim$years), 
+  function (x, yy, group_names) {
+    if(dim(x)[2] != length(group_names)) 
+      stop("Array dimensions do not match group levels.")
+    
+    dims <- list(iter = seq(1, dim(x)[1], by = 1),
+                 segment = seq(1, dim(x)[3], by = 1))
+    
+    dumm <- expand.grid(iter = dims$iter,
+                        segment = 0, 
+                        Freq = 1, 
+                        group = group_names)
+    
+    # calculate the cumulative product across segments for each group and 
+    # iteration, then convert to a dataframe
+    cumprod_list <- vector(length(group_names), mode = "list") 
+    for (i in seq_along(group_names)) {
+      cumprod_mat <- t(apply(x[ , i, ], 1, cumprod))
+      dimnames(cumprod_mat) = dims[1:2]
+      cumprod_list[[i]] <- cumprod_mat %>% 
+        as.table() %>% 
+        as.data.frame() %>% 
+        mutate(group = group_names[i])
+    }
+    
+    cumprod_list %>% 
+      bind_rows() %>% 
+      rbind(dumm, .) %>%
+      mutate(segment = as.integer(as.character(segment)),
+             stock_group = yy) %>%
+      rename(est = Freq) %>% 
+      #add segment key
+      left_join(., seg_key, by = c("stock_group", "segment")) %>% 
+      mutate(par = case_when(
+        segment == max(segment) ~ "beta",
+        TRUE ~ "phi"
+      )) %>% 
+      group_by(segment, group) %>% 
+      mutate(median = median(est),
+             low = quantile(est, 0.05),
+             up = quantile(est, 0.95)) %>% 
+      ungroup() %>% 
+      arrange(segment, group, iter) 
+  }
+)
+dat_tbl_trim$cum_survival <- cum_surv_list
+
 
 ## calculate average among years
-phi_mat_mean <- map(
-  cjs_hier_sims,
+phi_mat_mean <- purrr::map(
+  dat_tbl_trim$cjs_hier,
   function(x) {
     alpha <- extract(x)[["alpha_phi"]]
     alpha_t <- extract(x)[["alpha_t_phi"]]
@@ -304,7 +381,6 @@ phi_mat_mean <- map(
   }
 )
 
-# integrate out year effects
 cum_surv_list_mean <- pmap(
   list(phi_mat_mean, dat_tbl_trim$stock_group), 
   function (x, yy) {
@@ -357,7 +433,7 @@ dat_tbl_trim <- readRDS(
 
 # combine new and old tbls
 standard_tbl <- readRDS(
-  here::here("data", "model_outputs", "hier_cjs_posterior_tbl.RDS")
+  here::here("data", "model_outputs", "hier_cjs_int_date_posterior_tbl.RDS")
 ) %>% 
   mutate(
     data = "standard"
@@ -430,6 +506,29 @@ png(here::here("figs", "sens", "phi_ests_sens.png"),
     height = 5, width = 7.5, units = "in", res = 200)
 stage_spec_surv
 dev.off()
+
+
+dum <- extract(cjs_hier_sims[[9]])[["alpha_t_phi"]] %>% 
+  as.data.frame() %>%
+  pivot_longer(everything(), names_to = "segment", values_to = "est", 
+               names_prefix = "V")
+
+std_mod <- readRDS(
+  here::here("data", "model_outputs", "hier_cjs_fit_tbl_int_date.RDS")
+) 
+dum2 <- extract(std_mod[[4]])[["alpha_t_phi"]] %>% 
+  as.data.frame() %>%
+  pivot_longer(everything(), names_to = "segment", values_to = "est", 
+               names_prefix = "V")
+
+p <- ggplot() +
+  geom_density(data = dum, aes(x = est), 
+               fill = "red", colour = "red", alpha = 0.4) +
+  geom_density(data = dum2, aes(x = est), 
+               fill = "blue", colour = "blue", alpha = 0.4) +
+  facet_wrap(~segment) + 
+  ggsidekick::theme_sleek() +
+  labs(x = "Gamma Phi T Estimate", y = "Kernel Density")
 
 
 # cumulative survival

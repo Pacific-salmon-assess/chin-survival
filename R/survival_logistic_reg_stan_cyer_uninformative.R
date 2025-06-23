@@ -908,6 +908,6 @@ pred_stk_comb
 dev.off()
 png(here::here("figs", "binomial-glm-cyer-uninformative",
                "diff_survival_hist.png"),
-    units = "in", res = 250, height = 3.5, width = 6)
+    units = "in", res = 250, height = 4.5, width = 6)
 diff_survival_hist
 dev.off()

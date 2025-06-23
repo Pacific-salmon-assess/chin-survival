@@ -839,7 +839,7 @@ yr_phi_dat <- purrr::map2(
   )
 
 png(here::here("figs", "cjs", "estimated_yearly_phi.png"), 
-    height = 5.5, width = 7.5, units = "in", res = 250)
+    height = 6.5, width = 7.5, units = "in", res = 250)
 ggplot(yr_phi_dat) +
   geom_pointrange(
     aes(x = segment_name, y = med, ymin = lo, ymax = up, fill = year),
@@ -849,7 +849,8 @@ ggplot(yr_phi_dat) +
   facet_wrap(~stock_group, scales = "free_x", ncol = 2) +
   scale_fill_brewer(palette = "PuOr", name = "") +
   ggsidekick::theme_sleek() +
-  labs(x = "Segment Name", y = "Stage-Specific Survival Rate") 
+  labs(x = "Segment Name", y = "Stage-Specific Survival Rate") +
+  theme(legend.position = "top")
 dev.off()
 
 
@@ -897,7 +898,7 @@ yr_p_dat <- purrr::map2(
 
 
 png(here::here("figs", "cjs", "estimated_yearly_p.png"), 
-    height = 4.5, width = 9, units = "in", res = 250)
+    height = 6.5, width = 7.5, units = "in", res = 250)
 ggplot(yr_p_dat) +
   geom_pointrange(
     aes(x = segment_name, y = med, ymin = lo, ymax = up, fill = year),
@@ -907,7 +908,8 @@ ggplot(yr_p_dat) +
   facet_wrap(~stock_group, scales = "free_x", ncol = 2) +
   scale_fill_brewer(palette = "PuOr", name = "") +
   ggsidekick::theme_sleek() +
-  labs(x = "Segment Name", y = "Detection Probability") 
+  labs(x = "Segment Name", y = "Detection Probability") +
+  theme(legend.position = "top")
 dev.off()
 
 
@@ -1012,7 +1014,8 @@ surv_plot_mean <- ggplot(data = mean_surv_dat) +
   scale_fill_manual(values = fill_pal, label = c("Marine", "Terminal"),
                     name = "Terminal") +
   theme(legend.text=element_text(size = 9),
-        axis.text.x = element_text(size = rel(.8))) +
+        axis.text.x = element_text(size = rel(.8)),
+        legend.position = "top") +
   guides(fill = guide_legend(override.aes = list(shape = 21))) +
   facet_wrap(~stock_group, scales = "free_x", ncol = 2) +
   labs(x = "Segment Name", y = "Cumulative Survival")
@@ -1085,7 +1088,7 @@ surv_plot_clean
 dev.off()
 
 png(here::here("figs", "cjs", "cum_surv_mean_hier_clean.png"), 
-    height = 5, width =7.5, units = "in", res = 200)
+    height = 6, width =7.5, units = "in", res = 200)
 surv_plot_mean
 dev.off()
 
