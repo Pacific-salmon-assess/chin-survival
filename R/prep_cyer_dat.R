@@ -13,26 +13,26 @@ stock_key <- read.csv(
 
 ## CLEAN CYER DATA -------------------------------------------------------------
 
-sheet_names <- excel_sheets(
-  here::here(
-    "data", "harvest", "ctc_esc_data", 
-    "TCCHINOOK-25-01-Appendix-C-Mortality-Distribution-Tables-Detailed.xlsx"
-  ))
-
 stocks <- stock_key %>% 
   filter(!is.na(ctc_indicator)) %>% 
   pull(ctc_indicator) %>% 
   unique()
+
+## import marked data
+sheet_names <- excel_sheets(
+  here::here(
+    "data", "harvest", "ctc_esc_data", 
+    "TCCHINOOK-25-XX-Appendix-C-Mortality-Distribution-Tables-Detailed-marked_noTBRSEAK.xlsx"
+  ))
+
 matching_sheets <- sheet_names[
   sapply(sheet_names, function(x) any(grepl(paste(stocks, collapse = "|"), x)))
 ]
 matching_sheets2 <- matching_sheets[
-  sapply(matching_sheets, function(x) any(grepl("TM", x)))
+  sapply(matching_sheets, function(x) any(grepl("total mort", x)))
 ]
 sheet_ids <- which(sheet_names %in% matching_sheets2)
 
-
-# CWT based CYERs from Laura Tessier
 # identify sheets w/ relevant data and associated stock name
 new_col_names <- c(
   "year", "cwt_n", "ages", "aabm_seak_t", "aabm_seak_n", "aabm_seak_s", 
@@ -44,13 +44,13 @@ new_col_names <- c(
   "term_sus_s", "stray", "esc", "comment"
 ) 
 
-cwt_dat <- purrr::map2(
+cwt_dat_marked <- purrr::map2(
   sheet_ids, matching_sheets2, 
   function(x, y) {
     dum <- read_xlsx(
       here::here(
         "data", "harvest", "ctc_esc_data", 
-        "TCCHINOOK-25-01-Appendix-C-Mortality-Distribution-Tables-Detailed.xlsx"
+        "TCCHINOOK-25-XX-Appendix-C-Mortality-Distribution-Tables-Detailed-marked_noTBRSEAK.xlsx"
       ),
       sheet = x,
       skip = 6,
@@ -60,40 +60,56 @@ cwt_dat <- purrr::map2(
     dum %>% 
       mutate(
         indicator = str_split(y, " ") %>% unlist() %>% .[1],
-        mark = str_split(y, " ") %>% unlist() %>% .[2]
+        mark = "marked"
       ) %>% 
       # remove five year averages at bottom of table
-      filter(!grepl("-", year))
+      filter(!grepl("-", year),
+             ! year == "2024") 
+  }
+) %>% 
+  bind_rows()
+
+cwt_dat_unmarked <- purrr::map2(
+  sheet_ids, matching_sheets2, 
+  function(x, y) {
+    dum <- read_xlsx(
+      here::here(
+        "data", "harvest", "ctc_esc_data", 
+        "TCCHINOOK-25-XX-Appendix-C-Mortality-Distribution-Tables-Detailed-unmarked_noTBRSEAK.xlsx"
+      ),
+      sheet = x,
+      skip = 6,
+      col_names = FALSE
+    )
+    colnames(dum) <- new_col_names
+    dum %>% 
+      mutate(
+        indicator = str_split(y, " ") %>% unlist() %>% .[1],
+        mark = "unmarked"
+      ) %>% 
+      # remove five year averages at bottom of table
+      filter(!grepl("-", year),
+             ! year == "2024") 
   }
 ) %>% 
   bind_rows()
 
 
-# southern US harvest not available for 2023; calculate mean values 2016-22 for
-# each fishery, add to original dataset for 23 then rescale
-# REPLACED WITH OVERALL AVERAGE BELOW SINCE 23 data only available for few stocks
-cwt_dat_long <- cwt_dat %>%
+cwt_dat_long <- rbind(cwt_dat_unmarked, cwt_dat_marked) %>%
   filter(comment == "ok") %>%
   mutate(indicator = paste(indicator, mark, sep = "_")) %>%
   pivot_longer(cols = c(starts_with("aabm"), starts_with("isbm"),
                         starts_with("term"), stray, esc),
                names_to = "strata", values_to = "percent_run") %>%
   mutate(
-    year = as.numeric(year),
-    southern_us = ifelse(
-      (grepl("falcon", strata) | grepl("_sus_", strata) |
-         grepl("puget", strata) | grepl("wac", strata)),
-      TRUE,
-      FALSE
-    )
+    year = as.numeric(year)#,
+    # southern_us = ifelse(
+    #   (grepl("falcon", strata) | grepl("_sus_", strata) |
+    #      grepl("puget", strata) | grepl("wac", strata)),
+    #   TRUE,
+    #   FALSE
+    # )
   )
-# calculate mean southern US exploitation rate to use since 2022 values
-# unavailable
-# mean_sus <- cwt_dat_long %>%
-#   filter(year > 2015 & year < 2023) %>%
-#   group_by(strata, indicator) %>%
-#   summarize(mean_percent_run = mean(percent_run))
-
 
 cwt_dat_long2 <- cwt_dat_long %>% 
   group_by(
@@ -112,7 +128,7 @@ cwt_dat_long2 <- cwt_dat_long %>%
 cwt_dat_long2 %>% 
   filter(strata %in% c("aabm_wcvi_s", "aabm_wcvi_s"), 
          year > 2018,
-         mark == "unmarked") %>% 
+         mark == "unmarked") %>%
   group_by(indicator, year) %>% 
   summarize(total_er = sum(percent_run)) %>% 
   group_by(indicator) %>% 
@@ -143,21 +159,19 @@ cyer_dat <- cwt_dat_long2 %>%
   mutate(
     total_er = 1 - percent_escaped
   ) 
-
-ggplot(cyer_dat) + 
-  # geom_point(aes(x = year, y= can_er)) + 
-  geom_point(aes(x = year, y= total_er), color = "red") + 
-  facet_wrap(~indicator) +
-  ggsidekick::theme_sleek()
+# 
+# ggplot(cyer_dat) + 
+#   # geom_point(aes(x = year, y= can_er)) + 
+#   geom_point(aes(x = year, y= total_er), color = "red") + 
+#   facet_wrap(~indicator) +
+#   ggsidekick::theme_sleek()
 
 
 # export exploitation rate for focal domain
 cwt_dat_out <- cwt_dat_long2 %>% 
   filter(grepl("isbm", strata) | grepl("aabm_wcvi", strata),
          !grepl("isbm_nbc", strata),
-         !grepl("isbm_puget", strata),
-         # remove incomplete 2023 years and replace with average
-         !year == "2023"
+         !grepl("isbm_puget", strata)
          ) %>% 
   group_by(year, indicator) %>% 
   summarize(
@@ -170,19 +184,7 @@ cwt_dat_out <- cwt_dat_long2 %>%
       purrr::map(., head, n = 1) %>%
       unlist() 
   )
-# use recevent average as proxy for 2023
-recent_avg <- cwt_dat_out %>% 
-  filter(year > 2018 & year < 2023) %>% 
-  group_by(indicator, clip, stock,) %>% 
-  summarize(focal_er = mean(focal_er)) %>% 
-  ungroup() %>% 
-  mutate(
-    year = 2023
-  ) %>% 
-  select(colnames(cwt_dat_out))
-  
-
-saveRDS(rbind(cwt_dat_out, recent_avg),
+saveRDS(cwt_dat_out,
         here::here("data", "harvest", "cleaned_cyer_dat_no_puget.rds"))
 
 
@@ -190,9 +192,7 @@ saveRDS(rbind(cwt_dat_out, recent_avg),
 # as above but includes puget
 cwt_dat_out <- cwt_dat_long2 %>% 
   filter(grepl("isbm", strata) | grepl("aabm_wcvi", strata),
-         !grepl("isbm_nbc", strata),
-         # remove incomplete 2023 years and replace with average
-         !year == "2023"
+         !grepl("isbm_nbc", strata)
   ) %>% 
   group_by(year, indicator) %>% 
   summarize(
@@ -205,17 +205,5 @@ cwt_dat_out <- cwt_dat_long2 %>%
       purrr::map(., head, n = 1) %>%
       unlist() 
   )
-# use recevent average as proxy for 2023
-recent_avg <- cwt_dat_out %>% 
-  filter(year > 2018 & year < 2023) %>% 
-  group_by(indicator, clip, stock,) %>% 
-  summarize(focal_er = mean(focal_er)) %>% 
-  ungroup() %>% 
-  mutate(
-    year = 2023
-  ) %>% 
-  select(colnames(cwt_dat_out))
-
-
-saveRDS(rbind(cwt_dat_out, recent_avg),
+saveRDS(cwt_dat_out,
         here::here("data", "harvest", "cleaned_cyer_dat.rds"))
