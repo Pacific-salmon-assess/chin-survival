@@ -22,7 +22,6 @@ indicator_key <- read.csv(
     ctc_indicator = ifelse(ctc_indicator == "SRH/ELK", "SRH", ctc_indicator)
   )
 
-# TODO: update with final CTC estimates
 cyer_dat_no_ps <- readRDS(
   here::here("data", "harvest", "cleaned_cyer_dat_no_puget.rds")
   ) %>% 
@@ -32,8 +31,7 @@ cyer_dat <- readRDS(here::here("data", "harvest", "cleaned_cyer_dat.rds")) %>%
   rename(ctc_indicator = stock) %>% 
   filter(year > 2018) %>% 
   left_join(., cyer_dat_no_ps, 
-            by = c("year", "ctc_indicator", "indicator", "clip")) %>% 
-  glimpse()
+            by = c("year", "ctc_indicator", "indicator", "clip")) 
 
 
 stage_dat <- readRDS(
@@ -69,12 +67,13 @@ chin2 <- left_join(
   by = "stock") %>% 
   mutate(
     agg_name = case_when(
-      stock %in% fr_sum_yr ~ "Fraser Sum. Yr.",
-      stock %in% fr_spr_yr ~ "Fraser Spr. Yr.",
+      stock %in% fr_sum_yr ~ "Fraser Sum. 1.2",
+      stock %in% fr_spr_yr ~ "Fraser Spr. 1.x",
+      agg_name == "Fraser Sum. 4.1" ~ "Fraser Spr. 0.3",
       # define subyearlings based on run bubble_ts plots
-      agg_name == "Fraser 4.1" ~ "Fraser Sum. 4.1",
+      agg_name == "Fraser 4.1" ~ "Fraser Sum. 0.3",
       acoustic_year %in% c("7719_2019", "7701_2019", "7692_2019", "7691_2019",
-                           "7692_2019", "7690_2019") ~ "Fraser Sum. 4.1",
+                           "7692_2019", "7690_2019") ~ "Fraser Sum. 0.3",
       acoustic_year %in% c("7696_2019", "5353_2022") ~ "Fraser Fall",
       grepl("CAPILANO", stock) ~ "ECVI",
       TRUE ~ agg_name
@@ -101,9 +100,9 @@ agg_names <- chin2 %>%
 stock_supp_table <- chin2 %>% 
   mutate(
     agg_name = fct_recode(agg_name,
-                          "Spring 1.x" = "Fraser Spr. Yr.",
-                          "Summer 1.3" = "Fraser Sum. Yr.", 
-                          "Summer 0.3" = "Fraser Sum. 4.1", 
+                          "Spring 1.x" = "Fraser Spr. 1.x",
+                          "Summer 1.3" = "Fraser Sum. 1.2", 
+                          "Summer 0.3" = "Fraser Sum. 0.3", 
                           "Fall 0.3" = "Fraser Fall")
   ) %>% 
   filter(stock_prob > 80) %>% 
@@ -222,120 +221,6 @@ write.csv(
   ),
   row.names = FALSE
 )
-
-
-## PRELIM FIGURES --------------------------------------------------------------
-
-ppn_foo <- function(group, response) {
-  group_exp <- c("vemco_code", group)
-  labs <- det_dat1 %>% 
-    dplyr::select_at(group_exp) %>% 
-    distinct() %>% 
-    group_by_at(group) %>% 
-    tally() %>% 
-    mutate(year = as.factor(year))
-  
-  dat_out <- det_dat1 %>% 
-    group_by_at(group) %>% 
-    summarize(n = length(unique(vemco_code)),
-              ppn = sum(.data[[response]] / n),
-              se = sqrt((ppn * (1 - ppn)) / n),
-              up = pmin(1, ppn + (1.96 * se)),
-              lo = pmax(0, ppn - (1.96 * se)),
-              .groups = "drop") %>% 
-    mutate(year = as.factor(year))
-  
-  list("labs" = labs, "dat" = dat_out)
-}
-
-
-det_ppns <- ppn_foo(group = c("stock_group", "year"), response = "term_det") 
-ggplot(data = det_ppns$dat, aes(y = ppn)) +
-  geom_pointrange(aes(x = year, ymin = lo, ymax = up)) +
-  facet_wrap(~stock_group) +
-  ggsidekick::theme_sleek() +
-  geom_text(data = det_ppns$lab, aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-inj_ppns <- ppn_foo(group = c("injury", "year"), response = "term_det")
-ggplot(data = inj_ppns$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~injury) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = inj_ppns$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-inj_ppns2 <- ppn_foo(group = c("comp_inj", "year"), response = "term_det")
-ggplot(data = inj_ppns2$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~comp_inj) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = inj_ppns2$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-
-loc_ppns <- ppn_foo(group = c("hook_loc", "year"), response = "term_det")
-ggplot(data = loc_ppns$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~hook_loc) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = loc_ppns$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-fin_ppns <- ppn_foo(group = c("fin_dam", "year"), response = "term_det")
-ggplot(data = fin_ppns$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~fin_dam) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = fin_ppns$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-scale_ppns <- ppn_foo(group = c("scale_loss", "year"), response = "term_det")
-ggplot(data = scale_ppns$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~scale_loss) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = scale_ppns$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-redep_ppns <- ppn_foo(group = c("redeploy", "year"), response = "det")
-ggplot(data = redep_ppns$dat,  aes(x = year, y = ppn)) +
-  geom_pointrange(aes(ymin = lo, ymax = up)) +
-  facet_wrap(~redeploy) +
-  ggsidekick::theme_sleek()+
-  geom_text(data = redep_ppns$lab, 
-            aes(x = year, y = -Inf, label  = n),
-            position = position_dodge(width = 1),
-            vjust = -0.5)
-
-
-ggplot(det_dat1, aes(x = lipid_z, y = final_det)) +
-  geom_point() +
-  facet_wrap(~year) +
-  ggsidekick::theme_sleek()
-ggplot(det_dat1, aes(x = trough_time, y = det)) +
-  geom_point() +
-  facet_wrap(~year) +
-  ggsidekick::theme_sleek()
-ggplot(det_dat1, aes(x = mean_log_e, y = final_det)) +
-  geom_point() +
-  facet_wrap(~year) +
-  ggsidekick::theme_sleek()
-ggplot(det_dat1, aes(x = cyer_z, y = final_det)) +
-  geom_point() +
-  facet_wrap(~year) +
-  ggsidekick::theme_sleek()
 
 
 ## DATE VS CONDITION -----------------------------------------------------------

@@ -78,7 +78,7 @@ det_dat <- det_dat1 %>%
       stock_group, 
       levels = c(
         "Low Col.", "Up Col.", "WA_OR", "WCVI", "ECVI", 
-        "Fraser Spr. Yr.", "Fraser Sum. Yr.", "Fraser Sum. 4.1", "Fraser Fall", 
+        "Fraser Spr. 1.x", "Fraser Sum. 1.2", "Fraser Sum. 0.3", "Fraser Fall", 
         "North Puget", "South Puget"
       )) %>% 
       droplevels(),
@@ -117,21 +117,21 @@ dat_list <- list(
 )
 
 
-# mod1 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_cov2_uninformative.stan"))
-# m1_stan <- sampling(mod1, data = dat_list,
-#                     chains = 4, iter = 2000, warmup = 1000,
-#                     control = list(adapt_delta = 0.96))
-# saveRDS(m1_stan,
-#         here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
+mod1 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_cov2_uninformative.stan"))
+m1_stan <- sampling(mod1, data = dat_list,
+                    chains = 4, iter = 2000, warmup = 1000,
+                    control = list(adapt_delta = 0.97))
+saveRDS(m1_stan,
+        here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
 # # as above but with alternative CYER index
-# dat_list$cyer_z <-  det_dat$cyer2_z
-# m1_stan_no_ps <- sampling(mod1, data = dat_list,
-#                     chains = 4, iter = 2000, warmup = 1000,
-#                     control = list(adapt_delta = 0.96))
-# saveRDS(
-#   m1_stan_no_ps,
-#   here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_no_ps.rds")
-# )
+dat_list$cyer_z <-  det_dat$cyer2_z
+m1_stan_no_ps <- sampling(mod1, data = dat_list,
+                    chains = 4, iter = 2000, warmup = 1000,
+                    control = list(adapt_delta = 0.97))
+saveRDS(
+  m1_stan_no_ps,
+  here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_no_ps.rds")
+)
 
 
 m1_stan <- readRDS(

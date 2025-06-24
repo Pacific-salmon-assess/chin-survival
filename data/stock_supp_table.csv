@@ -1,49 +1,49 @@
-Stock,Population,CTC_Indicator,n,spring_run
-Cali,AMERICAN_RIVER,NA,1,N
-Cali,BATTLE_CREEK,NA,2,N
-Cali,FEATHER_RIVER_FALL,NA,4,N
-Cali,MERCED_RIVER,NA,2,N
-ECVI,CAPILANO_RIVER,NA,2,N
-ECVI,COWICHAN_RIVER,Cowichan,3,N
-ECVI,QUALICUM_RIVER,Big Qualicum River,1,N
-ECVI,QUATSE_RIVER,Quinsam,1,N
-Fall 0.3,CHILLIWACK_RIVER_fall,Chilliwack,25,N
-Fall 0.3,CHILLIWACK_VEDDER_RIVER,Chilliwack,2,N
-Fall 0.3,HARRISON_RIVER,Harrison,22,N
-Spring 1.2,DEADMAN_RIVER,Nicola,1,Y
-Spring 1.2,NICOLA_RIVER,Nicola,1,Y
-Summer 0.3,ADAMS_RIVER,Shuswap,6,N
-Summer 0.3,LITTLE_RIVER,Shuswap,5,N
-Summer 0.3,SHUSWAP_RIVER-LOWER,Shuswap,3,N
-Summer 0.3,THOMPSON_RIVER_BELOW_KAMLOOPS_LAKE,Shuswap,9,N
-Summer 1.3,CARIBOO_RIVER,NA,1,
-Summer 1.3,CHILKO_RIVER,NA,2,
-Summer 1.3,NORTH_THOMPSON_RIVER,NA,1,
-Summer 1.3,RAFT_RIVER,NA,1,
-Low Col.,ABERNATHY_RIVER,Lewis River Hatchery,182,N
-Low Col.,CLACKAMAS_RIVER,Willamette Spring Hatchery,1,
-Low Col.,COWEEMAN,Coweeman Fall,3,N
-Low Col.,COWLITZ_HATCHERY_SPRING,NA,6,Y
-Low Col.,SANDY_RIVER,Willamette Spring Hatchery,4,
-Low Col.,SANTIAM_RIVER_North,Willamette Spring Hatchery,2,
-North Puget,NOOKSACK_RIVER,Samish,7,N
-North Puget,SKAGIT_RIVER,Skagit Summer Fall,2,N
-South Puget,GREEN_RIVER,South Puget Sound,8,N
-South Puget,GREEN_RIVER-Kendal,South Puget Sound,1,N
-South Puget,SKYKOMISH_RIVER,Skykomish,4,N
-South Puget,SNOHOMISH_RIVER,Stillaguamish,19,N
-South Puget,SOOS_CREEK,South Puget Sound,97,N
-South Puget,WHITE_RIVER,South Puget Sound,1,N
-Up Col.,DESCHUTES_RIVER,Columbia Upriver Brights,4,N
-Up Col.,HANFORD_REACH,Hanford Reach,29,N
-Up Col.,LYON'S_FERRY,Lyons Ferry,33,N
-Up Col.,SIMILKAMEEN,Similkameen,1,N
-Up Col.,WENATCHEE_RIVER,Columbia Summers,5,N
-WA_OR,EUCHRE_CREEK,Elk River ,3,N
-WA_OR,FORKS_CREEK_HATCHERY,Queets Fall,6,N
-WA_OR,NESTUCCA_RIVER_FALL,Salmon River,1,N
-WA_OR,UMPQUA_SPRING,NA,5,Y
-WCVI,ROBERTSON_CREEK,Robertson Creek,20,N
-WCVI,SAN_JUAN_RIVER,Robertson Creek,1,N
-WCVI,SOOKE_RIVER,Robertson Creek,2,N
-WCVI,THORNTON_CREEK,Robertson Creek,1,N
+"Stock","Population","CTC_Indicator","n"
+"Cali","AMERICAN_RIVER",NA,1
+"Cali","BATTLE_CREEK",NA,2
+"Cali","FEATHER_RIVER_FALL",NA,4
+"Cali","MERCED_RIVER",NA,2
+"ECVI","CAPILANO_RIVER",NA,2
+"ECVI","COWICHAN_RIVER","Cowichan",3
+"ECVI","QUALICUM_RIVER","Big Qualicum River",1
+"ECVI","QUATSE_RIVER","Quinsam",1
+"Fall 0.3","CHILLIWACK_RIVER_fall","Chilliwack",25
+"Fall 0.3","CHILLIWACK_VEDDER_RIVER","Chilliwack",2
+"Fall 0.3","HARRISON_RIVER","Harrison",22
+"Spring 1.x","DEADMAN_RIVER","Nicola",1
+"Spring 1.x","NICOLA_RIVER","Nicola",1
+"Summer 0.3","ADAMS_RIVER","Shuswap",6
+"Summer 0.3","LITTLE_RIVER","Shuswap",5
+"Summer 0.3","SHUSWAP_RIVER-LOWER","Shuswap",3
+"Summer 0.3","THOMPSON_RIVER_BELOW_KAMLOOPS_LAKE","Shuswap",9
+"Summer 1.3","CARIBOO_RIVER",NA,1
+"Summer 1.3","CHILKO_RIVER",NA,2
+"Summer 1.3","NORTH_THOMPSON_RIVER",NA,1
+"Summer 1.3","RAFT_RIVER",NA,1
+"Low Col.","ABERNATHY_RIVER","Lewis River Hatchery",182
+"Low Col.","CLACKAMAS_RIVER","Willamette Spring Hatchery",1
+"Low Col.","COWEEMAN","Coweeman Fall",3
+"Low Col.","COWLITZ_HATCHERY_SPRING",NA,6
+"Low Col.","SANDY_RIVER","Willamette Spring Hatchery",4
+"Low Col.","SANTIAM_RIVER_North","Willamette Spring Hatchery",2
+"North Puget","NOOKSACK_RIVER","Samish",7
+"North Puget","SKAGIT_RIVER","Skagit Summer Fall",2
+"South Puget","GREEN_RIVER","South Puget Sound",8
+"South Puget","GREEN_RIVER-Kendal","South Puget Sound",1
+"South Puget","SKYKOMISH_RIVER","Skykomish",4
+"South Puget","SNOHOMISH_RIVER","Stillaguamish",19
+"South Puget","SOOS_CREEK","South Puget Sound",97
+"South Puget","WHITE_RIVER","South Puget Sound",1
+"Up Col.","DESCHUTES_RIVER","Columbia Upriver Brights",4
+"Up Col.","HANFORD_REACH","Hanford Reach",29
+"Up Col.","LYON'S_FERRY","Lyons Ferry",33
+"Up Col.","SIMILKAMEEN","Similkameen",1
+"Up Col.","WENATCHEE_RIVER","Columbia Summers",5
+"WA_OR","EUCHRE_CREEK","Elk River ",3
+"WA_OR","FORKS_CREEK_HATCHERY","Queets Fall",6
+"WA_OR","NESTUCCA_RIVER_FALL","Salmon River",1
+"WA_OR","UMPQUA_SPRING",NA,5
+"WCVI","ROBERTSON_CREEK","Robertson Creek",20
+"WCVI","SAN_JUAN_RIVER","Robertson Creek",1
+"WCVI","SOOKE_RIVER","Robertson Creek",2
+"WCVI","THORNTON_CREEK","Robertson Creek",1

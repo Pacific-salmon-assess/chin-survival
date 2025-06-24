@@ -15,7 +15,7 @@ det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds")) %>%
       stock_group, 
       levels = c(
         "Cali", "Low Col.", "Up Col.", "WA_OR", "WCVI", "ECVI", 
-        "Fraser Spr. Yr.", "Fraser Sum. Yr.", "Fraser Sum. 4.1", "Fraser Fall", 
+        "Fraser Spr. 1.x", "Fraser Sum. 1.2", "Fraser Sum. 0.3", "Fraser Fall", 
         "North Puget", "South Puget"
       ))
   )
