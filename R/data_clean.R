@@ -19,18 +19,26 @@ indicator_key <- read.csv(
   here::here("data", "ctc_decoder", "ctc_stock_decoder.csv")
 ) %>% 
   mutate(
-    ctc_indicator = ifelse(ctc_indicator == "SRH/ELK", "SRH", ctc_indicator)
+    ctc_indicator = ifelse(ctc_indicator == "SRH/ELK", "SRH", ctc_indicator),
+    ctc_indicator = ifelse(grepl("UMPQ", stock), "ELK", ctc_indicator)
   )
 
-cyer_dat_no_ps <- readRDS(
-  here::here("data", "harvest", "cleaned_cyer_dat_no_puget.rds")
-  ) %>% 
-  rename(ctc_indicator = stock, focal_er_no_ps = focal_er) %>% 
+cyer_dat1 <- readRDS(
+  here::here("data", "harvest", "cleaned_cyer_dat_adj.rds")
+) %>% 
+  rename(ctc_indicator = stock, focal_er_adj = focal_er) %>% 
   filter(year > 2018)
+cyer_dat2 <- readRDS(
+  here::here("data", "harvest", "cleaned_cyer_dat_no_puget.rds")
+) %>% 
+  rename(ctc_indicator = stock, focal_er_no_ps = focal_er) %>% 
+  filter(year > 2018) %>% 
+  left_join(., cyer_dat1, 
+            by = c("year", "ctc_indicator", "indicator", "clip")) 
 cyer_dat <- readRDS(here::here("data", "harvest", "cleaned_cyer_dat.rds")) %>% 
   rename(ctc_indicator = stock) %>% 
   filter(year > 2018) %>% 
-  left_join(., cyer_dat_no_ps, 
+  left_join(., cyer_dat2, 
             by = c("year", "ctc_indicator", "indicator", "clip")) 
 
 
@@ -142,7 +150,7 @@ det_dat1 <- dat_tbl %>%
               select(vemco_code = acoustic_year, month, year, acoustic_type, 
                      known_stage, stage_1, stage_2, lat, lon, year_day, 
                      fl, wt, lipid, adj_inj, ctc_indicator,
-                     focal_er, focal_er_no_ps, comment),
+                     focal_er, focal_er_adj, focal_er_no_ps, comment),
             by = "vemco_code") %>%
   mutate(
     # redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes"),
@@ -157,6 +165,19 @@ det_dat1 <- dat_tbl %>%
   arrange(
     year, stock_group
   )
+
+# compare old and new ERs
+det_dat1 %>% 
+  mutate(
+    er_diff = abs(focal_er - focal_er_adj)
+  ) %>% 
+  filter(
+    er_diff > 0.01,
+    stage_1 == "mature"
+  ) %>% 
+  select(focal_er, focal_er_adj, ctc_indicator, year) %>% 
+  distinct()
+
 
 # small number of tags (<2% missing lipid data; impute)
 bio_dat <- det_dat1 %>% 

@@ -5,7 +5,7 @@
 library(tidyverse)
 library(readxl)
 
-stock_key <- read.csv(
+ stock_key <- read.csv(
   here::here("data", "ctc_decoder", "ctc_stock_decoder.csv"),
   stringsAsFactors = FALSE
 ) 
@@ -102,13 +102,7 @@ cwt_dat_long <- rbind(cwt_dat_unmarked, cwt_dat_marked) %>%
                         starts_with("term"), stray, esc),
                names_to = "strata", values_to = "percent_run") %>%
   mutate(
-    year = as.numeric(year)#,
-    # southern_us = ifelse(
-    #   (grepl("falcon", strata) | grepl("_sus_", strata) |
-    #      grepl("puget", strata) | grepl("wac", strata)),
-    #   TRUE,
-    #   FALSE
-    # )
+    year = as.numeric(year)
   )
 
 cwt_dat_long2 <- cwt_dat_long %>% 
@@ -188,7 +182,6 @@ saveRDS(cwt_dat_out,
         here::here("data", "harvest", "cleaned_cyer_dat_no_puget.rds"))
 
 
-
 # as above but includes puget
 cwt_dat_out <- cwt_dat_long2 %>% 
   filter(grepl("isbm", strata) | grepl("aabm_wcvi", strata),
@@ -207,3 +200,85 @@ cwt_dat_out <- cwt_dat_long2 %>%
   )
 saveRDS(cwt_dat_out,
         here::here("data", "harvest", "cleaned_cyer_dat.rds"))
+
+
+# as above but adjusts puget isbm for puget stocks (divides by two since 
+# only northern fisheries will impact them)
+cwt_dat_out <- cwt_dat_long2 %>% 
+  filter(grepl("isbm", strata) | grepl("aabm_wcvi", strata),
+         !grepl("isbm_nbc", strata)
+  ) %>% 
+  mutate(
+    new_scaled_percent = ifelse(
+      grepl("puget", strata) & indicator %in% c(
+        "SAM_marked", "SSF_marked", "SPS_marked", "STL_marked", "SKY_marked",
+        "SAM_unmarked", "SSF_unmarked", "SPS_unmarked", "STL_unmarked",
+        "SKY_unmarked"
+      ),
+      scaled_percent / 2,
+      scaled_percent
+    )
+  ) %>% 
+  group_by(year, indicator) %>% 
+  summarize(
+    focal_er = sum(new_scaled_percent)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    clip = ifelse(grepl("unmarked", indicator), "N", "Y"),
+    stock = str_split(indicator, "_")  %>%
+      purrr::map(., head, n = 1) %>%
+      unlist() 
+  )
+saveRDS(cwt_dat_out,
+        here::here("data", "harvest", "cleaned_cyer_dat_adj.rds"))
+
+
+
+## CLEAN PUGET SOUND CATCH/EFFORT DATA -----------------------------------------
+
+paths <- list.files(path = here::here("data", "harvest", "puget_sound_catch"),
+                    pattern = "\\.csv$", 
+                    full.names = TRUE)
+ps_dat <- lapply(paths, read.csv) %>% 
+  bind_rows() %>% 
+  janitor::clean_names() %>% 
+  mutate(
+    dttm = lubridate::mdy(sample_date),
+    year = lubridate::year(dttm),
+    month = lubridate::month(dttm),
+    region = case_when(
+      catch_area %in% c(
+        "Area 4, Eastern portion",
+        "Area 3, La Push"
+      ) ~ "washington_coastal",
+      catch_area %in% c(
+        "Area 8-2, Ports Susan and Gardner",
+        "Area 8-1, Deception Pass, Hope Island, and Skagit Bay",
+        "Area 7, San Juan Islands",                             
+        "Area 6, East Juan de Fuca Strait",
+        "Bellingham Bay",
+        "Area 5, Sekiu and Pillar Point",                       
+        "Area 6-2, Eastern portion of Area 6",
+        "Area 6-1, Western portion of Area 6",
+        "Dungeness Bay"
+      ) ~ "north_ps",
+      TRUE ~ "south_ps"
+    )
+  ) %>% 
+  filter(
+    month > 4 & month < 11,
+    !region == "washington_coastal"
+  ) 
+
+ps_dat %>% 
+  group_by(year) %>%
+  mutate(total_chinook = sum(chinook, na.rm = TRUE)) %>%
+  group_by(region, year) %>%
+  summarize(
+    region_chinook = sum(chinook, na.rm = TRUE),
+    total_chinook = first(total_chinook),  # same for entire year
+    ppn_chinook = region_chinook / total_chinook,
+    .groups = "drop"
+  )
+# approximately 50% of Puget Sound catch occurs south of arrays

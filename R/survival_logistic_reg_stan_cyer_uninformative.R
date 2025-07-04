@@ -72,7 +72,8 @@ det_dat <- det_dat1 %>%
     log_wt_z = scale(log(wt)) %>% as.numeric(),
     day_z = scale(year_day) %>% as.numeric(),
     cyer_z = scale(focal_er) %>% as.numeric(),
-    cyer2_z = scale(focal_er_no_ps) %>% as.numeric(),
+    cyer2_z = scale(focal_er_old) %>% as.numeric(),
+    cyer3_z = scale(focal_er_no_ps) %>% as.numeric(),
     year = as.factor(year),
     stock_group = factor(
       stock_group, 
@@ -118,13 +119,23 @@ dat_list <- list(
 
 
 mod1 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_cov2_uninformative.stan"))
+
 m1_stan <- sampling(mod1, data = dat_list,
                     chains = 4, iter = 2000, warmup = 1000,
                     control = list(adapt_delta = 0.97))
 saveRDS(m1_stan,
         here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
-# # as above but with alternative CYER index
+# as above but with alternative CYER index
 dat_list$cyer_z <-  det_dat$cyer2_z
+m1_stan_old <- sampling(mod1, data = dat_list,
+                          chains = 4, iter = 2000, warmup = 1000,
+                          control = list(adapt_delta = 0.97))
+saveRDS(
+  m1_stan_old,
+  here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_old.rds")
+)
+# as above but with alternative CYER index
+dat_list$cyer_z <-  det_dat$cyer3_z
 m1_stan_no_ps <- sampling(mod1, data = dat_list,
                     chains = 4, iter = 2000, warmup = 1000,
                     control = list(adapt_delta = 0.97))
@@ -135,11 +146,12 @@ saveRDS(
 
 
 m1_stan <- readRDS(
+  # here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_no_ps.rds"))
   here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
 
 
 # check problematic params
-summary_df <- summary(m1_stan)$summary %>% 
+summary_df <- summary(m1_stan_no_ps)$summary %>% 
   as.data.frame()
 summary_df$parameter <- rownames(summary_df)
 
@@ -150,7 +162,7 @@ summary_df %>%
   filter(grepl("beta", parameter))
 
 # similar effects regardless of whether Puget Sound ISBM fisheries included
-loo1 <- loo(m1_stan)
+loo1 <- loo(m1_stan_old)
 loo2 <- loo(m1_stan_no_ps)
 
 
@@ -178,7 +190,7 @@ terminal_det_p <- ggplot() +
 
 # POSTERIOR INFERENCE  ---------------------------------------------------------
 
-post <- extract.samples(m1_stan)
+post <- extract.samples(m1_stan_no_ps)
 
 yday_seq <- c(135, 182, 227) 
 day_label <- c("May 15", "Jul 1", "Aug 15")

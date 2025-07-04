@@ -109,27 +109,27 @@ cwt_dat_long2 <- cwt_dat_long %>%
 
 
 # look at relative impact of WCVI fisheries on different indicators
-cwt_dat_long2 %>% 
-  filter(strata %in% c("aabm_wcvi_s", "aabm_wcvi_s"), 
-         year > 2018,
-         mark == "unmarked") %>% 
-  group_by(indicator, year) %>% 
-  summarize(total_er = sum(percent_run)) %>% 
-  group_by(indicator) %>% 
-  summarize(mean_er = mean(total_er)) %>% 
-  arrange(mean_er) %>% 
-  print(n = Inf)
-
-cwt_dat_long2 %>% 
-  filter(strata %in% c("isbm_puget_n", "isbm_puget_s"), 
-         year > 2018,
-         mark == "unmarked") %>% 
-  group_by(indicator, year) %>% 
-  summarize(total_er = sum(percent_run)) %>% 
-  group_by(indicator) %>% 
-  summarize(mean_er = mean(total_er)) %>% 
-  arrange(mean_er) %>% 
-  print(n = Inf)
+# cwt_dat_long2 %>% 
+#   filter(strata %in% c("aabm_wcvi_s", "aabm_wcvi_s"), 
+#          year > 2018,
+#          mark == "unmarked") %>% 
+#   group_by(indicator, year) %>% 
+#   summarize(total_er = sum(percent_run)) %>% 
+#   group_by(indicator) %>% 
+#   summarize(mean_er = mean(total_er)) %>% 
+#   arrange(mean_er) %>% 
+#   print(n = Inf)
+# 
+# cwt_dat_long2 %>% 
+#   filter(strata %in% c("isbm_puget_n", "isbm_puget_s"), 
+#          year > 2018,
+#          mark == "unmarked") %>% 
+#   group_by(indicator, year) %>% 
+#   summarize(total_er = sum(percent_run)) %>% 
+#   group_by(indicator) %>% 
+#   summarize(mean_er = mean(total_er)) %>% 
+#   arrange(mean_er) %>% 
+#   print(n = Inf)
 
 
 #combine stray and escapement, then use to calculate total exploitation
@@ -180,11 +180,10 @@ recent_avg <- cwt_dat_out %>%
     year = 2023
   ) %>% 
   select(colnames(cwt_dat_out))
+cwt_dat_out_noPS_OLD <- rbind(cwt_dat_out, recent_avg)
 
-
-saveRDS(rbind(cwt_dat_out, recent_avg),
-        here::here("data", "harvest", "cleaned_cyer_dat_no_puget.rds"))
-
+saveRDS(cwt_dat_out_noPS_OLD,
+        here::here("data", "harvest", "cleaned_cyer_dat_no_puget_OLD.rds"))
 
 
 # as above but includes puget
@@ -215,7 +214,27 @@ recent_avg <- cwt_dat_out %>%
     year = 2023
   ) %>% 
   select(colnames(cwt_dat_out))
+cwt_dat_out_OLD <- rbind(cwt_dat_out, recent_avg)
+
+saveRDS(cwt_dat_out_OLD,
+        here::here("data", "harvest", "cleaned_cyer_dat_OLD.rds"))
 
 
-saveRDS(rbind(cwt_dat_out, recent_avg),
-        here::here("data", "harvest", "cleaned_cyer_dat.rds"))
+
+### compare to updated 
+
+new_dat <- readRDS(here::here("data", "harvest", "cleaned_cyer_dat.rds"))
+
+comp_dat <- rbind(cwt_dat_out_OLD %>% mutate(dataset = "old"),
+                  new_dat %>% mutate(dataset = "new")) %>% 
+  filter(
+    year > 2018
+  )
+
+comp_dat %>% 
+  pivot_wider(names_from = "dataset", values_from = "focal_er") %>% 
+  ggplot(.) +
+  geom_point(aes(x = old, y = new, colour = as.factor(year), shape = clip)) +
+  facet_wrap(~stock, scales = "free") +
+  geom_abline(yintercept = 0, slope = 1) 
+  glimpse()
