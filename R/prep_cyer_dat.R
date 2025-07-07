@@ -237,6 +237,7 @@ saveRDS(cwt_dat_out,
 
 ## CLEAN PUGET SOUND CATCH/EFFORT DATA -----------------------------------------
 
+# creel rec catch data from https://wdfw.wa.gov/fishing/reports/creel/puget-annual?sample_date=3&ramp=&catch_area=
 paths <- list.files(path = here::here("data", "harvest", "puget_sound_catch"),
                     pattern = "\\.csv$", 
                     full.names = TRUE)
