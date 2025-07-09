@@ -23,8 +23,13 @@ indicator_key <- read.csv(
     ctc_indicator = ifelse(grepl("UMPQ", stock), "ELK", ctc_indicator)
   )
 
+# cyer_dat1 <- readRDS(
+#   here::here("data", "harvest", "cleaned_cyer_dat_adj.rds")
+# ) %>% 
+#   rename(ctc_indicator = stock, focal_er_adj = focal_er) %>% 
+#   filter(year > 2018)
 cyer_dat1 <- readRDS(
-  here::here("data", "harvest", "cleaned_cyer_dat_adj.rds")
+  here::here("data", "harvest", "cleaned_cyer_dat_OLD.rds")
 ) %>% 
   rename(ctc_indicator = stock, focal_er_adj = focal_er) %>% 
   filter(year > 2018)
@@ -149,7 +154,7 @@ det_dat1 <- dat_tbl %>%
               mutate(month = lubridate::month(date)) %>% 
               select(vemco_code = acoustic_year, month, year, acoustic_type, 
                      known_stage, stage_1, stage_2, lat, lon, year_day, 
-                     fl, wt, lipid, adj_inj, ctc_indicator,
+                     fl, wt, lipid, adj_inj, ctc_indicator, clip,
                      focal_er, focal_er_adj, focal_er_no_ps, comment),
             by = "vemco_code") %>%
   mutate(
@@ -167,16 +172,23 @@ det_dat1 <- dat_tbl %>%
   )
 
 # compare old and new ERs
-det_dat1 %>% 
-  mutate(
-    er_diff = abs(focal_er - focal_er_adj)
-  ) %>% 
-  filter(
-    er_diff > 0.01,
-    stage_1 == "mature"
-  ) %>% 
-  select(focal_er, focal_er_adj, ctc_indicator, year) %>% 
-  distinct()
+# dd <- det_dat1 %>%
+#   mutate(
+#     er_diff = abs(focal_er - focal_er_adj)
+#   ) %>%
+#   filter(
+#     # er_diff > 0.01,
+#     stage_1 == "mature",
+#     clip == "Y"
+#   ) %>%
+#   select(focal_er, focal_er_adj, ctc_indicator, year, clip) %>%
+#   distinct()
+# 
+# ggplot(dd) +
+#   geom_point(aes(x = year, y = focal_er, shape = clip), color = "red") +
+#   geom_point(aes(x = year, y = focal_er_adj, shape = clip), color = "blue") +
+#   facet_wrap(~ctc_indicator, scales = "free_y")
+
 
 
 # small number of tags (<2% missing lipid data; impute)

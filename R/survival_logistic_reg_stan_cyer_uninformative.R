@@ -72,7 +72,7 @@ det_dat <- det_dat1 %>%
     log_wt_z = scale(log(wt)) %>% as.numeric(),
     day_z = scale(year_day) %>% as.numeric(),
     cyer_z = scale(focal_er) %>% as.numeric(),
-    cyer2_z = scale(focal_er_old) %>% as.numeric(),
+    cyer2_z = scale(focal_er_adj) %>% as.numeric(),
     cyer3_z = scale(focal_er_no_ps) %>% as.numeric(),
     year = as.factor(year),
     stock_group = factor(
@@ -120,21 +120,24 @@ dat_list <- list(
 
 mod1 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_cov2_uninformative.stan"))
 
+# includes all Puget Sound
 m1_stan <- sampling(mod1, data = dat_list,
                     chains = 4, iter = 2000, warmup = 1000,
                     control = list(adapt_delta = 0.97))
 saveRDS(m1_stan,
         here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
-# as above but with alternative CYER index
+
+# as above but with CYER adjusted for PS stocks
 dat_list$cyer_z <-  det_dat$cyer2_z
-m1_stan_old <- sampling(mod1, data = dat_list,
+m1_stan_adj <- sampling(mod1, data = dat_list,
                           chains = 4, iter = 2000, warmup = 1000,
                           control = list(adapt_delta = 0.97))
 saveRDS(
-  m1_stan_old,
-  here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_old.rds")
+  m1_stan_adj,
+  here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_adj.rds")
 )
-# as above but with alternative CYER index
+
+# as above but with all Puget harvest removed
 dat_list$cyer_z <-  det_dat$cyer3_z
 m1_stan_no_ps <- sampling(mod1, data = dat_list,
                     chains = 4, iter = 2000, warmup = 1000,
@@ -146,7 +149,7 @@ saveRDS(
 
 
 m1_stan <- readRDS(
-  # here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_no_ps.rds"))
+  # here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_adj.rds"))
   here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
 
 
@@ -162,8 +165,9 @@ summary_df %>%
   filter(grepl("beta", parameter))
 
 # similar effects regardless of whether Puget Sound ISBM fisheries included
-loo1 <- loo(m1_stan_old)
+loo1 <- loo(m1_stan_adj)
 loo2 <- loo(m1_stan_no_ps)
+loo3 <- loo(m1_stan)
 
 
 # DETECTION PROBABILITY --------------------------------------------------------
@@ -685,7 +689,7 @@ cyer_seq <- det_dat %>%
   arrange(stk) %>% 
   group_by(stk) %>% 
   summarize(
-    mean_cyer = mean(cyer_z)
+    mean_cyer = mean(cyer3_z)
   ) %>% 
   pull(mean_cyer)
 
@@ -703,7 +707,7 @@ sim_surv <- sim_surv_d <- sim_surv_cyer <- sim_fl <- sim_lipid <- matrix(
 )
 # define low cyer for comparison
 low_cyer <- 0
-low_cyer_z <- (low_cyer - mean(det_dat$focal_er)) / sd(det_dat$focal_er)
+low_cyer_z <- (low_cyer - mean(det_dat$focal_er_no_ps )) / sd(det_dat$focal_er_no_ps )
 
 
 for (j in seq_along(stk_seq)) {
@@ -798,11 +802,7 @@ pred_stk_dat <- rbind(
     lo = rethinking::HPDI(est, prob = 0.9)[1],
     up = rethinking::HPDI(est, prob = 0.9)[2]
   ) %>%
-  left_join(., stk_key, by = "stk") %>% 
-  mutate(
-    stock_group = fct_recode(stock_group, "Fraser Sum. 0.3" = "Fraser Sum. 4.1",
-                             "Fraser Spr. 1.2" = "Fraser Spr. Yr.")
-  )
+  left_join(., stk_key, by = "stk")
 
 pred_stk_dat %>% 
   group_by(effect) %>% 
