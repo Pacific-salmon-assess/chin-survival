@@ -149,9 +149,10 @@ saveRDS(
 
 
 m1_stan <- readRDS(
-  # here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_adj.rds"))
   here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
-
+m1_stan_no_ps <- readRDS(
+  here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_no_ps.rds")
+)
 
 # check problematic params
 summary_df <- summary(m1_stan_no_ps)$summary %>% 
