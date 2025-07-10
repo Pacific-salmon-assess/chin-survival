@@ -155,7 +155,7 @@ m1_stan_no_ps <- readRDS(
 )
 
 # check problematic params
-summary_df <- summary(m1_stan_no_ps)$summary %>% 
+summary_df <- summary(m1_stan_adj)$summary %>% 
   as.data.frame()
 summary_df$parameter <- rownames(summary_df)
 
@@ -171,9 +171,51 @@ loo2 <- loo(m1_stan_no_ps)
 loo3 <- loo(m1_stan)
 
 
+# QQ PLOT ----------------------------------------------------------------------
+
+# Define a function to calculate PIT residuals
+calc_pit <- function(y, posterior_pred) {
+  # Get the proportion of posterior samples that are less than or equal to the observed value
+  n_obs <- length(y)
+  pit_residuals <- numeric(n_obs)
+  
+  for (i in 1:n_obs) {
+    # Calculate pmin and pmax for each observation
+    y_prime <- posterior_pred[i, ]  # posterior predictions for i-th observation
+    pmin_i <- mean(y_prime < y[i])
+    pmax_i <- mean(y_prime <= y[i])
+    
+    # Generate the PIT residuals as a random draw from uniform(pmin, pmax)
+    pit_residuals[i] <- runif(1, pmin_i, pmax_i)
+  }
+  
+  return(pit_residuals)
+}
+
+
+post <- as_draws_matrix(m1_stan_adj)  # or `as_draws_df`, or use `post::as_draws()`
+s_obs_rep_cols <- grep("^s_obs_rep\\[", colnames(post), value = TRUE)
+s_obs_rep_samples <- post[, s_obs_rep_cols]
+
+# Calculate PIT residuals
+pit_residuals <- calc_pit(y = det_dat$term_det, posterior_pred = s_obs_rep_samples)
+qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
+       main = "QQ-plot of PIT Residuals")
+abline(0, 1)
+
+
+png(here::here("figs", "binomial-glm-cyer-uninformative", "qq_plot.png"),
+    units = "in", res = 250, height = 3.5, width = 3.5)
+qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
+       xlab = "Theoretical Quantiles",
+       ylab = "Sample Quantiles")
+abline(0, 1)
+dev.off()
+
+
 # DETECTION PROBABILITY --------------------------------------------------------
 
-det_p_draws <- as_draws_df(m1_stan) %>%
+det_p_draws <- as_draws_df(m1_stan_adj) %>%
   spread_draws(p[i]) %>% 
   rename(det_group_id_n = i) %>% 
   left_join(., key, by = "det_group_id_n") %>% 
@@ -195,7 +237,7 @@ terminal_det_p <- ggplot() +
 
 # POSTERIOR INFERENCE  ---------------------------------------------------------
 
-post <- extract.samples(m1_stan_no_ps)
+post <- extract.samples(m1_stan_adj)
 
 yday_seq <- c(135, 182, 227) 
 day_label <- c("May 15", "Jul 1", "Aug 15")
@@ -237,6 +279,21 @@ pred_day_cyer_dat <- bind_rows(preds) %>%
     med = median(est),
     lo = rethinking::HPDI(est, prob = 0.9)[1],
     up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) %>% 
+  ungroup()
+pred_day_cyer_dat %>% 
+  filter(
+    day %in% c("May 15")
+  ) %>% 
+  filter(
+    med == min(.$med) | med == max(.$med)
+  )
+pred_day_cyer_dat %>% 
+  filter(
+    day %in% c("Aug 15")
+  ) %>% 
+  filter(
+    med == min(.$med) | med == max(.$med)
   )
 
 pred_day_cyer <- ggplot(
@@ -494,7 +551,7 @@ names(day_effect_pal) <- c("direct", "total")
 # shared y axis minimum value 
 ymin_val <- 0.1
 
-pred_day_ribbon <- rbind(pred_day_surv_total, pred_day_surv_direct) %>% 
+pred_day_dat <- rbind(pred_day_surv_total, pred_day_surv_direct) %>% 
   mutate(
     yday_z = as.numeric(yday_z),
     year_day = (yday_z * sd(det_dat$year_day)) + mean(det_dat$year_day)
@@ -504,9 +561,17 @@ pred_day_ribbon <- rbind(pred_day_surv_total, pred_day_surv_direct) %>%
     med = median(est),
     lo = rethinking::HPDI(est, prob = 0.9)[1],
     up = rethinking::HPDI(est, prob = 0.9)[2]
+  ) 
+pred_day_dat %>% 
+  mutate(
+    max_day = max(pred_day_dat$year_day),
+    min_day = min(pred_day_dat$year_day)
   ) %>% 
-  ggplot(
-    ., aes(x = year_day, y = med, lty = effect)
+  filter(
+    year_day == min_day | year_day == max_day
+  )
+pred_day_ribbon <- ggplot(
+    pred_day_dat, aes(x = year_day, y = med, lty = effect)
   ) +
   geom_line(
     colour = "#7570b3"
@@ -577,7 +642,7 @@ pred_fl <- sapply(
     inv_logit(post$alpha_s + post$beta_fs * x)
   }
 )
-pred_fl_ribbon <- pred_fl %>% 
+pred_fl_dat <- pred_fl %>% 
   as.data.frame() %>% 
   set_names(fl_seq) %>% 
   pivot_longer(
@@ -585,16 +650,23 @@ pred_fl_ribbon <- pred_fl %>%
   ) %>% 
   mutate(
     fl_z = as.numeric(fl_z),
-    fl = (fl_z * sd(det_dat$fl)) + mean(det_dat$fl)
+    fl = (fl_z * sd(det_dat$fl)) + mean(det_dat$fl),
+    max_fl = max(fl),
+    min_fl = min(fl)
   ) %>% 
-  group_by(fl) %>% 
+  group_by(fl, max_fl, min_fl) %>% 
   summarize(
     med = median(est),
     lo = rethinking::HPDI(est, prob = 0.9)[1],
     up = rethinking::HPDI(est, prob = 0.9)[2]
-  ) %>% 
-  ggplot(
-    ., aes(x = fl, y = med)
+  )
+pred_fl_dat %>% 
+  filter(
+    fl == max_fl | fl == min_fl
+  )
+
+pred_fl_ribbon <- ggplot(
+  pred_fl_dat, aes(x = fl, y = med)
   ) +
   geom_line(
     colour = "#7570b3"
@@ -690,7 +762,7 @@ cyer_seq <- det_dat %>%
   arrange(stk) %>% 
   group_by(stk) %>% 
   summarize(
-    mean_cyer = mean(cyer3_z)
+    mean_cyer = mean(cyer2_z)
   ) %>% 
   pull(mean_cyer)
 
@@ -708,7 +780,7 @@ sim_surv <- sim_surv_d <- sim_surv_cyer <- sim_fl <- sim_lipid <- matrix(
 )
 # define low cyer for comparison
 low_cyer <- 0
-low_cyer_z <- (low_cyer - mean(det_dat$focal_er_no_ps )) / sd(det_dat$focal_er_no_ps )
+low_cyer_z <- (low_cyer - mean(det_dat$focal_er_adj )) / sd(det_dat$focal_er_adj )
 
 
 for (j in seq_along(stk_seq)) {
@@ -726,7 +798,7 @@ for (j in seq_along(stk_seq)) {
     sim_fl[i, j] <- mu[1]
     sim_lipid[i, j] <- mu[2]
   }
-  # excludes hierarchical intercept; assumes low injury and low harvest rate
+  # assumes low injury and low harvest rate
   sim_eta <- as.numeric(
     post$alpha_s + 
       post$beta_ds * pred_mu_date[ , j] +
@@ -735,12 +807,12 @@ for (j in seq_along(stk_seq)) {
       post$beta_cs * low_cyer_z +
       post$alpha_stk[ , j, 4]
   )
-  # as above but sets fl and lipid to zero (i.e. removes them)
+  # as above but sets date fl and lipid to zero (i.e. removes them)
   sim_eta_direct <- as.numeric(
     post$alpha_s + post$alpha_stk[ , j, 4] +
       post$beta_cs * low_cyer_z
   )
-  # as above but includes stock-specific cyer
+  # as above but includes stock-specific cyer and mean date
   sim_eta_cyer <- as.numeric(
     post$alpha_s + 
       post$beta_ds * pred_mu_date[ , j] +
@@ -919,6 +991,7 @@ png(here::here("figs", "binomial-glm-cyer-uninformative", "stock_surv.png"),
     units = "in", res = 250, height = 3.5, width = 6)
 pred_stk_comb
 dev.off()
+
 png(here::here("figs", "binomial-glm-cyer-uninformative",
                "diff_survival_hist.png"),
     units = "in", res = 250, height = 4.5, width = 6)

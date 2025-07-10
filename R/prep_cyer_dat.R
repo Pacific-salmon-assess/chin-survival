@@ -215,7 +215,7 @@ cwt_dat_out <- cwt_dat_long2 %>%
         "SAM_unmarked", "SSF_unmarked", "SPS_unmarked", "STL_unmarked",
         "SKY_unmarked"
       ),
-      scaled_percent / 2,
+      0, #scaled_percent / 2,
       scaled_percent
     )
   ) %>% 

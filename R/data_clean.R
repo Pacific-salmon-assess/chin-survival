@@ -23,16 +23,16 @@ indicator_key <- read.csv(
     ctc_indicator = ifelse(grepl("UMPQ", stock), "ELK", ctc_indicator)
   )
 
+cyer_dat1 <- readRDS(
+  here::here("data", "harvest", "cleaned_cyer_dat_adj.rds")
+) %>%
+  rename(ctc_indicator = stock, focal_er_adj = focal_er) %>%
+  filter(year > 2018)
 # cyer_dat1 <- readRDS(
-#   here::here("data", "harvest", "cleaned_cyer_dat_adj.rds")
+#   here::here("data", "harvest", "cleaned_cyer_dat_OLD.rds")
 # ) %>% 
 #   rename(ctc_indicator = stock, focal_er_adj = focal_er) %>% 
 #   filter(year > 2018)
-cyer_dat1 <- readRDS(
-  here::here("data", "harvest", "cleaned_cyer_dat_OLD.rds")
-) %>% 
-  rename(ctc_indicator = stock, focal_er_adj = focal_er) %>% 
-  filter(year > 2018)
 cyer_dat2 <- readRDS(
   here::here("data", "harvest", "cleaned_cyer_dat_no_puget.rds")
 ) %>% 
@@ -172,22 +172,22 @@ det_dat1 <- dat_tbl %>%
   )
 
 # compare old and new ERs
-# dd <- det_dat1 %>%
-#   mutate(
-#     er_diff = abs(focal_er - focal_er_adj)
-#   ) %>%
-#   filter(
-#     # er_diff > 0.01,
-#     stage_1 == "mature",
-#     clip == "Y"
-#   ) %>%
-#   select(focal_er, focal_er_adj, ctc_indicator, year, clip) %>%
-#   distinct()
-# 
-# ggplot(dd) +
-#   geom_point(aes(x = year, y = focal_er, shape = clip), color = "red") +
-#   geom_point(aes(x = year, y = focal_er_adj, shape = clip), color = "blue") +
-#   facet_wrap(~ctc_indicator, scales = "free_y")
+dd <- det_dat1 %>%
+  mutate(
+    er_diff = abs(focal_er - focal_er_adj)
+  ) %>%
+  filter(
+    # er_diff > 0.01,
+    stage_1 == "mature",
+    clip == "Y"
+  ) %>%
+  select(focal_er, focal_er_adj, ctc_indicator, year, clip) %>%
+  distinct()
+
+ggplot(dd) +
+  geom_point(aes(x = year, y = focal_er, shape = clip), color = "red") +
+  geom_point(aes(x = year, y = focal_er_adj, shape = clip), color = "blue") +
+  facet_wrap(~ctc_indicator, scales = "free_y")
 
 
 
