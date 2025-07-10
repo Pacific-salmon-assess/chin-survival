@@ -102,7 +102,7 @@ png(here::here("figs", "supp", "stock_cyer.png"),
     height = 4, width = 5.5, units = "in", res = 200)
 ggplot() +
   geom_boxplot(data = det_dat1,
-               aes(x = stock_group, y = focal_er, fill = stock_group)) +
+               aes(x = stock_group, y = focal_er_adj, fill = stock_group)) +
   scale_fill_manual(values = stock_pal) +
   labs(y = "Exploitation Rate") +
   ggsidekick::theme_sleek() +
