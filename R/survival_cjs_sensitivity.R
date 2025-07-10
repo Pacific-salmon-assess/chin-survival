@@ -90,7 +90,37 @@ dat_tbl_trim2 <- dat_tbl_trim_in %>%
   )
 
 
-dat_tbl_trim <- rbind(dat_tbl_trim1, dat_tbl_trim2)
+# standard tbl fit in normal model 
+mature_tags2 <- dat_tbl_trim_in %>% 
+  unnest(bio_dat) %>%
+  filter(stage_1 == "mature") %>% 
+  pull(vemco_code)
+
+dat_tbl_trim3 <- dat_tbl_trim_in %>% 
+  mutate(
+    bio_dat = purrr::map(
+      bio_dat, ~.x %>% filter(vemco_code %in% mature_tags2)
+    ),
+    wide_array_dat = purrr::map2(
+      wide_array_dat, bio_dat,
+      ~ .x %>% 
+        filter(vemco_code %in% mature_tags) %>%
+        left_join(
+          ., 
+          # add z-scored tagging date
+          .y %>% 
+            select(vemco_code, year_day), 
+          by = "vemco_code") %>% 
+        mutate(
+          tag_date_z = scale(year_day) %>% as.numeric()
+        )
+    ),
+    data = "standard"
+  )
+
+
+dat_tbl_trim <- rbind(dat_tbl_trim1, dat_tbl_trim2) %>% 
+  rbind(., dat_tbl_trim3)
 
 dat_tbl_trim$stock_group <- fct_relevel(
   as.factor(dat_tbl_trim$stock_group),
@@ -430,24 +460,12 @@ dat_tbl_trim <- readRDS(
   here::here("data", "model_outputs", "hier_cjs_posterior_tbl_sens.RDS")
   )
 
-
-# combine new and old tbls
-standard_tbl <- readRDS(
-  here::here("data", "model_outputs", "hier_cjs_int_date_posterior_tbl.RDS")
-) %>% 
-  mutate(
-    data = "standard"
-  ) %>% 
-  select(
-    colnames(dat_tbl_trim)
-  )
-
-
-dat_tbl <- rbind(standard_tbl, dat_tbl_trim) %>% 
+dat_tbl <- dat_tbl_trim %>% 
   mutate(
     data = factor(data, levels = c("standard", "mature_2", "five_day"),
                   labels = c("standard", "maturity", "tag effect"))
   )
+
 
 
 ## VISUALIZE POSTERIOR ---------------------------------------------------------
@@ -508,27 +526,27 @@ stage_spec_surv
 dev.off()
 
 
-dum <- extract(cjs_hier_sims[[9]])[["alpha_t_phi"]] %>% 
-  as.data.frame() %>%
-  pivot_longer(everything(), names_to = "segment", values_to = "est", 
-               names_prefix = "V")
-
-std_mod <- readRDS(
-  here::here("data", "model_outputs", "hier_cjs_fit_tbl_int_date.RDS")
-) 
-dum2 <- extract(std_mod[[4]])[["alpha_t_phi"]] %>% 
-  as.data.frame() %>%
-  pivot_longer(everything(), names_to = "segment", values_to = "est", 
-               names_prefix = "V")
-
-p <- ggplot() +
-  geom_density(data = dum, aes(x = est), 
-               fill = "red", colour = "red", alpha = 0.4) +
-  geom_density(data = dum2, aes(x = est), 
-               fill = "blue", colour = "blue", alpha = 0.4) +
-  facet_wrap(~segment) + 
-  ggsidekick::theme_sleek() +
-  labs(x = "Gamma Phi T Estimate", y = "Kernel Density")
+# dum <- extract(cjs_hier_sims[[9]])[["alpha_t_phi"]] %>% 
+#   as.data.frame() %>%
+#   pivot_longer(everything(), names_to = "segment", values_to = "est", 
+#                names_prefix = "V")
+# 
+# std_mod <- readRDS(
+#   here::here("data", "model_outputs", "hier_cjs_fit_tbl_int_date.RDS")
+# ) 
+# dum2 <- extract(std_mod[[4]])[["alpha_t_phi"]] %>% 
+#   as.data.frame() %>%
+#   pivot_longer(everything(), names_to = "segment", values_to = "est", 
+#                names_prefix = "V")
+# 
+# p <- ggplot() +
+#   geom_density(data = dum, aes(x = est), 
+#                fill = "red", colour = "red", alpha = 0.4) +
+#   geom_density(data = dum2, aes(x = est), 
+#                fill = "blue", colour = "blue", alpha = 0.4) +
+#   facet_wrap(~segment) + 
+#   ggsidekick::theme_sleek() +
+#   labs(x = "Gamma Phi T Estimate", y = "Kernel Density")
 
 
 # cumulative survival
