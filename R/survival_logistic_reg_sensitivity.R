@@ -10,7 +10,52 @@ library(grid)
 rstan::rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
+
+# import posterior estimates of detection probability based on CJS models
+# add high detection probability for WCVI in 2021 and 2022 because a) all 
+# tagged fish Robertson Creek and b) 100% of in-river detections observed on
+# multiple arrays
+post_p_wcvi <- data.frame(
+  stock_group = "WCVI",
+  year = c("2021", "2022"),
+  mean_logit_p = 5.64,
+  sd_logit_p = 1.09
+)
+post_p <- readRDS(here::here("data", "posterior_p.rds")) %>% 
+  rbind(., post_p_wcvi) %>% 
+  mutate(det_group_id = paste(as.character(stock_group), year, sep = "_")) %>% 
+  select(-c(stock_group, year))
+key <- det_dat1 %>% 
+  mutate(
+    det_group_id = ifelse(
+      grepl("Fraser", stock_group), "Fraser", as.character(stock_group)
+    ) %>% 
+      paste(., year, sep = "_")
+  ) %>% 
+  select(stock_group, year, det_group_id) %>% 
+  distinct() %>% 
+  arrange(stock_group, year, det_group_id) %>% 
+  left_join(., post_p, by = "det_group_id") %>% 
+  #replace NAs with placeholders
+  mutate(
+    post = ifelse(is.na(mean_logit_p), 0, 1),
+    mean_logit_p = ifelse(is.na(mean_logit_p), 0.001, mean_logit_p),
+    sd_logit_p = ifelse(is.na(sd_logit_p), 1, sd_logit_p)
+  ) %>% 
+  # sort so that unobserved stocks follow observed
+  arrange(desc(post), stock_group, year, det_group_id) %>% 
+  mutate(
+    det_group_id_n = seq(1, nrow(.), by = 1)
+  )
+
+
+
 det_dat_in <- readRDS(here::here("data", "surv_log_reg_data.rds")) %>% 
+  left_join(
+    .,
+    key %>% select(stock_group, year, det_group_id_n), 
+    by = c("stock_group", "year")
+  ) %>% 
   #scale cov
   mutate(
     lipid_z = scale(lipid) %>% as.numeric(),
@@ -18,18 +63,8 @@ det_dat_in <- readRDS(here::here("data", "surv_log_reg_data.rds")) %>%
     wt_z = scale(wt) %>% as.numeric(),
     log_wt_z = scale(log(wt)) %>% as.numeric(),
     day_z = scale(year_day) %>% as.numeric(),
-    cyer_z = scale(isbm_cyer) %>% as.numeric(),
-    terminal_p = as.factor(terminal_p),
-    inj = as.integer(as.factor(adj_inj)),
-    term_p = as.integer(terminal_p)
-  )
-
-
-# switch maturity stage
-det_dat1 <- det_dat_in %>% 
-  filter(
-    !is.na(isbm_cyer),
-    stage_2 == "mature"
+    cyer_z = scale(focal_er_adj) %>% as.numeric(),
+    inj = as.integer(as.factor(adj_inj))
   ) %>% 
   mutate(
     year = as.factor(year),
@@ -43,8 +78,15 @@ det_dat1 <- det_dat_in %>%
       droplevels(),
     yr = as.integer(year),
     stk = as.integer(stock_group)
-  ) %>% 
-  droplevels()
+  ) 
+
+
+# switch maturity stage
+det_dat1 <- det_dat_in %>% 
+  filter(
+    !is.na(focal_er_adj),
+    stage_2 == "mature"
+  ) 
 
 
 # five days post-release
@@ -67,25 +109,13 @@ five_d_tags <- readRDS(
   unique()
 det_dat2 <- det_dat_in %>% 
   filter(
-    !is.na(isbm_cyer),
+    !is.na(focal_er_adj),
     vemco_code %in% five_d_tags & vemco_code %in% mature_tags1
-  ) %>% 
-  mutate(
-    year = as.factor(year),
-    stock_group = factor(
-      stock_group, 
-      levels = c(
-        "Low Col.", "Up Col.", "WA_OR", "WCVI", "ECVI", 
-        "Fraser Spr. Yr.", "Fraser Sum. Yr.", "Fraser Sum. 4.1", "Fraser Fall", 
-        "North Puget", "South Puget"
-      )) %>% 
-      droplevels(),
-    yr = as.integer(year),
-    stk = as.integer(stock_group)
   ) 
 
 
 dat_list_in <- list(det_dat1, det_dat2)
+
 
 
 ## FIT MODELS ------------------------------------------------------------------
