@@ -1216,10 +1216,10 @@ for (i in seq_along(stk_key$agg_n)) {
 stk_col_pal <- c(
   "#fee5d9", "#fcae91", "#fb6a4a", "#cb181d"
 )
-names(stk_col_pal) <- c("Fraser Spr. Yr.",
-                          "Fraser Sum. Yr.",
-                          "Fraser Sum. Sub.",
-                          "Fraser Fall Sub.")
+names(stk_col_pal) <- c("Fraser Spr. 1.x",
+                          "Fraser Sum. 1.3",
+                          "Fraser Sum. 0.3",
+                          "Fraser Fall")
 
 stk_cumprod_plot <- cumprod_list %>% 
   bind_rows() %>% 
@@ -1239,8 +1239,10 @@ stk_cumprod_plot <- cumprod_list %>%
            stock, 
            levels = c("Fraser Spr. Yr.", "Fraser Sum. Yr.", "Fraser Sum. 4.1",
                       "Fraser Fall"),
-           labels = c("Fraser Spr. Yr.", "Fraser Sum. Yr.", "Fraser Sum. Sub.",
-                      "Fraser Fall Sub.")
+           labels = c("Fraser Spr. 1.x",
+                      "Fraser Sum. 1.3",
+                      "Fraser Sum. 0.3",
+                      "Fraser Fall")
            )
          ) %>% 
   group_by(segment, segment_name, stock) %>% 
@@ -1295,8 +1297,10 @@ stk_effect %>%
       stk, 
       levels = c("Fraser Spr. Yr.", "Fraser Sum. Yr.", "Fraser Sum. 4.1",
                  "Fraser Fall"),
-      labels = c("Fraser Spr. Yr.", "Fraser Sum. Yr.", "Fraser Sum. Sub.",
-                 "Fraser Fall Sub.")
+      labels = c("Fraser Spr. 1.x",
+                 "Fraser Sum. 1.3",
+                 "Fraser Sum. 0.3",
+                 "Fraser Fall")
     )
   ) %>% 
   ggplot(.) +

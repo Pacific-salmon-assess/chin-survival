@@ -79,7 +79,7 @@ det_dat <- det_dat1 %>%
       stock_group, 
       levels = c(
         "Low Col.", "Up Col.", "WA_OR", "WCVI", "ECVI", 
-        "Fraser Spr. 1.x", "Fraser Sum. 1.2", "Fraser Sum. 0.3", "Fraser Fall", 
+        "Fraser Spr. 1.x", "Fraser Sum. 1.3", "Fraser Sum. 0.3", "Fraser Fall", 
         "North Puget", "South Puget"
       )) %>% 
       droplevels(),

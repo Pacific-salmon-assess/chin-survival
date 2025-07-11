@@ -83,7 +83,7 @@ chin2 <- left_join(
   by = "stock") %>% 
   mutate(
     agg_name = case_when(
-      stock %in% fr_sum_yr ~ "Fraser Sum. 1.2",
+      stock %in% fr_sum_yr ~ "Fraser Sum. 1.3",
       stock %in% fr_spr_yr ~ "Fraser Spr. 1.x",
       agg_name == "Fraser Sum. 4.1" ~ "Fraser Spr. 0.3",
       # define subyearlings based on run bubble_ts plots
@@ -117,7 +117,7 @@ stock_supp_table <- chin2 %>%
   mutate(
     agg_name = fct_recode(agg_name,
                           "Spring 1.x" = "Fraser Spr. 1.x",
-                          "Summer 1.3" = "Fraser Sum. 1.2", 
+                          "Summer 1.3" = "Fraser Sum. 1.3", 
                           "Summer 0.3" = "Fraser Sum. 0.3", 
                           "Fall 0.3" = "Fraser Fall")
   ) %>% 
