@@ -119,27 +119,27 @@ cwt_dat_long2 <- cwt_dat_long %>%
 
 
 # look at relative impact of WCVI fisheries on different indicators
-# cwt_dat_long2 %>% 
-#   filter(strata %in% c("aabm_wcvi_s", "aabm_wcvi_s"), 
-#          year > 2018,
-#          mark == "unmarked") %>%
-#   group_by(indicator, year) %>% 
-#   summarize(total_er = sum(percent_run)) %>% 
-#   group_by(indicator) %>% 
-#   summarize(mean_er = mean(total_er)) %>% 
-#   arrange(mean_er) %>% 
-#   print(n = Inf)
-# 
-# cwt_dat_long2 %>% 
-#   filter(strata %in% c("isbm_puget_n", "isbm_puget_s"), 
-#          year > 2018,
-#          mark == "unmarked") %>% 
-#   group_by(indicator, year) %>% 
-#   summarize(total_er = sum(percent_run)) %>% 
-#   group_by(indicator) %>% 
-#   summarize(mean_er = mean(total_er)) %>% 
-#   arrange(mean_er) %>% 
-#   print(n = Inf)
+cwt_dat_long2 %>%
+  filter(strata %in% c("aabm_wcvi_s", "aabm_wcvi_s"),
+         year > 2018,
+         mark == "unmarked") %>%
+  group_by(indicator, year) %>%
+  summarize(total_er = sum(percent_run)) %>%
+  group_by(indicator) %>%
+  summarize(mean_er = mean(total_er)) %>%
+  arrange(mean_er) %>%
+  print(n = Inf)
+
+cwt_dat_long2 %>%
+  filter(strata %in% c("isbm_puget_n", "isbm_puget_s"),
+         year > 2018,
+         mark == "unmarked") %>%
+  group_by(indicator, year) %>%
+  summarize(total_er = sum(percent_run)) %>%
+  group_by(indicator) %>%
+  summarize(mean_er = mean(total_er)) %>%
+  arrange(mean_er) %>%
+  print(n = Inf)
 
 
 #combine stray and escapement, then use to calculate total exploitation
