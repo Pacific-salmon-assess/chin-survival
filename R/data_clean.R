@@ -19,8 +19,11 @@ indicator_key <- read.csv(
   here::here("data", "ctc_decoder", "ctc_stock_decoder.csv")
 ) %>% 
   mutate(
-    ctc_indicator = ifelse(ctc_indicator == "SRH/ELK", "SRH", ctc_indicator),
-    ctc_indicator = ifelse(grepl("UMPQ", stock), "ELK", ctc_indicator)
+    ctc_indicator = ifelse(ctc_indicator == "SRH/ELK", "SRH", ctc_indicator)#,
+    # ctc_indicator = ifelse(grepl("UMPQ", stock), "ELK", ctc_indicator)
+    # ctc_indicator = ifelse(agg_name == "Fraser Summer Year.",
+    #                        "SHU_adjusted", 
+    #                        ctc_indicator)
   )
 
 cyer_dat1 <- readRDS(
@@ -172,22 +175,22 @@ det_dat1 <- dat_tbl %>%
   )
 
 # compare old and new ERs
-dd <- det_dat1 %>%
-  mutate(
-    er_diff = abs(focal_er - focal_er_adj)
-  ) %>%
-  filter(
-    # er_diff > 0.01,
-    stage_1 == "mature",
-    clip == "Y"
-  ) %>%
-  select(focal_er, focal_er_adj, ctc_indicator, year, clip) %>%
-  distinct()
-
-ggplot(dd) +
-  geom_point(aes(x = year, y = focal_er, shape = clip), color = "red") +
-  geom_point(aes(x = year, y = focal_er_adj, shape = clip), color = "blue") +
-  facet_wrap(~ctc_indicator, scales = "free_y")
+# dd <- det_dat1 %>%
+#   mutate(
+#     er_diff = abs(focal_er - focal_er_adj)
+#   ) %>%
+#   filter(
+#     # er_diff > 0.01,
+#     stage_1 == "mature",
+#     clip == "Y"
+#   ) %>%
+#   select(focal_er, focal_er_adj, ctc_indicator, year, clip) %>%
+#   distinct()
+# 
+# ggplot(dd) +
+#   geom_point(aes(x = year, y = focal_er, shape = clip), color = "red") +
+#   geom_point(aes(x = year, y = focal_er_adj, shape = clip), color = "blue") +
+#   facet_wrap(~ctc_indicator, scales = "free_y")
 
 
 

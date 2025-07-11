@@ -84,7 +84,6 @@ det_dat <- det_dat1 %>%
       )) %>% 
       droplevels(),
     inj = as.integer(as.factor(adj_inj)),
-    term_p = as.integer(terminal_p),
     yr = as.integer(year),
     stk = as.integer(stock_group)
   ) 
@@ -121,11 +120,11 @@ dat_list <- list(
 mod1 <- stan_model(here::here("R", "stan_models", "obs_surv_jll_cov2_uninformative.stan"))
 
 # includes all Puget Sound
-m1_stan <- sampling(mod1, data = dat_list,
-                    chains = 4, iter = 2000, warmup = 1000,
-                    control = list(adapt_delta = 0.97))
-saveRDS(m1_stan,
-        here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
+# m1_stan <- sampling(mod1, data = dat_list,
+#                     chains = 4, iter = 2000, warmup = 1000,
+#                     control = list(adapt_delta = 0.97))
+# saveRDS(m1_stan,
+#         here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
 
 # as above but with CYER adjusted for PS stocks
 dat_list$cyer_z <-  det_dat$cyer2_z
@@ -138,21 +137,27 @@ saveRDS(
 )
 
 # as above but with all Puget harvest removed
-dat_list$cyer_z <-  det_dat$cyer3_z
-m1_stan_no_ps <- sampling(mod1, data = dat_list,
-                    chains = 4, iter = 2000, warmup = 1000,
-                    control = list(adapt_delta = 0.97))
-saveRDS(
-  m1_stan_no_ps,
-  here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_no_ps.rds")
-)
+# dat_list$cyer_z <-  det_dat$cyer3_z
+# m1_stan_no_ps <- sampling(mod1, data = dat_list,
+#                     chains = 4, iter = 2000, warmup = 1000,
+#                     control = list(adapt_delta = 0.97))
+# saveRDS(
+#   m1_stan_no_ps,
+#   here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_no_ps.rds")
+# )
+# 
+# 
+# m1_stan <- readRDS(
+#   here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
+# m1_stan_no_ps <- readRDS(
+#   here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_no_ps.rds")
+# )
 
+m1_stan_adj <- readRDS(
+  here::here(
+    "data", "model_outputs", "hier_binomial_cyer_stan_uninformative_adj.rds")
+  )
 
-m1_stan <- readRDS(
-  here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative.rds"))
-m1_stan_no_ps <- readRDS(
-  here::here("data", "model_outputs", "hier_binomial_cyer_stan_uninformative_no_ps.rds")
-)
 
 # check problematic params
 summary_df <- summary(m1_stan_adj)$summary %>% 
@@ -166,9 +171,9 @@ summary_df %>%
   filter(grepl("beta", parameter))
 
 # similar effects regardless of whether Puget Sound ISBM fisheries included
-loo1 <- loo(m1_stan_adj)
-loo2 <- loo(m1_stan_no_ps)
-loo3 <- loo(m1_stan)
+# loo1 <- loo(m1_stan_adj)
+# loo2 <- loo(m1_stan_no_ps)
+# loo3 <- loo(m1_stan)
 
 
 # QQ PLOT ----------------------------------------------------------------------
