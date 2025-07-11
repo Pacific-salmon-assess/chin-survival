@@ -143,23 +143,39 @@ cwt_dat_long2 <- cwt_dat_long %>%
 
 
 #combine stray and escapement, then use to calculate total exploitation
-cyer_dat <- cwt_dat_long2 %>% 
-  filter(strata %in% c("esc", "stray")) %>% 
-  group_by(year, indicator) %>% 
-  summarize(
-    percent_escaped = sum(scaled_percent)
-  ) %>% 
-  ungroup() %>% 
-  mutate(
-    total_er = 1 - percent_escaped
-  ) 
- 
+# cyer_dat <- cwt_dat_long2 %>% 
+#   filter(strata %in% c("esc", "stray")) %>% 
+#   group_by(year, indicator) %>% 
+#   summarize(
+#     percent_escaped = sum(scaled_percent)
+#   ) %>% 
+#   ungroup() %>% 
+#   mutate(
+#     total_er = 1 - percent_escaped
+#   ) 
+#  
 # ggplot(cyer_dat) + 
 #   # geom_point(aes(x = year, y= can_er)) + 
 #   geom_point(aes(x = year, y= total_er), color = "red") + 
 #   facet_wrap(~indicator) +
 #   ggsidekick::theme_sleek()
 
+
+# function to make proxy Chilko data assumed 50% harvest of SHU
+chi_foo <- function(x) {
+  x %>% 
+    filter(
+      stock == "SHU"
+    ) %>% 
+    group_by(
+      year, clip
+    ) %>% 
+    mutate(
+      focal_er = focal_er / 2,
+      stock = "SHU_adjusted",
+      indicator = ifelse(clip == "Y", "SHU_adjusted_marked", "SHU_adjusted_unmarked")
+    ) 
+}
 
 # export exploitation rate for focal domain
 cwt_dat_out <- cwt_dat_long2 %>% 
@@ -178,12 +194,13 @@ cwt_dat_out <- cwt_dat_long2 %>%
       purrr::map(., head, n = 1) %>%
       unlist() 
   )
-saveRDS(cwt_dat_out,
+chi_dat <- chi_foo(cwt_dat_out)
+saveRDS(rbind(cwt_dat_out, chi_dat),
         here::here("data", "harvest", "cleaned_cyer_dat_no_puget.rds"))
 
 
 # as above but includes puget
-cwt_dat_out <- cwt_dat_long2 %>% 
+cwt_dat_out2 <- cwt_dat_long2 %>% 
   filter(grepl("isbm", strata) | grepl("aabm_wcvi", strata),
          !grepl("isbm_nbc", strata)
   ) %>% 
@@ -198,13 +215,14 @@ cwt_dat_out <- cwt_dat_long2 %>%
       purrr::map(., head, n = 1) %>%
       unlist() 
   )
-saveRDS(cwt_dat_out,
+chi_dat2 <- chi_foo(cwt_dat_out2)
+saveRDS(rbind(cwt_dat_out2, chi_dat2),
         here::here("data", "harvest", "cleaned_cyer_dat.rds"))
 
 
 # as above but adjusts puget isbm for puget stocks (divides by two since 
 # only northern fisheries will impact them)
-cwt_dat_out <- cwt_dat_long2 %>% 
+cwt_dat_out3 <- cwt_dat_long2 %>% 
   filter(grepl("isbm", strata) | grepl("aabm_wcvi", strata),
          !grepl("isbm_nbc", strata)
   ) %>% 
@@ -230,7 +248,8 @@ cwt_dat_out <- cwt_dat_long2 %>%
       purrr::map(., head, n = 1) %>%
       unlist() 
   )
-saveRDS(cwt_dat_out,
+chi_dat3 <- chi_foo(cwt_dat_out3)
+saveRDS(rbind(cwt_dat_out3, chi_dat3),
         here::here("data", "harvest", "cleaned_cyer_dat_adj.rds"))
 
 
