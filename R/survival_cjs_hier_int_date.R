@@ -839,7 +839,7 @@ yr_phi_dat <- purrr::map2(
   )
 
 png(here::here("figs", "cjs", "estimated_yearly_phi.png"), 
-    height = 6.5, width = 7.5, units = "in", res = 250)
+    height = 8.5, width = 7.5, units = "in", res = 250)
 ggplot(yr_phi_dat) +
   geom_pointrange(
     aes(x = segment_name, y = med, ymin = lo, ymax = up, fill = year),
@@ -850,7 +850,9 @@ ggplot(yr_phi_dat) +
   scale_fill_brewer(palette = "PuOr", name = "") +
   ggsidekick::theme_sleek() +
   labs(x = "Segment Name", y = "Stage-Specific Survival Rate") +
-  theme(legend.position = "top")
+  theme(legend.position = "top") +
+  theme(legend.position = "top",
+        axis.text.x = element_text(size = 11, angle = 45, hjust = 1))
 dev.off()
 
 
@@ -898,7 +900,7 @@ yr_p_dat <- purrr::map2(
 
 
 png(here::here("figs", "cjs", "estimated_yearly_p.png"), 
-    height = 6.5, width = 7.5, units = "in", res = 250)
+    height = 8.5, width = 7.5, units = "in", res = 250)
 ggplot(yr_p_dat) +
   geom_pointrange(
     aes(x = segment_name, y = med, ymin = lo, ymax = up, fill = year),
@@ -909,7 +911,8 @@ ggplot(yr_p_dat) +
   scale_fill_brewer(palette = "PuOr", name = "") +
   ggsidekick::theme_sleek() +
   labs(x = "Segment Name", y = "Detection Probability") +
-  theme(legend.position = "top")
+  theme(legend.position = "top",
+        axis.text.x = element_text(size = 11, angle = 45, hjust = 1))
 dev.off()
 
 
