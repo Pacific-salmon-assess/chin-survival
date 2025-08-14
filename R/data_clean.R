@@ -12,7 +12,7 @@ chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS")) %>%
     !is.na(acoustic),
     !is.na(agg_name),
     !fish == "CK113", # magnet not removed
-    (agg_prob > 80 | genetic_source != "GSI")
+    (agg_prob > 90 | genetic_source != "GSI")
   )
 
 indicator_key <- read.csv(
@@ -121,7 +121,7 @@ stock_supp_table <- chin2 %>%
                           "Summer 0.3" = "Fraser Sum. 0.3", 
                           "Fall 0.3" = "Fraser Fall")
   ) %>% 
-  filter(stock_prob > 80) %>% 
+  filter(agg_prob > 90) %>% 
   group_by(
     Stock = agg_name, Population = stock, CTC_Indicator = ctc_name
   ) %>% 

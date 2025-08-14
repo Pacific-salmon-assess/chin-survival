@@ -13,110 +13,119 @@ stock_key <- read.csv(
 
 ## CLEAN CYER DATA -------------------------------------------------------------
 
-stocks <- stock_key %>% 
-  filter(!is.na(ctc_indicator)) %>% 
-  pull(ctc_indicator) %>% 
-  unique()
+# stocks <- stock_key %>% 
+#   filter(!is.na(ctc_indicator)) %>% 
+#   pull(ctc_indicator) %>% 
+#   unique()
+# 
+# ## import marked data
+# sheet_names <- excel_sheets(
+#   here::here(
+#     "data", "harvest", "ctc_esc_data", 
+#     "TCCHINOOK-25-XX-Appendix-C-Mortality-Distribution-Tables-Detailed-marked_noTBRSEAK.xlsx"
+#   ))
+# 
+# matching_sheets <- sheet_names[
+#   sapply(sheet_names, function(x) any(grepl(paste(stocks, collapse = "|"), x)))
+# ]
+# matching_sheets2 <- matching_sheets[
+#   sapply(matching_sheets, function(x) any(grepl("total mort", x)))
+# ]
+# sheet_ids <- which(sheet_names %in% matching_sheets2)
+# 
+# # identify sheets w/ relevant data and associated stock name
+# new_col_names <- c(
+#   "year", "cwt_n", "ages", "aabm_seak_t", "aabm_seak_n", "aabm_seak_s", 
+#   "aabm_nbc_t", "aabm_nbc_s", "aabm_wcvi_t", "aabm_wcvi_s", "isbm_nbc_t", 
+#   "isbm_nbc_n", "isbm_nbc_s", "isbm_sbc_t", "isbm_sbc_n", "isbm_sbc_s", 
+#   "isbm_n_falcon_t", "isbm_n_falcon_s", "isbm_s_falcon_t", "isbm_s_falcon_s", 
+#   "isbm_wac_n", "isbm_puget_n", "isbm_puget_s", "term_seak_t", "term_seak_n",
+#   "term_seak_s", "term_can_n", "term_can_s", "term_sus_t", "term_sus_n", 
+#   "term_sus_s", "stray", "esc", "comment"
+# ) 
+# 
+# cwt_dat_marked <- purrr::map2(
+#   sheet_ids, matching_sheets2, 
+#   function(x, y) {
+#     dum <- read_xlsx(
+#       here::here(
+#         "data", "harvest", "ctc_esc_data", 
+#         "TCCHINOOK-25-XX-Appendix-C-Mortality-Distribution-Tables-Detailed-marked_noTBRSEAK.xlsx"
+#       ),
+#       sheet = x,
+#       skip = 6,
+#       col_names = FALSE
+#     )
+#     colnames(dum) <- new_col_names
+#     dum %>% 
+#       mutate(
+#         indicator = str_split(y, " ") %>% unlist() %>% .[1],
+#         mark = "marked"
+#       ) %>% 
+#       # remove five year averages at bottom of table
+#       filter(!grepl("-", year),
+#              ! year == "2024") 
+#   }
+# ) %>% 
+#   bind_rows()
+# 
+# cwt_dat_unmarked <- purrr::map2(
+#   sheet_ids, matching_sheets2, 
+#   function(x, y) {
+#     dum <- read_xlsx(
+#       here::here(
+#         "data", "harvest", "ctc_esc_data", 
+#         "TCCHINOOK-25-XX-Appendix-C-Mortality-Distribution-Tables-Detailed-unmarked_noTBRSEAK.xlsx"
+#       ),
+#       sheet = x,
+#       skip = 6,
+#       col_names = FALSE
+#     )
+#     colnames(dum) <- new_col_names
+#     dum %>% 
+#       mutate(
+#         indicator = str_split(y, " ") %>% unlist() %>% .[1],
+#         mark = "unmarked"
+#       ) %>% 
+#       # remove five year averages at bottom of table
+#       filter(!grepl("-", year),
+#              ! year == "2024") 
+#   }
+# ) %>% 
+#   bind_rows()
+# 
+# 
+# cwt_dat_long <- rbind(cwt_dat_unmarked, cwt_dat_marked) %>%
+#   filter(comment == "ok") %>%
+#   mutate(indicator = paste(indicator, mark, sep = "_")) %>%
+#   pivot_longer(cols = c(starts_with("aabm"), starts_with("isbm"),
+#                         starts_with("term"), stray, esc),
+#                names_to = "strata", values_to = "percent_run") %>%
+#   mutate(
+#     year = as.numeric(year)
+#   )
+# 
+# cwt_dat_long2 <- cwt_dat_long %>%
+#   group_by(
+#     indicator, year
+#   ) %>%
+#   mutate(
+#     total_percent = sum(percent_run)
+#   ) %>%
+#   ungroup() %>%
+#   mutate(
+#     scaled_percent = percent_run / total_percent
+#   )
+# saveRDS(cwt_dat_long2,
+#         here::here(
+#           "data", "harvest", "cyer_dat_long.rds"
+#         ))
 
-## import marked data
-sheet_names <- excel_sheets(
+cwt_dat_long2 <- readRDS(
   here::here(
-    "data", "harvest", "ctc_esc_data", 
-    "TCCHINOOK-25-XX-Appendix-C-Mortality-Distribution-Tables-Detailed-marked_noTBRSEAK.xlsx"
-  ))
-
-matching_sheets <- sheet_names[
-  sapply(sheet_names, function(x) any(grepl(paste(stocks, collapse = "|"), x)))
-]
-matching_sheets2 <- matching_sheets[
-  sapply(matching_sheets, function(x) any(grepl("total mort", x)))
-]
-sheet_ids <- which(sheet_names %in% matching_sheets2)
-
-# identify sheets w/ relevant data and associated stock name
-new_col_names <- c(
-  "year", "cwt_n", "ages", "aabm_seak_t", "aabm_seak_n", "aabm_seak_s", 
-  "aabm_nbc_t", "aabm_nbc_s", "aabm_wcvi_t", "aabm_wcvi_s", "isbm_nbc_t", 
-  "isbm_nbc_n", "isbm_nbc_s", "isbm_sbc_t", "isbm_sbc_n", "isbm_sbc_s", 
-  "isbm_n_falcon_t", "isbm_n_falcon_s", "isbm_s_falcon_t", "isbm_s_falcon_s", 
-  "isbm_wac_n", "isbm_puget_n", "isbm_puget_s", "term_seak_t", "term_seak_n",
-  "term_seak_s", "term_can_n", "term_can_s", "term_sus_t", "term_sus_n", 
-  "term_sus_s", "stray", "esc", "comment"
-) 
-
-cwt_dat_marked <- purrr::map2(
-  sheet_ids, matching_sheets2, 
-  function(x, y) {
-    dum <- read_xlsx(
-      here::here(
-        "data", "harvest", "ctc_esc_data", 
-        "TCCHINOOK-25-XX-Appendix-C-Mortality-Distribution-Tables-Detailed-marked_noTBRSEAK.xlsx"
-      ),
-      sheet = x,
-      skip = 6,
-      col_names = FALSE
-    )
-    colnames(dum) <- new_col_names
-    dum %>% 
-      mutate(
-        indicator = str_split(y, " ") %>% unlist() %>% .[1],
-        mark = "marked"
-      ) %>% 
-      # remove five year averages at bottom of table
-      filter(!grepl("-", year),
-             ! year == "2024") 
-  }
-) %>% 
-  bind_rows()
-
-cwt_dat_unmarked <- purrr::map2(
-  sheet_ids, matching_sheets2, 
-  function(x, y) {
-    dum <- read_xlsx(
-      here::here(
-        "data", "harvest", "ctc_esc_data", 
-        "TCCHINOOK-25-XX-Appendix-C-Mortality-Distribution-Tables-Detailed-unmarked_noTBRSEAK.xlsx"
-      ),
-      sheet = x,
-      skip = 6,
-      col_names = FALSE
-    )
-    colnames(dum) <- new_col_names
-    dum %>% 
-      mutate(
-        indicator = str_split(y, " ") %>% unlist() %>% .[1],
-        mark = "unmarked"
-      ) %>% 
-      # remove five year averages at bottom of table
-      filter(!grepl("-", year),
-             ! year == "2024") 
-  }
-) %>% 
-  bind_rows()
-
-
-cwt_dat_long <- rbind(cwt_dat_unmarked, cwt_dat_marked) %>%
-  filter(comment == "ok") %>%
-  mutate(indicator = paste(indicator, mark, sep = "_")) %>%
-  pivot_longer(cols = c(starts_with("aabm"), starts_with("isbm"),
-                        starts_with("term"), stray, esc),
-               names_to = "strata", values_to = "percent_run") %>%
-  mutate(
-    year = as.numeric(year)
+    "data", "harvest", "cyer_dat_long.rds"
   )
-
-cwt_dat_long2 <- cwt_dat_long %>% 
-  group_by(
-    indicator, year
-  ) %>% 
-  mutate(
-    total_percent = sum(percent_run)
-  ) %>% 
-  ungroup() %>% 
-  mutate(
-    scaled_percent = percent_run / total_percent
-  )
-
+)
 
 # look at relative impact of WCVI fisheries on different indicators
 cwt_dat_long2 %>%
@@ -140,6 +149,44 @@ cwt_dat_long2 %>%
   summarize(mean_er = mean(total_er)) %>%
   arrange(mean_er) %>%
   print(n = Inf)
+
+# look at relative impact of terminal vs non-terminal for Up Col
+cwt_dat_long2 %>% 
+  filter(
+    grepl("isbm", strata) | grepl("aabm_wcvi", strata) | grepl("term_sus", strata),
+    !grepl("isbm_nbc", strata),
+    indicator %in% c(
+      "HAN_unmarked", "LYF_unmarked", 
+      "HAN_marked", "LYF_marked"
+    ),
+    year > 2018
+  ) %>% 
+  mutate(
+    terminal = ifelse(grepl("term", strata), "y", "n")
+  ) %>% 
+  group_by(indicator, year, terminal) %>%
+  summarize(total_er = sum(percent_run)) %>%  
+  group_by(terminal) %>%
+  summarize(mean_er = mean(total_er))
+  
+# look at relative impact of terminal vs non-terminal for Low Col
+cwt_dat_long2 %>% 
+  filter(
+    grepl("isbm", strata) | grepl("aabm_wcvi", strata) | grepl("term_sus", strata),
+    !grepl("isbm_nbc", strata),
+    indicator %in% c(
+      "LRH_unmarked",
+      "LRH_marked"
+    ),
+    year > 2018
+  ) %>% 
+  mutate(
+    terminal = ifelse(grepl("term", strata), "y", "n")
+  ) %>% 
+  group_by(indicator, year, terminal) %>%
+  summarize(total_er = sum(percent_run)) %>%  
+  group_by(terminal) %>%
+  summarize(mean_er = mean(total_er))
 
 
 #combine stray and escapement, then use to calculate total exploitation
@@ -220,8 +267,7 @@ saveRDS(rbind(cwt_dat_out2, chi_dat2),
         here::here("data", "harvest", "cleaned_cyer_dat.rds"))
 
 
-# as above but adjusts puget isbm for puget stocks (divides by two since 
-# only northern fisheries will impact them)
+# as above but removes puget isbm for puget stocks 
 cwt_dat_out3 <- cwt_dat_long2 %>% 
   filter(grepl("isbm", strata) | grepl("aabm_wcvi", strata),
          !grepl("isbm_nbc", strata)
