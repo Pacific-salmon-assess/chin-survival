@@ -1,6 +1,5 @@
 // Joint likelihood state space model estimating true survival while 
-// incorporating posterior estimates of detection probability
-// Adds injury effects
+// incorporating posterior estimates of detection probability and injury effects
 data{
     int<lower=1> N;                 // Number of observations
     int<lower=1> N_year;            // Number of years
@@ -79,26 +78,26 @@ model{
     vector[N] logit_phi;
     vector[N] log_phi;
     
-    Sigma_fl ~ exponential( 2 );
-    sigma_day ~ exponential( 2 );
-    sigma_stk ~ exponential( 2 );
-    L_Rho_stk ~ lkj_corr_cholesky( 2 );
-    sigma_yr ~ exponential( 2 );
-    L_Rho_yr ~ lkj_corr_cholesky( 2 );
-    Rho_sl ~ lkj_corr( 2 );
-    alpha_s ~ normal( 0.9, 1.5 );
-    alpha_f ~ normal( 0 , 1 );
-    alpha_l ~ normal( 0 , 1 );
-    beta_ds ~ normal( 0 , 0.5 );
-    beta_fs ~ normal( 0 , 0.5 );
-    beta_ls ~ normal( 0 , 0.5 );
-    beta_is ~ normal( 0 , 0.5 );
-    beta_ds_cs ~ normal( 0 , 0.5 );
-    beta_cs ~ normal( 0 , 0.5 );
-    beta_df ~ normal( 0 , 1 );
-    beta_dl ~ normal( 0 , 1 );
-    to_vector( z_stk ) ~ normal( 0 , 1 );
-    to_vector( z_yr ) ~ normal( 0 , 1 );
+    Sigma_fl ~ exponential(2);
+    sigma_day ~ exponential(2);
+    sigma_stk ~ exponential(2);
+    L_Rho_stk ~ lkj_corr_cholesky(2);
+    sigma_yr ~ exponential(2);
+    L_Rho_yr ~ lkj_corr_cholesky(2);
+    Rho_sl ~ lkj_corr(2);
+    alpha_s ~ normal(0.9, 1.5);
+    alpha_f ~ normal(0, 1);
+    alpha_l ~ normal(0, 1);
+    beta_ds ~ normal(0, 0.5);
+    beta_fs ~ normal(0, 0.5);
+    beta_ls ~ normal(0, 0.5);
+    beta_is ~ normal(0, 0.5);
+    beta_ds_cs ~ normal(0, 0.5);
+    beta_cs ~ normal(0, 0.5);
+    beta_df ~ normal(0, 1);
+    beta_dl ~ normal(0, 1);
+    to_vector(z_stk) ~ normal(0, 1);
+    to_vector(z_yr) ~ normal(0, 1);
 
     delta ~ dirichlet(alpha_i);
 
@@ -145,8 +144,8 @@ model{
     day_z ~ normal( mu_day , sigma_day );
 }
 generated quantities{
-    matrix[3,3] Rho_yr;
-    matrix[4,4] Rho_stk;
+    matrix[3, 3] Rho_yr;
+    matrix[4, 4] Rho_stk;
     Rho_stk = multiply_lower_tri_self_transpose(L_Rho_stk);
     Rho_yr = multiply_lower_tri_self_transpose(L_Rho_yr);
 

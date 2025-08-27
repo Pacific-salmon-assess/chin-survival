@@ -17,13 +17,15 @@ knitr-cache
 *.accdb
 *.laccdb
 *.mdb
+
 Rmd/
+data/model_outputs/
+figs/maps/array_map.rds
+R/stan_models/defunct/
 
 # History files
 .Rhistory
 .Rapp.history
-data/model_outputs/
-figs/maps/array_map.rds
 
 myNotes.*
 .Rproj.user/
