@@ -22,6 +22,9 @@ Rmd/
 data/model_outputs/
 figs/maps/array_map.rds
 R/stan_models/defunct/
+data/puget_sound_catch/
+R/puget_sound_cpue.R
+R/defunct/
 
 # History files
 .Rhistory
