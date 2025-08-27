@@ -6,7 +6,7 @@ library(tidyverse)
 library(ggplot2)
 
 
-det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds")) %>% 
+det_dat1 <- readRDS(here::here("data", "surv_hts_data.rds")) %>% 
   filter(
     stage_1 == "mature"
   ) %>% 

@@ -526,29 +526,6 @@ stage_spec_surv
 dev.off()
 
 
-# dum <- extract(cjs_hier_sims[[9]])[["alpha_t_phi"]] %>% 
-#   as.data.frame() %>%
-#   pivot_longer(everything(), names_to = "segment", values_to = "est", 
-#                names_prefix = "V")
-# 
-# std_mod <- readRDS(
-#   here::here("data", "model_outputs", "hier_cjs_fit_tbl_int_date.RDS")
-# ) 
-# dum2 <- extract(std_mod[[4]])[["alpha_t_phi"]] %>% 
-#   as.data.frame() %>%
-#   pivot_longer(everything(), names_to = "segment", values_to = "est", 
-#                names_prefix = "V")
-# 
-# p <- ggplot() +
-#   geom_density(data = dum, aes(x = est), 
-#                fill = "red", colour = "red", alpha = 0.4) +
-#   geom_density(data = dum2, aes(x = est), 
-#                fill = "blue", colour = "blue", alpha = 0.4) +
-#   facet_wrap(~segment) + 
-#   ggsidekick::theme_sleek() +
-#   labs(x = "Gamma Phi T Estimate", y = "Kernel Density")
-
-
 # cumulative survival
 mean_surv_dat <- dat_tbl %>% 
   select(data, cum_survival_mean) %>% 

@@ -1,8 +1,9 @@
-### CJS survival models
-## June 5, 2025
-## Same as survival_cjs_hier.R, but uses simpler CJS models without interaction
-# between year and stage as well as covariate for tagging date
-
+### Cormack-Jolly-Seber Survival Models
+## Estimates stage-specific survival rates by fitting separate model to each 
+## stock. 
+## Models include stage-specific differences in survival (random effects) and 
+## detection probability (fixed effects), as well as a tagging date covariate; 
+## Fraser River stocks fit with separate model including stock-specific RIs
 
 library(tidyverse)
 library(rstan)
@@ -12,6 +13,9 @@ library(loo)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 set.seed(123)
+
+
+## DATA CLEAN ------------------------------------------------------------------
 
 ## Import occurence matrix (generated in chinTagging/prep_detection_histories.R 
 # and cleaned in data_clean.R)
@@ -52,8 +56,7 @@ array_dist <- read.csv(
     stock_group, array_num, dist
   )
 
-
-## Import survival segment key for labelling plots 
+# Import survival segment key for labelling plots 
 seg_key <- read.csv(
   here::here("data", "surv_segment_key_2023.csv")
 ) %>%
@@ -71,8 +74,6 @@ seg_key <- read.csv(
     ., array_dist, by = c("stock_group", "array_num")
   ) 
 
-
-# Fit model --------------------------------------------------------------------
 
 # Function to convert wide DF to list input for Stan models
 prep_cjs_dat <- function(dat, grouping_vars = NULL) {
@@ -119,6 +120,9 @@ dat_tbl_trim$dat_in <- pmap(
   .f = prep_cjs_dat
 ) 
 
+
+## FIT --------------------------------------------------------------------
+
 # Call Stan from R and fit to each aggregate separately 
 hier_mod_sims <- stan_model(
   here::here("R", "stan_models", "cjs_int_hier_eff_adaptive_date.stan")
@@ -127,8 +131,6 @@ hier_mod_sims_stk <- stan_model(
   here::here("R", "stan_models", "cjs_int_hier_eff_adaptive_date_stock.stan")
 )
 
-
-## FIT --------------------------------------------------------------------
 
 # MCMC settings
 n_chains = 4
@@ -155,7 +157,7 @@ cjs_hier_sims <- pmap(
         as.numeric()
       
       pars <- c(pars_in,
-                # stock specific pars and quants
+                # stock specific pars
                 "alpha_stk_phi", "sigma_alpha_stk_phi", "phi_stk",
                 "alpha_stk_phi_z")
       
@@ -238,7 +240,7 @@ saveRDS(loo_list,
 dat_tbl_trim$cjs_hier <- cjs_hier_sims
 
 
-## Model checks ----------------------------------------------------------------
+## MODEL CHECKS ----------------------------------------------------------------
 
 # neff 
 purrr::map(dat_tbl_trim$cjs_hier, function (x) {
@@ -341,7 +343,7 @@ pp_plot_list
 dev.off()
 
 
-## Prior-Posterior Comparisons -------------------------------------------------
+## PRIOR-POSTERION COMPARISONS -------------------------------------------------
 
 # average survival
 alpha_phi_prior_df <- data.frame(est = rnorm(4000, 0.8, 1), parameter = "Prior")
@@ -544,7 +546,7 @@ purrr::map2(
 )
 
 
-## Post-hoc calculations -------------------------------------------------------
+## POST-HOC CALCULATIONS -------------------------------------------------------
 
 
 # extract phi matrix and swap last col with beta estimates (i.e. combined p and 
@@ -679,7 +681,7 @@ saveRDS(
 
 
 
-## Parameter estimates ---------------------------------------------------------
+## PARAMETER ESTIMATES ---------------------------------------------------------
 
 dat_tbl_trim <- readRDS(
   here::here("data", "model_outputs", "hier_cjs_int_date_posterior_tbl.RDS")
@@ -954,14 +956,58 @@ dev.off()
 
 
 
-## Visualize posterior ---------------------------------------------------------
-
-source(here::here("R", "functions", "plot_survival.R"))
+## VISUALIZE POSTERIOR ---------------------------------------------------------
 
 # import data
 dat_tbl_trim <- readRDS(
   here::here("data", "model_outputs", "hier_cjs_int_date_posterior_tbl.RDS")
 )
+
+
+# function to plot cumulative survival w/ or w/out sims
+plot_surv <- function(x, show_mcmc = TRUE) {
+  #subset for plotting
+  set.seed(123)
+  trials <- sample(1:length(unique(x$iter)), 50, replace = F)
+  dat <- x %>% 
+    filter(iter %in% trials)
+  mu_dat <- x %>% 
+    dplyr::select(-iter, -est) %>% 
+    distinct()
+  
+  fill_pal <- c("white", "red")
+  names(fill_pal) <- c("phi", "beta")
+  
+  p <- ggplot() +
+    geom_pointrange(data = mu_dat, 
+                    aes(x = fct_reorder(segment_name, segment), 
+                        y = median, ymin = low, ymax = up, fill = par),
+                    shape = 21) +
+    ggsidekick::theme_sleek() +
+    scale_fill_manual(values = fill_pal) +
+    theme(axis.title.x = element_blank(), 
+          axis.title.y = element_blank(),
+          legend.text=element_text(size = 9),
+          legend.title = element_blank(),
+          axis.text.x = element_text(size = rel(.8))) +
+    guides(fill = "none") +
+    lims(y = c(0, 1)) 
+  
+  if (show_mcmc == TRUE) {
+    p <- p +
+      geom_line(data = dat, 
+                aes(x = segment_name, y = est, group = iter), alpha = 0.1)
+  }
+  
+  if (!is.na(x$agg_name_f[1])) {
+    title <- as.character(unique(x$agg_name_f))
+    p <- p +
+      labs(title = title)
+  }
+  
+  return(p)
+}
+
 
 surv_plot_trials <- purrr::map(dat_tbl_trim$cum_survival, function (x) {
   x %>% 
@@ -1181,7 +1227,7 @@ cowplot::plot_grid(p_total, p_dist, ncol = 1)
 dev.off()
 
 
-## Calculate cumulative survival for Fraser by stock ---------------------------
+## FRASER CUMULATIVE SURVIVAL --------------------------------------------------
 
 # stock name key
 stk_key <- data.frame(stock = dat_tbl_trim$bio_dat[[2]]$agg) %>%

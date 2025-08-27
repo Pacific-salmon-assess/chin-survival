@@ -19,35 +19,15 @@ indicator_key <- read.csv(
   here::here("data", "ctc_decoder", "ctc_stock_decoder.csv")
 ) %>% 
   mutate(
-    ctc_indicator = ifelse(ctc_indicator == "SRH/ELK", "SRH", ctc_indicator)#,
-    # ctc_indicator = ifelse(grepl("UMPQ", stock), "ELK", ctc_indicator)
-    # ctc_indicator = ifelse(agg_name == "Fraser Summer Year.",
-    #                        "SHU_adjusted", 
-    #                        ctc_indicator)
+    ctc_indicator = ifelse(ctc_indicator == "SRH/ELK", "SRH", ctc_indicator)
   )
 
-cyer_dat1 <- readRDS(
+# generate alternative CYER datasets
+cyer_dat <- readRDS(
   here::here("data", "harvest", "cleaned_cyer_dat_adj.rds")
 ) %>%
   rename(ctc_indicator = stock, focal_er_adj = focal_er) %>%
   filter(year > 2018)
-# cyer_dat1 <- readRDS(
-#   here::here("data", "harvest", "cleaned_cyer_dat_OLD.rds")
-# ) %>% 
-#   rename(ctc_indicator = stock, focal_er_adj = focal_er) %>% 
-#   filter(year > 2018)
-cyer_dat2 <- readRDS(
-  here::here("data", "harvest", "cleaned_cyer_dat_no_puget.rds")
-) %>% 
-  rename(ctc_indicator = stock, focal_er_no_ps = focal_er) %>% 
-  filter(year > 2018) %>% 
-  left_join(., cyer_dat1, 
-            by = c("year", "ctc_indicator", "indicator", "clip")) 
-cyer_dat <- readRDS(here::here("data", "harvest", "cleaned_cyer_dat.rds")) %>% 
-  rename(ctc_indicator = stock) %>% 
-  filter(year > 2018) %>% 
-  left_join(., cyer_dat2, 
-            by = c("year", "ctc_indicator", "indicator", "clip")) 
 
 
 stage_dat <- readRDS(
@@ -56,14 +36,6 @@ stage_dat <- readRDS(
     fish, known_stage = stage, stage_1 = stage_predicted, 
     stage_2 = stage_predicted_sens
   )
-
-
-# ID tag codes to retain
-# kept_tags <- dat_tbl %>%
-#   # unnest and filter out stage 3
-#   unnest(cols = bio_dat) %>%
-#   filter(redeploy == "no") %>%
-#   pull(vemco_code)
 
 
 ## CLEAN AND EXPORT FOR MODEL FITTING ------------------------------------------
@@ -158,7 +130,7 @@ det_dat1 <- dat_tbl %>%
               select(vemco_code = acoustic_year, month, year, acoustic_type, 
                      known_stage, stage_1, stage_2, lat, lon, year_day, 
                      fl, wt, lipid, adj_inj, ctc_indicator, clip,
-                     focal_er, focal_er_adj, focal_er_no_ps, comment),
+                     focal_er_adj, comment),
             by = "vemco_code") %>%
   mutate(
     # redeploy = ifelse(acoustic_type %in% c("V13P", "V13"), "no", "yes"),
@@ -174,25 +146,6 @@ det_dat1 <- dat_tbl %>%
     year, stock_group
   )
 
-# compare old and new ERs
-# dd <- det_dat1 %>%
-#   mutate(
-#     er_diff = abs(focal_er - focal_er_adj)
-#   ) %>%
-#   filter(
-#     # er_diff > 0.01,
-#     stage_1 == "mature",
-#     clip == "Y"
-#   ) %>%
-#   select(focal_er, focal_er_adj, ctc_indicator, year, clip) %>%
-#   distinct()
-# 
-# ggplot(dd) +
-#   geom_point(aes(x = year, y = focal_er, shape = clip), color = "red") +
-#   geom_point(aes(x = year, y = focal_er_adj, shape = clip), color = "blue") +
-#   facet_wrap(~ctc_indicator, scales = "free_y")
-
-
 
 # small number of tags (<2% missing lipid data; impute)
 bio_dat <- det_dat1 %>% 
@@ -206,7 +159,7 @@ det_dat1$lipid <- interp_lipid$lipid
 
  
 # export 
-saveRDS(det_dat1, here::here("data", "surv_log_reg_data.rds"))
+saveRDS(det_dat1, here::here("data", "surv_hts_data.rds"))
 
 
 
@@ -239,91 +192,3 @@ dat_tbl_trim <- dat_tbl %>%
   select(stock_group, bio_dat, wide_array_dat)
 
 saveRDS(dat_tbl_trim, here::here("data", "surv_cjs_data.rds"))
-
-
-
-## DATA SHARE ------------------------------------------------------------------
-
-# export summary of stocks, stock groups and indicators to share
-indicator_dat <- chin %>% 
-  select(stock, cu_name, agg_name) %>% 
-  distinct() %>% 
-  arrange(agg_name)
-
-write.csv(
-  indicator_dat,
-  here::here(
-    "data", "ctc_decoder", "ctc_stock_decoder_template.csv"
-  ),
-  row.names = FALSE
-)
-
-
-## DATE VS CONDITION -----------------------------------------------------------
-
-library(lme4)
-
-det_dat1$year_f <- as.factor(det_dat1$year)
-
-# determine whether submodel of date vs. condition should be non-linear or not
-fit_fl <- lmer(fl ~ year_day + (1 | stock_group) + (1 | year_f),
-               data = det_dat1)
-fit_fl_log <- lmer(log(fl) ~ year_day + (1 | stock_group) + (1 | year_f),
-                   data = det_dat1)
-fit_lip <- lmer(lipid ~ year_day + (1 | stock_group) + (1 | year_f),
-                data = det_dat1)
-fit_lip_log <- lmer(log(lipid) ~ year_day + (1 | stock_group) + (1 | year_f),
-                    data = det_dat1)
-fit_list <- list(fit_fl, fit_fl_log, fit_lip, fit_lip_log)
-
-
-det_dat_resid <- det_dat1 %>% 
-  mutate(
-    fl_resid = resid(fit_fl),
-    fl_log_resid = resid(fit_fl_log) %>% as.numeric(),
-    lip_resid = resid(fit_lip) %>% as.numeric(),
-    lip_log_resid = resid(fit_lip_log) %>% as.numeric()
-  )
-
-plot(lip_resid ~ year_day, data = det_dat_resid)
-plot(lip_log_resid ~ year_day, data = det_dat_resid)
-
-pred_dat <- data.frame(
-  year_day = seq(min(det_dat1$year_day), max(det_dat1$year_day), 
-                 length.out = 50),
-  stock_group = det_dat1$stock_group[2]
-)
-
-names_vec <- c(
-  "fl",
-  "fl_log",
-  "lip",
-  "lip_log"
-)
-purrr::map2(
-  fit_list, names_vec,
-  function(x, y) {
-    pp <- predict(x, newdata = pred_dat, re.form = NA, se.fit = TRUE)
-    dum <- pred_dat %>% 
-      mutate(fit = pp$fit,
-             se = pp$se.fit,
-             upr = fit + 1.96 * se,
-             lwr = fit - 1.96 * se)
-    
-    p <- if(grepl("log", y)) {
-      ggplot() +
-        geom_line(data = dum, aes(x = year_day, y = exp(fit)), color = "blue", size = 1) +  # Predicted line
-        geom_ribbon(data = dum, aes(x = year_day, ymin = exp(lwr), ymax = exp(upr)), alpha = 0.2, fill = "blue") +  # Confidence interval
-        labs(title = "y") +
-        theme_minimal() 
-    } else {
-      ggplot() +
-        geom_line(data = dum, aes(x = year_day, y = fit), color = "blue", size = 1) +  # Predicted line
-        geom_ribbon(data = dum, aes(x = year_day, ymin = lwr, ymax = upr), alpha = 0.2, fill = "blue") +  # Confidence interval
-        labs(title = "y") +
-        theme_minimal() 
-    }
-    return(p)
-  }
-)
-# no evidence of non-linear response

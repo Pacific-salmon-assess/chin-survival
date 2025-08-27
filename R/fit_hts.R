@@ -16,7 +16,7 @@ options(mc.cores = parallel::detectCores())
 
 ## DATA CLEAN ------------------------------------------------------------------
 
-det_dat1 <- readRDS(here::here("data", "surv_log_reg_data.rds")) %>% 
+det_dat1 <- readRDS(here::here("data", "surv_hts_data.rds")) %>% 
   filter(
     !is.na(focal_er),
     stage_1 == "mature"
@@ -73,9 +73,7 @@ det_dat <- det_dat1 %>%
     wt_z = scale(wt) %>% as.numeric(),
     log_wt_z = scale(log(wt)) %>% as.numeric(),
     day_z = scale(year_day) %>% as.numeric(),
-    cyer_z = scale(focal_er) %>% as.numeric(),
-    cyer2_z = scale(focal_er_adj) %>% as.numeric(),
-    cyer3_z = scale(focal_er_no_ps) %>% as.numeric(),
+    cyer_z = scale(focal_er_adj) %>% as.numeric(),
     year = as.factor(year),
     stock_group = factor(
       stock_group, 
@@ -114,7 +112,7 @@ dat_list <- list(
   fl_z = det_dat$fl_z,
   lipid_z = det_dat$lipid_z,
   day_z = det_dat$day_z,
-  cyer_z = det_dat$cyer2_z,
+  cyer_z = det_dat$cyer_z,
   alpha_i = rep(2, length(unique(det_dat$inj)) - 1)
 )
 
@@ -144,7 +142,8 @@ m1_stan_adj <- readRDS(
 
 # Define a function to calculate PIT residuals
 calc_pit <- function(y, posterior_pred) {
-  # Get the proportion of posterior samples that are less than or equal to the observed value
+  # Get the proportion of posterior samples that are less than or equal to the 
+  # observed value
   n_obs <- length(y)
   pit_residuals <- numeric(n_obs)
   
@@ -162,17 +161,11 @@ calc_pit <- function(y, posterior_pred) {
 }
 
 
-post <- as_draws_matrix(m1_stan_adj)  # or `as_draws_df`, or use `post::as_draws()`
+post <- as_draws_matrix(m1_stan_adj)  
 s_obs_rep_cols <- grep("^s_obs_rep\\[", colnames(post), value = TRUE)
 s_obs_rep_samples <- post[, s_obs_rep_cols]
 
 # Calculate PIT residuals
-pit_residuals <- calc_pit(y = det_dat$term_det, posterior_pred = s_obs_rep_samples)
-qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
-       main = "QQ-plot of PIT Residuals")
-abline(0, 1)
-
-
 png(here::here("figs", "binomial-glm-cyer-uninformative", "qq_plot.png"),
     units = "in", res = 250, height = 3.5, width = 3.5)
 qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
@@ -811,15 +804,6 @@ pred_stk_surv_total <- sim_surv %>%
   mutate(
     effect = "absent"
   )
-# pred_stk_surv_direct <- sim_surv_d %>% 
-#   as.data.frame() %>% 
-#   set_names(stk_seq) %>% 
-#   pivot_longer(
-#     cols = everything(), names_to = "stk", values_to = "est"
-#   ) %>% 
-#   mutate(
-#     effect = "direct"
-#   )
 pred_stk_surv_cyer <- sim_surv_cyer %>% 
   as.data.frame() %>% 
   set_names(stk_seq) %>% 

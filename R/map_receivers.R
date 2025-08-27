@@ -1,5 +1,4 @@
-## Check location of terminal receivers for each stock group by plotting 
-# receiver maps by year
+## Map receiver locations for manuscript
 
 
 library(tidyverse)

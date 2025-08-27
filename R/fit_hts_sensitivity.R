@@ -1,7 +1,6 @@
-## Logistic Survival Sensitivity Analysis
+## Hierarchical Terminal Survival Sensitivity Analysis
 ## Compare parameter estimates after a) fixing alternative maturation schedules
 # or b) removing individuals with presumed tagging mortality
-# Jan. 6, 2025
 
 library(tidyverse)
 library(rstan)
@@ -11,7 +10,10 @@ library(grid)
 rstan::rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
-det_dat_in <- readRDS(here::here("data", "surv_log_reg_data.rds")) %>% 
+
+## DATA CLEAN ------------------------------------------------------------------
+
+det_dat_in <- readRDS(here::here("data", "surv_hts_data.rds")) %>% 
   filter(
     !is.na(focal_er_adj)
   ) %>% 
