@@ -166,7 +166,7 @@ s_obs_rep_cols <- grep("^s_obs_rep\\[", colnames(post), value = TRUE)
 s_obs_rep_samples <- post[, s_obs_rep_cols]
 
 # Calculate PIT residuals
-png(here::here("figs", "binomial-glm-cyer-uninformative", "qq_plot.png"),
+png(here::here("figs", "hts", "qq_plot.png"),
     units = "in", res = 250, height = 3.5, width = 3.5)
 qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
        xlab = "Theoretical Quantiles",
@@ -882,43 +882,43 @@ diff_survival_hist <- ggplot(data = diff_surv_dat) +
 
 
 ## export figs
-png(here::here("figs", "binomial-glm-cyer-uninformative", "det_prob.png"), 
+png(here::here("figs", "hts", "det_prob.png"), 
     units = "in", 
     res = 250, height = 4.5, width = 6.5)
 terminal_det_p
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "surv_cyer.png"), 
+png(here::here("figs", "hts", "surv_cyer.png"), 
     units = "in", res = 250, height = 5.25, width = 2.5)
 pred_day_cyer
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "ri_sigmas.png"), 
+png(here::here("figs", "hts", "ri_sigmas.png"), 
     units = "in", res = 250, height = 3.5, width = 6)
 sigma_stk_pt
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "fl_lipid_corr.png"), 
+png(here::here("figs", "hts", "fl_lipid_corr.png"), 
     units = "in", res = 250, height = 3, width = 3.5)
 rho_hist
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "stock_ri_corr.png"),
+png(here::here("figs", "hts", "stock_ri_corr.png"),
     units = "in", res = 250, height = 5, width = 5.5)
 cor_plot_list[[1]]
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "yr_ri_corr.png"), 
+png(here::here("figs", "hts", "yr_ri_corr.png"), 
     units = "in", res = 250, height = 4.5, width = 5)
 cor_plot_list[[2]]
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "fl_lipid_pred.png"),
+png(here::here("figs", "hts", "fl_lipid_pred.png"),
     units = "in", res = 250, height = 3.5, width = 6)
 pred_mu_ribbon
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "surv_pred.png"), 
+png(here::here("figs", "hts", "surv_pred.png"), 
     units = "in", res = 250, height = 5.25, width = 2.5)
 gridExtra::grid.arrange(
   gridExtra::arrangeGrob(
@@ -930,22 +930,22 @@ gridExtra::grid.arrange(
 )
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "inj_pred.png"), 
+png(here::here("figs", "hts", "inj_pred.png"), 
     units = "in", res = 250, height = 3, width = 3.5)
 injury_point
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "inj_delta.png"),
+png(here::here("figs", "hts", "inj_delta.png"),
     units = "in", res = 250, height = 3, width = 3.5)
 diff_hist
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative", "stock_surv.png"),
+png(here::here("figs", "hts", "stock_surv.png"),
     units = "in", res = 250, height = 3.5, width = 6)
 pred_stk_comb
 dev.off()
 
-png(here::here("figs", "binomial-glm-cyer-uninformative",
+png(here::here("figs", "hts",
                "diff_survival_hist.png"),
     units = "in", res = 250, height = 4.5, width = 6)
 diff_survival_hist
