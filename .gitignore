@@ -17,6 +17,7 @@ knitr-cache
 *.accdb
 *.laccdb
 *.mdb
+Rmd/
 
 # History files
 .Rhistory
