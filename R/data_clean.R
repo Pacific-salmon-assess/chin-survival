@@ -1,5 +1,5 @@
-## Data Cleaning, Exploration and Summary Figures 
-# Sep 13, 2024
+### Data Cleaning
+## Import individual detections data and reform to pass to models
 
 library(tidyverse)
 
@@ -16,7 +16,7 @@ chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS")) %>%
   )
 
 indicator_key <- read.csv(
-  here::here("data", "ctc_decoder", "ctc_stock_decoder.csv")
+  here::here("data", "ctc_stock_decoder.csv")
 ) %>% 
   mutate(
     ctc_indicator = ifelse(ctc_indicator == "SRH/ELK", "SRH", ctc_indicator)

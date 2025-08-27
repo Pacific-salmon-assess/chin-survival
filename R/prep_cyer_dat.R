@@ -5,7 +5,7 @@ library(tidyverse)
 library(readxl)
 
 stock_key <- read.csv(
-  here::here("data", "ctc_decoder", "ctc_stock_decoder.csv"),
+  here::here("data", "ctc_stock_decoder.csv"),
   stringsAsFactors = FALSE
 ) 
 
