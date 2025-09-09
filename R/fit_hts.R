@@ -18,7 +18,7 @@ options(mc.cores = parallel::detectCores())
 
 det_dat1 <- readRDS(here::here("data", "surv_hts_data.rds")) %>% 
   filter(
-    !is.na(focal_er),
+    !is.na(focal_er_adj),
     stage_1 == "mature"
   )
 
