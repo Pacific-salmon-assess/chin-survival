@@ -212,6 +212,17 @@ ggdraw() +
 dev.off()
 
 
+
+base_map2 <- ggplot() +
+  geom_sf(data = coast_plotting, color = "black", fill = "white") +
+  labs(x = "", y = "") +
+  theme_void() +
+  theme(panel.background = element_rect(colour="black", fill="darkgrey"),
+        legend.position = "top", 
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1)) +
+  coord_sf(expand = FALSE)
+
+
 # import PIT detections to include in receiver map
 pit_dat <- readRDS(here::here("data", "cleanedPIT_detections.RDS")) %>% 
   mutate(region = "in_river",
@@ -253,7 +264,8 @@ rec <- rec_all  %>%
       region == "bark_snd" & latitude < 49.1 ~ "wcvi",
       region == "disc_isl" & latitude > 49.25 ~ "nevi",
       TRUE ~ region
-    )
+    ),
+    receiver_type = ifelse(project_name == "pit", "PIT", "acoustic")
   )
 
 # use array key to plot array number by stock group 
@@ -316,14 +328,19 @@ array_list1 <- purrr::pmap(
   }
   ) 
 array_list <- array_list1[c(1,3,4,6,7)]
-cali_segs <- base_map +
+
+shape_pal <- c(21, 23)
+names(shape_pal) <- c("acoustic", "PIT")
+
+
+cali_segs <- base_map2 +
   coord_sf(xlim = c(-126, -121), expand = FALSE) +
   geom_point(
     data = array_list[[1]],
-    aes(x = longitude, y = latitude, fill = segment_name),
-    shape = 21
+    aes(x = longitude, y = latitude, fill = segment_name, shape = receiver_type),
   ) +
   scale_fill_viridis_d() +
+  scale_shape_manual(values = shape_pal) +
   theme(axis.ticks = element_blank(),
         legend.position = "right",
         legend.key = element_rect(fill = "transparent", colour = NA),
@@ -336,7 +353,8 @@ cali_segs <- base_map +
       keyheight = unit(0.25, "cm"),
       keywidth  = unit(0.25, "cm"),
       override.aes = list(shape = 21, colour = "black")
-    )
+    ),
+    shape = "none"
   ) +
   facet_wrap(~stock_group)
 cali_legend <- get_legend(
@@ -345,7 +363,7 @@ cali_legend <- get_legend(
 cali_inset <- ggdraw(
   cali_segs +
     theme(legend.position = "none")
-  ) +
+) +
   draw_grob(cali_legend, x = 0.55, y = 0.79, width = 0.25, height = 0.25)
 
 # vectors specifying legend location (2, 4, 1, 3)
@@ -363,14 +381,14 @@ seg_list <- purrr::pmap(
         !is.na(segment_name)
       ) %>% 
       droplevels()
-    p_segs <- base_map +
+    p_segs <- base_map2 +
       coord_sf(xlim = c(-126, -121), ylim = c(45.5, 51)) +
       geom_point(
         data = dat_in,
-        aes(x = longitude, y = latitude, fill = segment_name),
-        shape = 21
+        aes(x = longitude, y = latitude, fill = segment_name, shape = receiver_type),
       ) +
       scale_fill_viridis_d() +
+      scale_shape_manual(values = shape_pal) +
       theme(axis.ticks = element_blank(),
             legend.position = "right",
             legend.key = element_rect(fill = "transparent", colour = NA),
@@ -383,7 +401,8 @@ seg_list <- purrr::pmap(
           keyheight = unit(0.25, "cm"),
           keywidth  = unit(0.25, "cm"),
           override.aes = list(shape = 21, colour = "black")
-        )
+        ),
+        shape = "none"
       ) +
       facet_wrap(~stock_group)
     p_legend <- get_legend(
