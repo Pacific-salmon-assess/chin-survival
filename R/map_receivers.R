@@ -19,12 +19,13 @@ coast_plotting <- readRDS(here::here("data",
 base_map <- ggplot() +
   geom_sf(data = coast_plotting, color = "black", fill = "white") +
   labs(x = "", y = "") +
-  # theme_void() +
-  theme(panel.background = element_rect(colour="black", fill="darkgrey"),
+  coord_sf(expand = FALSE) +
+  ggsidekick::theme_sleek() +
+  theme(panel.background = element_rect(colour="black", fill = "darkgrey"),
         legend.position = "top", 
         # axis.text = element_blank(),
-        panel.border = element_rect(color = "black", fill = NA, linewidth = 1)) +
-  coord_sf(expand = FALSE)
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1)) 
+  
 
 
 # path to high res shapefiles for bc coast only
@@ -51,6 +52,19 @@ tag_dat <- readRDS(here::here("data", "surv_hts_data.rds"))
 ## DEPLOYMENTS MAP -------------------------------------------------------------
 
 
+# location names
+places <- tibble::tribble(
+  ~name,               ~lon,     ~lat,
+  "Juan de Fuca\nStrait", -124,  47.9,
+  "Strait of\nGeorgia",   -123.5,  49.4,
+  "Vancouver\nIsland",    -125.8,  49.8,
+  "Puget Sound",         -122.6,  47.8,
+  "Columbia\nRiver",      -122.2,  46,
+  "Fraser\nRiver",        -122.2,  49.5
+) %>% 
+  sf::st_as_sf(coords = c("lon","lat"), crs = 4326)
+
+
 deploy_pts <- chin %>% 
   filter(acoustic_year %in% tag_dat$vemco_code)
 
@@ -68,23 +82,36 @@ deploy_map <- ggplot() +
   theme(
     strip.background = element_rect(colour="white", fill="white"),
     legend.position = "none",
-    panel.border = element_rect(color = "black", fill = NA, linewidth = 1)
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+    axis.text = element_blank(),
+    axis.ticks = element_blank()
   ) 
 
 # inset map
 deploy_inset <- base_map +
-  coord_sf(expand = FALSE, ylim = c(45, 51)) +
+  coord_sf(expand = FALSE, ylim = c(45, 51), xlim = c(-128.5, -121.5)) +
   geom_rect(aes(xmin = -126.2, xmax = -124.75, ymin = 48.25, ymax = 49.2),
             color = "red", fill = NA, linewidth = 1) +
-  theme(
-    axis.text = element_blank()
+  geom_label(
+    data = places,
+    aes(geometry = geometry, label = name),
+    stat = "sf_coordinates",
+    size = 3,
+    fill = "white",       # background color
+    colour = "black"
   )
 
-png(here::here("figs", "maps", "deploy_map.png"), height = 4.25, width = 5,
+png(here::here("figs", "maps", "deploy_map.png"), height = 6.25, width = 5,
     units = "in", res = 250)
+# cowplot::plot_grid(deploy_map, deploy_inset, nrow = 2, 
+#                    rel_widths =  c(0.5, 0.7),
+#                    rel_heights = c(0.4, 0.6))
+# ggdraw() +
+#   draw_plot(deploy_map) +
+#   draw_plot(deploy_inset, x = 0.79, y = 0.16, width = 0.2, height = 0.2)
 ggdraw() +
-  draw_plot(deploy_map) +
-  draw_plot(deploy_inset, x = 0.79, y = 0.16, width = 0.2, height = 0.2)
+  draw_plot(deploy_inset) +
+  draw_plot(deploy_map, x = 0.13, y = 0.03, width = 0.45, height = 0.45)
 dev.off()
 
 
@@ -232,10 +259,6 @@ rec <- rec_all  %>%
 # use array key to plot array number by stock group 
 array_key <- read.csv(here::here("data", 
                                  "surv_segment_key_2023.csv")) %>% 
-  # exclude stocks missing from CJS analysis
-  # filter(
-  #   !stock_group %in% c("ECVI", "North Puget", "WA_OR")
-  # ) %>%
   mutate(segment = array_num - 1) %>% 
   distinct() 
   
