@@ -19,19 +19,17 @@ coast_plotting <- readRDS(here::here("data",
 base_map <- ggplot() +
   geom_sf(data = coast_plotting, color = "black", fill = "white") +
   labs(x = "", y = "") +
-  theme_void() +
+  # theme_void() +
   theme(panel.background = element_rect(colour="black", fill="darkgrey"),
         legend.position = "top", 
-        axis.text = element_blank(),
+        # axis.text = element_blank(),
         panel.border = element_rect(color = "black", fill = NA, linewidth = 1)) +
   coord_sf(expand = FALSE)
 
 
-## DEPLOYMENTS MAP -------------------------------------------------------------
-
 # path to high res shapefiles for bc coast only
 if (Sys.info()['sysname'] == "Windows") {
-  coast_path <- "C:/Users/FRESHWATERC/OneDrive - DFO-MPO/General - Applied Salmon Ecology/Spatial Data/High_res_coastline"
+  coast_path <- "C:/Users/FRESHWATERC/OneDrive - DFO-MPO/General - Applied Salmon Ecology/Spatial Data/coastline_shapefiles/High_res_coastline"
 } else {
   coast_path <- "/Users/cam/Google Drive/spatial/coastline_shapefiles/High_res_coastline"
 }
@@ -47,7 +45,11 @@ bc_coast <- st_read(
 
 
 chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS"))
-tag_dat <- readRDS(here::here("data", "surv_log_reg_data.rds"))
+tag_dat <- readRDS(here::here("data", "surv_hts_data.rds"))
+
+
+## DEPLOYMENTS MAP -------------------------------------------------------------
+
 
 deploy_pts <- chin %>% 
   filter(acoustic_year %in% tag_dat$vemco_code)
@@ -73,7 +75,10 @@ deploy_map <- ggplot() +
 deploy_inset <- base_map +
   coord_sf(expand = FALSE, ylim = c(45, 51)) +
   geom_rect(aes(xmin = -126.2, xmax = -124.75, ymin = 48.25, ymax = 49.2),
-            color = "red", fill = NA, linewidth = 1)
+            color = "red", fill = NA, linewidth = 1) +
+  theme(
+    axis.text = element_blank()
+  )
 
 png(here::here("figs", "maps", "deploy_map.png"), height = 4.25, width = 5,
     units = "in", res = 250)
@@ -231,8 +236,7 @@ array_key <- read.csv(here::here("data",
   # filter(
   #   !stock_group %in% c("ECVI", "North Puget", "WA_OR")
   # ) %>%
-  mutate(segment = array_num - 1,
-         segment_name = str_replace(segment_name, " ", "\n")) %>% 
+  mutate(segment = array_num - 1) %>% 
   distinct() 
   
 array_tbl <- array_key %>% 
@@ -278,7 +282,7 @@ rec_dummy_list <- list(cali, ecvi, fraser, col, puget, puget, col, wa_or,
                        wcvi)
 
 # make plots
-array_list <- purrr::pmap(
+array_list1 <- purrr::pmap(
   list(array_tbl$stock_group, array_tbl$data, rec_dummy_list),
   function (x, y, z) {
     left_join(
@@ -288,6 +292,7 @@ array_list <- purrr::pmap(
              stock_group = x) 
   }
   ) 
+array_list <- array_list1[c(1,3,4,6,7)]
 cali_segs <- base_map +
   coord_sf(xlim = c(-126, -121), expand = FALSE) +
   geom_point(
@@ -296,36 +301,90 @@ cali_segs <- base_map +
     shape = 21
   ) +
   scale_fill_viridis_d() +
-  theme(legend.position = "none",
-        axis.ticks = element_blank()
-        ) +
+  theme(axis.ticks = element_blank(),
+        legend.position = "right",
+        legend.key = element_rect(fill = "transparent", colour = NA),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 6),
+        legend.background = element_rect(fill = "white", colour = NA)
+  ) +           
+  guides(
+    fill = guide_legend(
+      keyheight = unit(0.25, "cm"),
+      keywidth  = unit(0.25, "cm"),
+      override.aes = list(shape = 21, colour = "black")
+    )
+  ) +
   facet_wrap(~stock_group)
-seg_list <- purrr::map(
-  array_list[-1],
-  ~ base_map +
-    coord_sf(xlim = c(-126, -121), ylim = c(45.5, 51)) +
-    geom_point(
-      data = .x,
-      aes(x = longitude, y = latitude, fill = segment_name),
-      shape = 21
+cali_legend <- get_legend(
+  cali_segs
+)
+cali_inset <- ggdraw(
+  cali_segs +
+    theme(legend.position = "none")
+  ) +
+  draw_grob(cali_legend, x = 0.55, y = 0.79, width = 0.25, height = 0.25)
+
+# vectors specifying legend location (2, 4, 1, 3)
+x_vec <- c(0.55, #fraser
+           0.67, #lcol
+           0.61, # puget
+           0.67) #ucol
+y_vec <- c(0.74, 0.73, 0.74, 0.71)
+
+seg_list <- purrr::pmap(
+  list(array_list[-1], x_vec, y_vec),
+  function (dat_in, x_vec, y_vec) {
+    dat_in <- dat_in %>% 
+      filter(
+        !is.na(segment_name)
+      ) %>% 
+      droplevels()
+    p_segs <- base_map +
+      coord_sf(xlim = c(-126, -121), ylim = c(45.5, 51)) +
+      geom_point(
+        data = dat_in,
+        aes(x = longitude, y = latitude, fill = segment_name),
+        shape = 21
+      ) +
+      scale_fill_viridis_d() +
+      theme(axis.ticks = element_blank(),
+            legend.position = "right",
+            legend.key = element_rect(fill = "transparent", colour = NA),
+            legend.title = element_blank(),
+            legend.text = element_text(size = 6),
+            legend.background = element_rect(fill = "white", colour = NA)
+      ) +           
+      guides(
+        fill = guide_legend(
+          keyheight = unit(0.25, "cm"),
+          keywidth  = unit(0.25, "cm"),
+          override.aes = list(shape = 21, colour = "black")
+        )
+      ) +
+      facet_wrap(~stock_group)
+    p_legend <- get_legend(
+      p_segs
+    )
+    ggdraw(
+      p_segs +
+        theme(legend.position = "none")
     ) +
-    scale_fill_viridis_d() +
-    theme(legend.position = "none",
-          axis.ticks = element_blank()) +
-    facet_wrap(~stock_group)
+      draw_grob(p_legend, x = x_vec, y = y_vec, width = 0.2, height = 0.2)
+  }
 )
 
 array_map2 <- cowplot::plot_grid(
-  seg_list[[3]], seg_list[[6]], 
-  seg_list[[2]], seg_list[[5]], 
+  seg_list[[2]], seg_list[[4]], 
+  seg_list[[1]], seg_list[[3]], 
   ncol = 2
   )
 array_map <- cowplot::plot_grid(
-  cali_segs, array_map2, rel_widths = c(0.2, 0.3)
+  cali_inset, array_map2, rel_widths = c(0.2, 0.35)
   )
 
 
 png(here::here("figs", "maps", "array-map.png"),
-    height = 5, width = 5, units = "in", res = 200)
+    height = 5.25, width = 5, units = "in", res = 200)
 array_map
 dev.off()
