@@ -837,12 +837,17 @@ yr_phi_dat <- purrr::map2(
         "Puget\nSound", "Lower\nCol.", "Bonneville", "Above\nBonneville",
         "In\nRiver", "Downstream\nMission", "Upstream\nMission"
       )),
-    stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group))
+    stock_group = factor(stock_group, levels = levels(dat_tbl_trim$stock_group)),
+    par = ifelse(
+      array_num == max_array_num,
+      "beta",
+      "phi"
+    )
   )
 
-png(here::here("figs", "cjs", "estimated_yearly_phi.png"), 
-    height = 8.5, width = 7.5, units = "in", res = 250)
-ggplot(yr_phi_dat) +
+png(here::here("figs", "cjs", "estimated_yearly_phi_no_beta.png"), 
+    height = 8.5, width = 6.5, units = "in", res = 250)
+ggplot(yr_phi_dat %>% filter(par == "phi")) +
   geom_pointrange(
     aes(x = segment_name, y = med, ymin = lo, ymax = up, fill = year),
     shape = 21,
