@@ -873,7 +873,7 @@ yr_p_dat <- purrr::map2(
       rename(year = Var2, segment = Var3) %>% 
       mutate(est = Freq,
              year = as.numeric(as.factor(year)) + 2018,
-             segment = as.numeric(as.factor(segment))) %>% 
+             segment = as.numeric(as.factor(segment)) - 1) %>% 
       group_by(
         segment, year
       ) %>% 
