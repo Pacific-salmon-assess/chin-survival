@@ -90,7 +90,7 @@ deploy_map <- ggplot() +
 # inset map
 deploy_inset <- base_map +
   coord_sf(expand = FALSE, ylim = c(45, 51), xlim = c(-128.5, -121.5)) +
-  geom_rect(aes(xmin = -126.2, xmax = -124.75, ymin = 48.25, ymax = 49.2),
+  geom_rect(aes(xmin = -126.1, xmax = -125.15, ymin = 48.5, ymax = 49.01),
             color = "red", fill = NA, linewidth = 1) +
   geom_label(
     data = places,
