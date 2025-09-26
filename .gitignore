@@ -24,6 +24,7 @@ figs/maps/array_map.rds
 R/stan_models/defunct/
 data/puget_sound_catch/
 R/defunct/
+tex/
 
 # History files
 .Rhistory
