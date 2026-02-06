@@ -113,6 +113,17 @@ chin2 %>%
   tally()
 
 
+## 
+chin2 %>% 
+  mutate(
+    hatchery = ifelse(clip == "Y" | genetic_source == "PBT", "yes", "no")
+  ) %>% 
+  group_by(
+    hatchery
+  ) %>% 
+  tally()
+
+
 ## Logistic Regression Dataset
 det_dat1 <- dat_tbl %>% 
   dplyr::select(stock_group, agg_det) %>% 
@@ -192,3 +203,18 @@ dat_tbl_trim <- dat_tbl %>%
   select(stock_group, bio_dat, wide_array_dat)
 
 saveRDS(dat_tbl_trim, here::here("data", "surv_cjs_data.rds"))
+
+
+# unique tags across both datasets
+det_dat1 <- readRDS(here::here("data", "surv_hts_data.rds")) %>% 
+  filter(
+    !is.na(focal_er_adj),
+    stage_1 == "mature"
+  )
+tags1 <- unique(det_dat1)
+
+dat_tbl_trim <- readRDS(here::here("data", "surv_cjs_data.rds"))
+tags2 <- purrr::map(dat_tbl_trim$bio_dat, ~ .x$vemco_code) %>% 
+  unlist()
+
+length(unique(c(tags1, tags2)))
