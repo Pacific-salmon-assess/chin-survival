@@ -49,6 +49,30 @@ chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS"))
 tag_dat <- readRDS(here::here("data", "surv_hts_data.rds"))
 
 
+# NOTE: these locations only show VR and PIT arrays, not recaptures
+rec_all <- readRDS(here::here("data", 
+                              "receivers_all.RDS"))$rec_all %>%
+  dplyr::rename(latitude = station_latitude,
+                longitude = station_longitude)
+rec_all2 <- readRDS(here::here("data", 
+                               "receivers_all.RDS"))$dup_rec_all %>%
+  dplyr::rename(name = station_name,
+                latitude = station_latitude,
+                longitude = station_longitude) %>%
+  mutate(
+    project_name = fct_recode(project_name,
+                              `NOAA Puget` = "PS",
+                              Kintama = "Haro",
+                              UBC = "temp_ubc",
+                              `Feather River` = "feather",
+                              SOBaD = "noaa_roegner")
+  ) %>%
+  droplevels() %>% 
+  filter(
+    !field_season == "2024"
+  )
+
+
 ## DEPLOYMENTS MAP -------------------------------------------------------------
 
 
@@ -116,29 +140,6 @@ dev.off()
 
 
 ## RECEIVER LOCATIONS _---------------------------------------------------------
-
-# NOTE: these locations only show VR and PIT arrays, not recaptures
-rec_all <- readRDS(here::here("data", 
-                              "receivers_all.RDS"))$rec_all %>%
-  dplyr::rename(latitude = station_latitude,
-                longitude = station_longitude)
-rec_all2 <- readRDS(here::here("data", 
-                               "receivers_all.RDS"))$dup_rec_all %>%
-  dplyr::rename(name = station_name,
-                latitude = station_latitude,
-                longitude = station_longitude) %>%
-  mutate(
-    project_name = fct_recode(project_name,
-                              `NOAA Puget` = "PS",
-                              Kintama = "Haro",
-                              UBC = "temp_ubc",
-                              `Feather River` = "feather",
-                              SOBaD = "noaa_roegner")
-  ) %>%
-  droplevels() %>% 
-  filter(
-    !field_season == "2024"
-  )
 
 rect_data <- data.frame(xmin = -126.05, xmax = -125.2, ymin = 48.45, ymax = 49)
 multi_year_map <- ggplot() +
@@ -286,8 +287,10 @@ cali <- rec %>%
          !grepl("fraser", region))
 fraser <- rec %>% 
   filter(!region == "bonn",
-         !(region == "in_river" & !(project_name %in% c("Haro", "Instream", "Kintama"))),
-         !(region == "lower_col" & longitude > -123.7))
+         !(region == "in_river" & 
+             !(project_name %in% c("Haro", "Instream", "Kintama"))),
+         !(region == "lower_col" & longitude > -123.7),
+         !region == "cali")
 col <- rec %>% 
   filter(!(region == "in_river" & 
              (latitude < 45 | latitude > 47)),
@@ -298,21 +301,25 @@ puget <- rec %>%
              (latitude < 47 | latitude > 48.25)),
          !(region == "in_river" & longitude > -12.45),
          !(region == "lower_col" & longitude > -123.7),
-         !grepl("fraser", region))
+         !grepl("fraser", region),
+         !region == "cali")
 wa_or <- rec %>%
   filter(!region == "bonn",
          !(region == "in_river"),
-         !grepl("fraser", region))
+         !grepl("fraser", region),
+         !region == "cali")
 wcvi <- rec %>% 
   filter(!region == "bonn",
          !(region == "in_river" & 
              (latitude < 49.1 | longitude > -124)),
          !(region == "lower_col" & longitude > -123.7),
-         !grepl("fraser", region))
+         !grepl("fraser", region),
+         !region == "cali")
 ecvi <- rec %>%
   filter(!region == "bonn",
          !(region == "in_river"),
-         !grepl("fraser", region))
+         !grepl("fraser", region),
+         !region == "cali")
 rec_dummy_list <- list(cali, ecvi, fraser, col, puget, puget, col, wa_or,
                        wcvi)
 
@@ -329,18 +336,24 @@ array_list1 <- purrr::pmap(
   ) 
 array_list <- array_list1[c(1,3,4,6,7)]
 
-shape_pal <- c(21, 23)
-names(shape_pal) <- c("acoustic", "PIT")
+# shape_pal <- c(21, 23)
+# names(shape_pal) <- c("acoustic", "PIT")
+colour_pal <- c("black", "red")
+names(colour_pal) <- c("acoustic", "PIT")
+
+
+purrr::map(array_list, ~ .x %>% filter(is.na(segment_name)) %>% select(region, station_name) %>% distinct())
 
 
 cali_segs <- base_map2 +
   coord_sf(xlim = c(-126, -121), expand = FALSE) +
   geom_point(
     data = array_list[[1]],
-    aes(x = longitude, y = latitude, fill = segment_name, shape = receiver_type),
+    aes(x = longitude, y = latitude, fill = segment_name, colour = receiver_type),
+    shape = 21
   ) +
   scale_fill_viridis_d() +
-  scale_shape_manual(values = shape_pal) +
+  scale_colour_manual(values = colour_pal) +
   theme(axis.ticks = element_blank(),
         legend.position = "right",
         legend.key = element_rect(fill = "transparent", colour = NA),
@@ -354,7 +367,7 @@ cali_segs <- base_map2 +
       keywidth  = unit(0.25, "cm"),
       override.aes = list(shape = 21, colour = "black")
     ),
-    shape = "none"
+    colour = "none"
   ) +
   facet_wrap(~stock_group)
 cali_legend <- get_legend(
@@ -385,10 +398,12 @@ seg_list <- purrr::pmap(
       coord_sf(xlim = c(-126, -121), ylim = c(45.5, 51)) +
       geom_point(
         data = dat_in,
-        aes(x = longitude, y = latitude, fill = segment_name, shape = receiver_type),
+        aes(x = longitude, y = latitude, fill = segment_name, 
+            colour = receiver_type),
+        shape = 21
       ) +
       scale_fill_viridis_d() +
-      scale_shape_manual(values = shape_pal) +
+      scale_colour_manual(values = colour_pal) +
       theme(axis.ticks = element_blank(),
             legend.position = "right",
             legend.key = element_rect(fill = "transparent", colour = NA),
@@ -402,7 +417,7 @@ seg_list <- purrr::pmap(
           keywidth  = unit(0.25, "cm"),
           override.aes = list(shape = 21, colour = "black")
         ),
-        shape = "none"
+        colour = "none"
       ) +
       facet_wrap(~stock_group)
     p_legend <- get_legend(
