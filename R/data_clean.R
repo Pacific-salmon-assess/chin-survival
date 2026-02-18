@@ -211,10 +211,13 @@ det_dat1 <- readRDS(here::here("data", "surv_hts_data.rds")) %>%
     !is.na(focal_er_adj),
     stage_1 == "mature"
   )
-tags1 <- unique(det_dat1)
+tags1 <- unique(det_dat1$vemco_code)
 
 dat_tbl_trim <- readRDS(here::here("data", "surv_cjs_data.rds"))
-tags2 <- purrr::map(dat_tbl_trim$bio_dat, ~ .x$vemco_code) %>% 
+tags2 <- purrr::map(dat_tbl_trim$bio_dat, 
+                    ~ .x %>% 
+                      filter(stage_1 == "mature") %>% 
+                      pull(vemco_code)) %>% 
   unlist()
 
 length(unique(c(tags1, tags2)))

@@ -336,24 +336,24 @@ array_list1 <- purrr::pmap(
   ) 
 array_list <- array_list1[c(1,3,4,6,7)]
 
-# shape_pal <- c(21, 23)
-# names(shape_pal) <- c("acoustic", "PIT")
-colour_pal <- c("black", "red")
-names(colour_pal) <- c("acoustic", "PIT")
-
-
-purrr::map(array_list, ~ .x %>% filter(is.na(segment_name)) %>% select(region, station_name) %>% distinct())
+shape_pal <- c(21, 25)
+names(shape_pal) <- c("acoustic", "PIT")
+size_pal <- c(1.1, 1.5)
+names(size_pal) <- c("acoustic", "PIT")
+# colour_pal <- c("black", "red")
+# names(colour_pal) <- c("acoustic", "PIT")
 
 
 cali_segs <- base_map2 +
   coord_sf(xlim = c(-126, -121), expand = FALSE) +
   geom_point(
     data = array_list[[1]],
-    aes(x = longitude, y = latitude, fill = segment_name, colour = receiver_type),
-    shape = 21
-  ) +
+    aes(x = longitude, y = latitude, fill = segment_name, shape = receiver_type,
+        size = receiver_type)
+    ) +
   scale_fill_viridis_d() +
-  scale_colour_manual(values = colour_pal) +
+  scale_shape_manual(values = shape_pal) +
+  scale_size_manual(values = size_pal) +
   theme(axis.ticks = element_blank(),
         legend.position = "right",
         legend.key = element_rect(fill = "transparent", colour = NA),
@@ -367,7 +367,8 @@ cali_segs <- base_map2 +
       keywidth  = unit(0.25, "cm"),
       override.aes = list(shape = 21, colour = "black")
     ),
-    colour = "none"
+    shape = "none",
+    size = "none"
   ) +
   facet_wrap(~stock_group)
 cali_legend <- get_legend(
@@ -399,11 +400,11 @@ seg_list <- purrr::pmap(
       geom_point(
         data = dat_in,
         aes(x = longitude, y = latitude, fill = segment_name, 
-            colour = receiver_type),
-        shape = 21
+            shape = receiver_type, size = receiver_type)
       ) +
       scale_fill_viridis_d() +
-      scale_colour_manual(values = colour_pal) +
+      scale_shape_manual(values = shape_pal) +
+      scale_size_manual(values = size_pal) +
       theme(axis.ticks = element_blank(),
             legend.position = "right",
             legend.key = element_rect(fill = "transparent", colour = NA),
@@ -417,7 +418,8 @@ seg_list <- purrr::pmap(
           keywidth  = unit(0.25, "cm"),
           override.aes = list(shape = 21, colour = "black")
         ),
-        colour = "none"
+        shape = "none",
+        size = "none"
       ) +
       facet_wrap(~stock_group)
     p_legend <- get_legend(
