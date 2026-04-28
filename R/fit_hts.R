@@ -140,32 +140,31 @@ m1_stan_adj <- readRDS(
 
 # QQ PLOT ----------------------------------------------------------------------
 
-# Define a function to calculate PIT residuals
 calc_pit <- function(y, posterior_pred) {
-  # Get the proportion of posterior samples that are less than or equal to the 
-  # observed value
   n_obs <- length(y)
   pit_residuals <- numeric(n_obs)
   
   for (i in 1:n_obs) {
-    # Calculate pmin and pmax for each observation
-    y_prime <- posterior_pred[i, ]  # posterior predictions for i-th observation
+    y_prime <- posterior_pred[i, ]
     pmin_i <- mean(y_prime < y[i])
     pmax_i <- mean(y_prime <= y[i])
-    
-    # Generate the PIT residuals as a random draw from uniform(pmin, pmax)
     pit_residuals[i] <- runif(1, pmin_i, pmax_i)
   }
   
   return(pit_residuals)
 }
 
-
 post <- as_draws_matrix(m1_stan_adj)  
 s_obs_rep_cols <- grep("^s_obs_rep\\[", colnames(post), value = TRUE)
 s_obs_rep_samples <- post[, s_obs_rep_cols]
 
+# Transpose so rows = observations, columns = posterior draws
+# (as_draws_matrix gives draws x parameters, so need to flip)
+s_obs_rep_samples_t <- t(s_obs_rep_samples)
+
 # Calculate PIT residuals
+pit_residuals <- calc_pit(dat_list$s_obs, s_obs_rep_samples_t)
+
 png(here::here("figs", "hts", "qq_plot.png"),
     units = "in", res = 250, height = 3.5, width = 3.5)
 qqplot(qunif(ppoints(length(pit_residuals))), pit_residuals,
