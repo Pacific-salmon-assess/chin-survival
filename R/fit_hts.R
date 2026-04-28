@@ -138,6 +138,19 @@ m1_stan_adj <- readRDS(
   )
 
 
+# DIAGNOSTICS ------------------------------------------------------------------
+
+summ <- summarise_draws(m1_stan_adj)
+
+# Parameters with Rhat > 1.01 
+summ %>% 
+  filter(rhat > 1.01)
+
+# Parameters with low bulk or tail ESS
+summ %>%  
+  filter(ess_bulk < 400 | ess_tail < 400)
+
+
 # QQ PLOT ----------------------------------------------------------------------
 
 calc_pit <- function(y, posterior_pred) {
@@ -226,7 +239,7 @@ for(i in seq_along(day_seq)) {
     ) %>% 
     mutate(
       cyer_z = as.numeric(cyer_z),
-      cyer = (cyer_z * sd(det_dat$focal_er)) + mean(det_dat$focal_er),
+      cyer = (cyer_z * sd(det_dat$focal_er_adj)) + mean(det_dat$focal_er_adj),
       day = day_label[i]
     )
 }
@@ -723,7 +736,7 @@ cyer_seq <- det_dat %>%
   arrange(stk) %>% 
   group_by(stk) %>% 
   summarize(
-    mean_cyer = mean(cyer2_z)
+    mean_cyer = mean(cyer_z)
   ) %>% 
   pull(mean_cyer)
 
