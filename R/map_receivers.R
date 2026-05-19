@@ -125,18 +125,19 @@ deploy_inset <- base_map +
     colour = "black"
   )
 
-png(here::here("figs", "maps", "deploy_map.png"), height = 6.25, width = 5,
-    units = "in", res = 250)
-# cowplot::plot_grid(deploy_map, deploy_inset, nrow = 2, 
-#                    rel_widths =  c(0.5, 0.7),
-#                    rel_heights = c(0.4, 0.6))
-# ggdraw() +
-#   draw_plot(deploy_map) +
-#   draw_plot(deploy_inset, x = 0.79, y = 0.16, width = 0.2, height = 0.2)
-ggdraw() +
+deploy_map2 <- ggdraw() +
   draw_plot(deploy_inset) +
   draw_plot(deploy_map, x = 0.13, y = 0.03, width = 0.45, height = 0.45)
-dev.off()
+
+# png(here::here("figs", "maps", "deploy_map.png"), height = 6.25, width = 5,
+#     units = "in", res = 250)
+# deploy_map
+# dev.off()
+
+ggsave(here::here("figs", "main_figs", "fig1_deploy_map.tif"), deploy_map2, 
+       units = "in", width = 5, height = 6.25, 
+       dpi = 350, compression = "lzw")
+
 
 
 ## RECEIVER LOCATIONS _---------------------------------------------------------
@@ -201,17 +202,17 @@ w1 <- 0.25;   h1 <- 0.62
 x1 <- x0 - (w1 - w0) / 2
 y1 <- y0 - (h1 - h0) / 2
  
-png(here::here("figs", "maps", "multi-year-map.png"),
-    height = 5, width = 6.5, units = "in", res = 200)
-ggdraw() + 
+rec_map_out <- ggdraw() + 
   draw_plot(multi_year_map) +
   draw_plot(inset_world, 
-            x = x1 + 0.1,
-            y = y1,
+            x = x1 + 0.09,
+            y = y1 - 0.005,
             width = w1,
             height = h1) 
-dev.off()
 
+ggsave(here::here("figs", "main_figs", "fig2_rec_map.tif"), rec_map_out, 
+       units = "in", width = 6.5, height = 5, 
+       dpi = 350, compression = "lzw")
 
 
 base_map2 <- ggplot() +
@@ -443,7 +444,6 @@ array_map <- cowplot::plot_grid(
   )
 
 
-png(here::here("figs", "maps", "array-map.png"),
-    height = 5.25, width = 5, units = "in", res = 200)
-array_map
-dev.off()
+ggsave(here::here("figs", "main_figs", "fig3_array_map.tif"), array_map, 
+       units = "in", width = 5, height = 5.25, 
+       dpi = 450, compression = "lzw")

@@ -845,9 +845,7 @@ yr_phi_dat <- purrr::map2(
     )
   )
 
-png(here::here("figs", "cjs", "estimated_yearly_phi_no_beta.png"), 
-    height = 8.5, width = 6.5, units = "in", res = 250)
-ggplot(yr_phi_dat %>% filter(par == "phi")) +
+yr_phi_plot <- ggplot(yr_phi_dat %>% filter(par == "phi")) +
   geom_pointrange(
     aes(x = segment_name, y = med, ymin = lo, ymax = up, fill = year),
     shape = 21,
@@ -860,7 +858,10 @@ ggplot(yr_phi_dat %>% filter(par == "phi")) +
   theme(legend.position = "top") +
   theme(legend.position = "top",
         axis.text.x = element_text(size = 11, angle = 45, hjust = 1))
-dev.off()
+
+ggsave(here::here("figs", "main_figs", "fig5_year_phi.tif"), yr_phi_plot, 
+       units = "in", width = 6.5, height = 8.5, 
+       dpi = 400, compression = "lzw")
 
 
 # year- and stage-specific detection parameter estimates
@@ -1151,11 +1152,10 @@ png(here::here("figs", "cjs", "cum_surv_mean_hier_clean_nobeta.png"),
 surv_plot_mean_trim
 dev.off()
 
-png(here::here("figs", "cjs", "cum_surv_mean_hier_clean_nobeta_dist.png"), 
-    height = 5, width = 7.5, units = "in", res = 200)
-surv_plot_mean_trim_dist
-dev.off()
-
+ggsave(here::here("figs", "main_figs", "fig6_cumulative_surv.tif"), 
+       surv_plot_mean_trim_dist, 
+       units = "in", width = 7.5, height = 5, 
+       dpi = 450, compression = "lzw")
 
 
 # plot terminal survival rate (absolute and scaled by migration distance) of 
