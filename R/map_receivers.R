@@ -127,12 +127,8 @@ deploy_inset <- base_map +
 
 deploy_map2 <- ggdraw() +
   draw_plot(deploy_inset) +
-  draw_plot(deploy_map, x = 0.13, y = 0.03, width = 0.45, height = 0.45)
-
-# png(here::here("figs", "maps", "deploy_map.png"), height = 6.25, width = 5,
-#     units = "in", res = 250)
-# deploy_map
-# dev.off()
+  draw_plot(deploy_map, x = 0.13, y = 0.03, width = 0.45, height = 0.45) +
+  theme(plot.background = element_rect(fill = "white", color = NA))
 
 ggsave(here::here("figs", "main_figs", "fig1_deploy_map.tif"), deploy_map2, 
        units = "in", width = 5, height = 6.25, 
@@ -201,14 +197,16 @@ w0 <- 0.025;   h0 <- 0.045
 w1 <- 0.25;   h1 <- 0.62
 x1 <- x0 - (w1 - w0) / 2
 y1 <- y0 - (h1 - h0) / 2
- 
-rec_map_out <- ggdraw() + 
+
+rec_map_out <- ggdraw() +
   draw_plot(multi_year_map) +
-  draw_plot(inset_world, 
+  draw_plot(inset_world,
             x = x1 + 0.09,
             y = y1 - 0.005,
             width = w1,
-            height = h1) 
+            height = h1) +
+  theme(plot.background = element_rect(fill = "white", color = NA))
+
 
 ggsave(here::here("figs", "main_figs", "fig2_rec_map.tif"), rec_map_out, 
        units = "in", width = 6.5, height = 5, 
@@ -439,9 +437,12 @@ array_map2 <- cowplot::plot_grid(
   seg_list[[1]], seg_list[[3]], 
   ncol = 2
   )
-array_map <- cowplot::plot_grid(
-  cali_inset, array_map2, rel_widths = c(0.2, 0.35)
+array_map <- ggdraw(
+  cowplot::plot_grid(
+    cali_inset, array_map2, rel_widths = c(0.2, 0.35)
   )
+) +
+  theme(plot.background = element_rect(fill = "white", color = NA))
 
 
 ggsave(here::here("figs", "main_figs", "fig3_array_map.tif"), array_map, 

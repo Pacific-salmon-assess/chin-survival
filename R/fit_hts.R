@@ -900,10 +900,10 @@ png(here::here("figs", "hts", "det_prob.png"),
 terminal_det_p
 dev.off()
 
-png(here::here("figs", "hts", "surv_cyer.png"), 
-    units = "in", res = 250, height = 5.25, width = 2.5)
-pred_day_cyer
-dev.off()
+ggsave(here::here("figs", "main_figs", "fig8_exp_rate.tif"), 
+       pred_day_cyer, 
+       units = "in", width = 2.5, height = 5.25, 
+       dpi = 350, compression = "lzw")
 
 png(here::here("figs", "hts", "ri_sigmas.png"), 
     units = "in", res = 250, height = 3.5, width = 6)
@@ -930,32 +930,35 @@ png(here::here("figs", "hts", "fl_lipid_pred.png"),
 pred_mu_ribbon
 dev.off()
 
-png(here::here("figs", "hts", "surv_pred.png"), 
-    units = "in", res = 250, height = 5.25, width = 2.5)
-gridExtra::grid.arrange(
-  gridExtra::arrangeGrob(
-    pp, 
-    left = textGrob(
-      "Predicted Survival Rate", rot = 90, 
-      gp = gpar(fontsize = 11))
-  )
-)
-dev.off()
+pp_out <- ggdraw(plot_grid(
+  ggdraw() + 
+    theme(plot.background = element_rect(fill = "white", color = NA)) +
+    draw_label("Predicted Survival Rate", angle = 90, size = 11),
+  pp,
+  ncol = 2,
+  rel_widths = c(0.08, 0.92)
+)) + 
+  theme(plot.background = element_rect(fill = "white", color = NA))
+ggsave(here::here("figs", "main_figs", "fig7_ind_effects.tif"), 
+       pp_out, 
+       units = "in", width = 2.5, height = 5.25, 
+       dpi = 350, compression = "lzw")
+
 
 png(here::here("figs", "hts", "inj_pred.png"), 
     units = "in", res = 250, height = 3, width = 3.5)
 injury_point
 dev.off()
 
-png(here::here("figs", "hts", "inj_delta.png"),
-    units = "in", res = 250, height = 3, width = 3.5)
-diff_hist
-dev.off()
+ggsave(here::here("figs", "main_figs", "fig9_inj_delta.tif"), 
+       diff_hist, 
+       units = "in", width = 3.5, height = 3.5, 
+       dpi = 350, compression = "lzw")
 
-png(here::here("figs", "hts", "stock_surv.png"),
-    units = "in", res = 250, height = 3.5, width = 6)
-pred_stk_comb
-dev.off()
+ggsave(here::here("figs", "main_figs", "fig10_stock_surv.tif"), 
+       pred_stk_comb, 
+       units = "in", width = 6, height = 3.5, 
+       dpi = 350, compression = "lzw")
 
 png(here::here("figs", "hts",
                "diff_survival_hist.png"),
