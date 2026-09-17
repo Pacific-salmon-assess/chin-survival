@@ -19,14 +19,25 @@ options(mc.cores = parallel::detectCores())
 ## DATA CLEAN ------------------------------------------------------------------
 
 health_data <- read.csv(here::here("data", "fish_health_data.csv")) %>% 
-  select(fish = alternate_num, tenaci_load = copy_no_te_mar) 
+  select(fish = alternate_num, fish_health_num = fish_num,
+         tenaci_load = copy_no_te_mar) 
 
 chin <- readRDS(here::here("data", "cleanTagData_GSI.RDS")) %>%
-  select(fish, vemco_code = acoustic_year) %>% 
+  select(fish, vemco_code = acoustic_year, 
+         stock:agg_prob) %>% 
   left_join(., health_data, by = "fish")
 
+# export gsi assignments for Art
+write.csv(
+  chin %>% 
+    filter(!is.na(fish_health_num)) %>% 
+    select(fish, fish_health_num, stock:agg_prob),
+  here::here("data", "gsi_for_art.csv"),
+  row.names = FALSE
+)
+
 det_dat1 <- readRDS(here::here("data", "surv_hts_data.rds")) %>% 
-  left_join(., chin, by = "vemco_code") %>% 
+  left_join(., chin %>% select(fish, vemco_code), by = "vemco_code") %>% 
   filter(
     !is.na(focal_er_adj),
     stage_1 == "mature",
