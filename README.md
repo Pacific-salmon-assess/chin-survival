@@ -1,7 +1,6 @@
 # Chinook Acoustic Telemetry Surival Analysis
 
-Data and code associated with acoustic telemetry-based estimates of marine survival 
-rates for adult Chinook salmon. Manuscript (**High and minimally variable adult marine survival among multiple stocks of Chinook salmon**) submitted to **Ecosphere**.
+Data and code associated with acoustic telemetry-based estimates of marine survival rates for adult Chinook salmon. Manuscript (**High and minimally variable adult marine survival among multiple stocks of Chinook salmon**) published in **Ecosphere** <https://esajournals.onlinelibrary.wiley.com/doi/10.1002/ecs2.70710>.
 
 All tags were deployed between 2019 and 2023 with detections metadata submitted to Ocean Tracking Network.
 
